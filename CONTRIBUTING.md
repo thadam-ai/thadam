@@ -31,6 +31,8 @@ python -m pytest -q
 
 When behavior is added, include focused tests for it. Use controlled agents and tools so default tests run without network access, model credentials, or hosted services. The current suite covers input validation, error handling, verifier contracts, report artifacts, and CLI/SDK agreement. Live model checks should be separate and explicitly configured.
 
+For LangGraph development, install `python -m pip install -e '.[dev,langgraph]'` before running tests. `tests/test_langgraph.py` runs actual compiled graphs with scripted models and local tools; it is skipped when compatible optional dependencies are absent. Run that module when changing callback handling and the full suite when changing shared models, assertions, or reports. Check dependency resolution in a clean environment with `python -m pip check`.
+
 ## Code that humans and AI agents can understand
 
 - Use descriptive domain names such as `TestCase`, `AssertionResult`, and `RunReport` consistently across code and documentation.

@@ -43,7 +43,7 @@ def test_five_case_cli_example_agrees_with_sdk(tmp_path, agent, function, code):
     assert command.returncode == code, command.stderr
     artifact = json.loads(path.read_text())
     sdk = report_to_dict(run_suite(function, load_suite(ROOT / "examples/refund_cases.json")))
-    assert artifact["schema_version"] == 1
+    assert artifact["schema_version"] == 2
     assert artifact["run_id"]
     assert artifact["summary"] == sdk["summary"]
     assert artifact["summary"]["total"] == 5
@@ -148,7 +148,7 @@ def test_atomic_report_failure_preserves_previous_artifact(tmp_path, monkeypatch
 
 def test_cli_help_and_argument_errors():
     assert invoke("--help").returncode == 0
-    assert "0.1.0" in invoke("--version").stdout
+    assert "0.2.0" in invoke("--version").stdout
     assert invoke("run", "examples/refund_cases.json").returncode == 2
 
 

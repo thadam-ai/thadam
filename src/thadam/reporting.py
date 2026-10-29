@@ -27,8 +27,14 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
                 "input": deepcopy(case.input),
                 "output": deepcopy(case.output),
                 "output_available": case.output_available,
-                "assertions": [asdict(assertion) for assertion in case.assertions],
+                "assertions": [
+                    {**asdict(assertion), "event_ids": list(assertion.event_ids)}
+                    for assertion in case.assertions
+                ],
                 "errors": [asdict(error) for error in case.errors],
+                "events": None if case.events is None else [asdict(event) for event in case.events],
+                "trace_complete": case.trace_complete,
+                "trace_warnings": list(case.trace_warnings),
             }
             for case in report.cases
         ],
@@ -117,6 +123,10 @@ def format_summary(
                         width,
                     )
                 )
+                if assertion.event_ids:
+                    lines.extend(
+                        _detail("events: " + ", ".join(assertion.event_ids), style, "muted", width)
+                    )
         for error in case.errors:
             check = f" [{error.assertion_id}]" if error.assertion_id is not None else ""
             lines.extend(
@@ -124,6 +134,37 @@ def format_summary(
                     f"{error.source}{check}: {error.type}: {error.message}", style, "error", width
                 )
             )
+        if case.status != "passed" and case.events is not None:
+            for event in case.events:
+                event_role: ColorRole = "error" if event.status == "error" else "muted"
+                duration = (
+                    "unknown duration"
+                    if event.duration_ms is None
+                    else f"{event.duration_ms:.2f} ms"
+                )
+                lines.extend(
+                    _detail(
+                        f"{event.kind} {event.name}: {event.status} ({duration}) [{event.id}]",
+                        style,
+                        event_role,
+                        width,
+                    )
+                )
+                if event.kind == "tool" and event.input_available:
+                    lines.extend(
+                        _detail(
+                            "arguments: " + json.dumps(event.input, ensure_ascii=False),
+                            style,
+                            event_role,
+                            width,
+                        )
+                    )
+                if event.error:
+                    lines.extend(
+                        _detail(f"{event.error.type}: {event.error.message}", style, "error", width)
+                    )
+        for warning in case.trace_warnings:
+            lines.extend(_detail("trace: " + warning, style, "failed", width))
         if case.errors or any(not item.passed for item in case.assertions):
             lines.append("")
     counts = report.summary

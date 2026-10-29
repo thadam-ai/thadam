@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** milestone 1 implemented. Later framework integrations, tracing, and services remain planned.
+**Status:** milestones 1 and 2 implemented. Regression comparison, scenario generation, and hosted services remain planned.
 
 See [DESIGN.md](../DESIGN.md) for the agreed technology stack, rationale, and decision history.
 
@@ -40,6 +40,8 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/_json.py` | Shared JSON value validation | Require serializable values at input/output boundaries |
 | `src/thadam/errors.py` | Public configuration and report-writing exceptions | Distinguish errors that prevent or interrupt a run from case results |
 | `src/thadam/adapters/python.py` | Validate the synchronous Python callable contract | Require one positional input; runner owns invocation |
+| `src/thadam/adapters/langgraph.py` | Execute compiled graphs with public model/tool callbacks | Optional imports, per-invocation collectors, JSON state mapping, fresh checkpoint threads |
+| `src/thadam/events.py` | Validate and snapshot execution evidence | Reject invalid traces; preserve unknown-versus-empty semantics |
 | `src/thadam/assertions.py` | Built-in assertions and Python verifier contract | Return evidence; do not invoke the agent |
 | `src/thadam/runner.py` | Execute cases, measure duration, and collect results | No CLI formatting or framework-specific code |
 | `src/thadam/reporting.py` | JSON serialization and terminal summaries | Preserve status, IDs, errors, and assertion evidence |
@@ -48,19 +50,19 @@ These modules implement the first local execution flow. Add new modules when the
 | `examples/` | Small runnable agent and suites | Demonstrate actual public APIs |
 | `tests/` | Contract and behavior checks | Controlled agent/tool fixtures by default |
 
-Add LangGraph integration, execution-event capture, and provider adapters in their roadmap milestones. Evolve this map when implementation shows a better boundary.
+Add further framework and provider adapters in their roadmap milestones. Evolve this map when implementation shows a better boundary.
 
 ## Contracts
 
 - **Case:** stable ID, JSON input, and explicit expectations. Cases must contain at least one assertion or SDK verifier.
-- **Agent:** milestone 1 accepts a synchronous callable with one JSON input and a JSON-compatible output. Each case is an independent invocation.
+- **Agent:** accepts one JSON input and returns JSON or an explicit `AgentResult`. Each case is an independent invocation. Instrumented exceptions use `AgentExecutionError` to preserve observed events.
 - **Assertion result:** stable assertion ID, observed value, expected value or contract description, pass/fail, and an explanation. SDK verifiers return a `CheckResult`, which the runner associates with the verifier's ID.
-- **Case result:** case ID, status, original input, output when available, assertion results, elapsed time, and structured error details.
+- **Case result:** case ID, status, input/output, checks, elapsed time, structured errors, optional events, and trace availability.
 - **Run report:** schema version, run ID, case results, and summary counts.
 
-Case states are `passed`, `failed`, and `error`. A failed expectation is `failed`; an agent exception, invalid agent output, or broken verifier is `error` with an explicit source. Invalid suite configuration is rejected before execution. Missing evidence cannot satisfy a check. CLI and SDK use the same rules.
+Case states are `passed`, `failed`, and `error`. A failed expectation is `failed`; an execution exception, invalid output/trace, unavailable tool evidence, or broken verifier is `error` with an explicit source. Invalid suite configuration is rejected before execution. CLI and SDK use the same rules.
 
-The first milestone specifies [implemented formats, SDK verifiers, and CLI exit codes](milestones/01-local-runner.md). Keep it current when public contracts change. `reporting.report_to_dict` defines the version-1 report shape explicitly.
+The first milestone specifies [suite formats, SDK verifiers, and CLI exit codes](milestones/01-local-runner.md). The second specifies [LangGraph coverage, tool checks, and execution events](milestones/02-langgraph.md). `reporting.report_to_dict` defines the version-2 report shape. Existing schema-1 case files remain supported.
 
 ## Dependencies and extension points
 
@@ -68,6 +70,8 @@ The core has no runtime dependencies. Add dependencies when required by a workin
 
 Cases and their JSON data are validated and snapshotted before the first invocation. Each agent receives a copy of its input; each verifier receives its own input/output snapshots. Callback objects retain their identity. This protects recorded evidence from agent/verifier mutations without claiming process isolation or automatically resetting a user's agent state.
 
-Capture only what an integration or explicit agent hook exposes. Later tool assertions must distinguish an observed empty tool list from tool activity that was never instrumented. Usage and cost fields are optional evidence, with unavailable values represented explicitly.
+Capture only what an integration or explicit agent hook exposes. Raw callable results have unknown events (`None`); an explicit instrumented result may have an empty tuple. Tool assertions require a complete observed callback trace, and argument checks require structured inputs. This completeness flag describes the callback scope, not actions performed outside instrumentation. Missing usage remains `None`.
+
+LangGraph collectors correlate parallel callbacks by framework run ID using a lock, preserving start order, parent IDs, terminal states, and durations. Existing callbacks/config are merged through the public configuration API. Each graph invocation receives a fresh thread ID to separate checkpoint histories; explicit checkpoint resumption is unsupported. The collector records tool/model callbacks, not every chain/node in the graph.
 
 Keep the execution engine usable locally. A future service may schedule runs and store reports while consuming the same execution and reporting contracts.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thadam"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open-source testing, evaluation, and reliability for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,6 +25,7 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
+langgraph = ["langgraph>=1.0,<2", "langchain-core>=1.0,<2"]
 
 [project.scripts]
 thadam = "thadam.cli:main"

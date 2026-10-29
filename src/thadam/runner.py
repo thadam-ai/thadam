@@ -9,7 +9,18 @@ from typing import Literal
 from thadam._json import validate_json
 from thadam.adapters.python import validate_agent
 from thadam.assertions import evaluate_assertion, evaluate_verifier
-from thadam.models import Agent, CaseError, CaseResult, CaseStatus, RunReport, TestCase
+from thadam.errors import AgentExecutionError, TraceUnavailableError
+from thadam.events import snapshot_trace
+from thadam.models import (
+    Agent,
+    AgentResult,
+    CaseError,
+    CaseResult,
+    CaseStatus,
+    ExecutionEvent,
+    RunReport,
+    TestCase,
+)
 from thadam.suites import validate_suite
 
 
@@ -40,7 +51,32 @@ def _run_case(agent: Agent, case: TestCase) -> CaseResult:
     try:
         output = agent(deepcopy(case.input))
     except (Exception, SystemExit) as error:
+        if isinstance(error, AgentExecutionError):
+            try:
+                events = snapshot_trace(error.events, error.trace_complete, error.trace_warnings)
+            except ValueError as trace_error:
+                return _execution_error(case, started, "trace", trace_error)
+            return _execution_error(
+                case,
+                started,
+                "agent",
+                error.original,
+                events=events,
+                trace_complete=error.trace_complete,
+                trace_warnings=tuple(error.trace_warnings),
+            )
         return _execution_error(case, started, "agent", error)
+
+    events = None
+    trace_complete = None
+    trace_warnings = ()
+    if isinstance(output, AgentResult):
+        try:
+            events = snapshot_trace(output.events, output.trace_complete, output.trace_warnings)
+        except ValueError as error:
+            return _execution_error(case, started, "trace", error)
+        trace_complete, trace_warnings = output.trace_complete, tuple(output.trace_warnings)
+        output = output.output
 
     try:
         if inspect.iscoroutine(output):
@@ -48,10 +84,37 @@ def _run_case(agent: Agent, case: TestCase) -> CaseResult:
         validate_json(output, "agent output")
         output = deepcopy(output)
     except Exception as error:
-        return _execution_error(case, started, "output", error)
+        return _execution_error(
+            case,
+            started,
+            "output",
+            error,
+            events=events,
+            trace_complete=trace_complete,
+            trace_warnings=trace_warnings,
+        )
 
-    assertions = [evaluate_assertion(assertion, output) for assertion in case.assertions]
+    assertions = []
     errors = []
+    for assertion in case.assertions:
+        try:
+            assertions.append(
+                evaluate_assertion(
+                    assertion,
+                    output,
+                    events=events,
+                    trace_complete=trace_complete,
+                )
+            )
+        except TraceUnavailableError as error:
+            errors.append(
+                CaseError(
+                    source="assertion",
+                    type=type(error).__name__,
+                    message=str(error),
+                    assertion_id=assertion.id,
+                )
+            )
     for verifier in case.verifiers:
         try:
             assertions.append(evaluate_verifier(verifier, case.input, output))
@@ -78,14 +141,21 @@ def _run_case(agent: Agent, case: TestCase) -> CaseResult:
         output_available=True,
         assertions=tuple(assertions),
         errors=tuple(errors),
+        events=events,
+        trace_complete=trace_complete,
+        trace_warnings=trace_warnings,
     )
 
 
 def _execution_error(
     case: TestCase,
     started: float,
-    source: Literal["agent", "output"],
+    source: Literal["agent", "output", "trace"],
     error: Exception | SystemExit,
+    *,
+    events: tuple[ExecutionEvent, ...] | None = None,
+    trace_complete: bool | None = None,
+    trace_warnings: tuple[str, ...] = (),
 ) -> CaseResult:
     return CaseResult(
         id=case.id,
@@ -93,4 +163,7 @@ def _execution_error(
         duration_ms=(perf_counter() - started) * 1000,
         input=deepcopy(case.input),
         errors=(CaseError(source=source, type=type(error).__name__, message=str(error)),),
+        events=events,
+        trace_complete=trace_complete,
+        trace_warnings=trace_warnings,
     )

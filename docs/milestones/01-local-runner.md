@@ -1,6 +1,6 @@
 # Milestone 1: local Python test runner
 
-**Status:** implemented. Commands below run from a repository checkout after editable installation. Framework instrumentation, enforced timeouts, and hosted services remain future milestones.
+**Status:** implemented. Commands below run from a repository checkout after editable installation. [Milestone 2](02-langgraph.md) adds optional LangGraph instrumentation. Enforced timeouts and hosted services remain future work.
 
 ## User outcome
 
@@ -8,7 +8,7 @@ A developer connects a Python agent, runs five saved scenarios, and gets a reada
 
 ## Supported agent
 
-The agent is a synchronous Python callable accepting one positional JSON input and returning one JSON-compatible value. A callable may wrap an existing agent. Milestone 1 evaluates its returned output; automatic framework or tool discovery follows later.
+The agent is a synchronous Python callable accepting one positional JSON input and returning one JSON-compatible value. A callable may wrap an existing agent. Milestone 2 additionally accepts explicit `AgentResult` evidence and provides a LangGraph adapter; plain Python callables remain uninstrumented unless they supply events.
 
 The example uses a local refund-policy function with order fixtures. `examples.refund_agent:run` passes all five cases; `run_buggy` yields three passes, one failed assertion, and one agent error. It demonstrates the runner without claiming to evaluate an actual LLM. CLI integration tests also load an independently defined user module from a temporary working directory.
 
@@ -97,9 +97,9 @@ CLI exit codes:
 
 ## Report requirements
 
-The report contains `schema_version`, `run_id`, `summary`, and an ordered `cases` array. Summary fields are `total`, `passed`, `failed`, and `errors`. Each case contains `id`, `status`, `duration_ms`, `input`, `output`, `output_available`, `assertions`, and `errors`. Input is the original case snapshot, even if the agent mutates its argument. A returned JSON null has `output_available: true`; an agent error has `output_available: false`.
+Current reports use schema version 2 and contain `schema_version`, `run_id`, `summary`, and an ordered `cases` array. Summary fields are `total`, `passed`, `failed`, and `errors`. Cases contain `id`, `status`, `duration_ms`, `input`, `output`, `output_available`, `assertions`, `errors`, `events`, `trace_complete`, and `trace_warnings`. Plain Python runs have null events/completeness and an empty warning list. Input is the original case snapshot, even if the agent mutates its argument. A returned JSON null has `output_available: true`; an agent error has `output_available: false`.
 
-Assertions contain `id`, `passed`, `message`, `expected`, and `actual`. Errors contain `source` (`agent`, `output`, or `verifier`), `type`, `message`, and an optional `assertion_id`. Invalid agent output becomes an `output` error and is omitted from the JSON evidence. Verifier errors retain valid output and any other completed checks. Errors take precedence over assertion failures in a case's status. Case errors do not stop subsequent cases. `KeyboardInterrupt` propagates; `SystemExit`, including exit code zero, from an agent or verifier becomes a case error. An agent import that raises `SystemExit` is a configuration error.
+Assertions contain `id`, `passed`, `message`, `expected`, `actual`, and `event_ids`. Output checks and SDK verifiers have empty event links. Errors contain `source` (`agent`, `output`, `verifier`, `assertion`, or `trace`), `type`, `message`, and an optional `assertion_id`. Invalid output becomes an `output` error and is omitted from JSON evidence; valid trace events are retained. Errors take precedence over failed expectations. Later cases continue. `KeyboardInterrupt` propagates; `SystemExit`, including exit code zero, from tested code becomes a case error. An agent import that raises `SystemExit` is a configuration error. See milestone 2 for event validation and trace availability semantics.
 
 Do not imply the runner can reproduce a probabilistic agent exactly. Milestone 1 runs sequentially, without automatic retries, enforced execution timeouts, or concurrent state management. These behaviors need explicit contracts in later milestones.
 

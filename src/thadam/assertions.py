@@ -4,20 +4,31 @@ import inspect
 from copy import deepcopy
 
 from thadam._json import validate_json
+from thadam.errors import TraceUnavailableError
 from thadam.models import (
+    Assertion,
     AssertionResult,
     CheckResult,
+    ExecutionEvent,
     JSONValue,
     OutputEquals,
-    OutputHasKeys,
+    ToolArgumentsMatch,
+    ToolCalled,
+    ToolNotCalled,
     Verifier,
 )
 
 
 def evaluate_assertion(
-    assertion: OutputEquals | OutputHasKeys, output: JSONValue
+    assertion: Assertion,
+    output: JSONValue,
+    *,
+    events: tuple[ExecutionEvent, ...] | None = None,
+    trace_complete: bool | None = None,
 ) -> AssertionResult:
     """Evaluate a validated built-in assertion without executing an agent."""
+    if isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch)):
+        return _evaluate_tool(assertion, events, trace_complete)
     if isinstance(assertion, OutputEquals):
         passed = _json_equal(assertion.expected, output)
         return AssertionResult(
@@ -41,6 +52,46 @@ def evaluate_assertion(
         expected=list(assertion.keys),
         actual=deepcopy(output),
         message=message,
+    )
+
+
+def _evaluate_tool(
+    assertion: ToolCalled | ToolNotCalled | ToolArgumentsMatch,
+    events: tuple[ExecutionEvent, ...] | None,
+    trace_complete: bool | None,
+) -> AssertionResult:
+    if events is None or trace_complete is not True:
+        raise TraceUnavailableError(
+            "Tool assertions require a complete, explicitly instrumented trace"
+        )
+    calls = [event for event in events if event.kind == "tool" and event.name == assertion.tool]
+    if isinstance(assertion, ToolArgumentsMatch):
+        if any(not call.input_available or not isinstance(call.input, dict) for call in calls):
+            raise TraceUnavailableError(
+                f"Structured arguments for {assertion.tool!r} are unavailable"
+            )
+        passed = bool(calls) and all(
+            all(
+                key in call.input and _json_equal(value, call.input[key])
+                for key, value in assertion.expected.items()
+            )
+            for call in calls
+        )
+        expected = {"tool": assertion.tool, "arguments_subset": deepcopy(assertion.expected)}
+        actual = [{"event_id": call.id, "arguments": deepcopy(call.input)} for call in calls]
+        message = f"Every call to {assertion.tool!r} must match the selected arguments"
+    else:
+        passed = bool(calls) if isinstance(assertion, ToolCalled) else not calls
+        expected = {"tool": assertion.tool, "called": isinstance(assertion, ToolCalled)}
+        actual = {"calls": len(calls)}
+        message = f"Tool {assertion.tool!r} was called {len(calls)} time(s)"
+    return AssertionResult(
+        id=assertion.id,
+        passed=passed,
+        message=message,
+        expected=expected,
+        actual=actual,
+        event_ids=tuple(call.id for call in calls),
     )
 
 

@@ -4,16 +4,18 @@
 
 Open-source testing, evaluation, and reliability for AI agents. Thadam helps developers test expected behavior, understand failures, and catch regressions before deployment.
 
-> **Project status: early development.** The first local Python runner, SDK, and CLI work. LangGraph instrumentation, tool tracing, scenario generation, and the dashboard are planned.
+> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, and tool assertions work. Scenario generation, regression comparison, and the dashboard are planned.
 
 ## What works today
 
 - A Python SDK and CLI for running agent test scenarios locally
 - Developer-defined assertions and verifiers for expected behavior
 - Synchronous custom Python agents accepting and returning JSON-compatible values
+- An optional LangGraph adapter capturing supported model/tool callbacks and reported token usage
+- Assertions for required/forbidden tool calls and selected arguments, linked to execution events
 - Terminal summaries and versioned JSON reports with output, assertion evidence, errors, and duration
 
-Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Execution evidence currently covers inputs supplied by the suite, returned outputs, checks, errors, and durations; model and tool-call tracing comes later.
+Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
 ## Try it locally
 
@@ -66,6 +68,33 @@ print(report.summary)
 
 Cases can also be constructed in Python with `TestCase`, `OutputEquals`, `OutputHasKeys`, and custom `Verifier` callbacks. See the [suite and verifier contracts](docs/milestones/01-local-runner.md) for formats, examples, and error semantics.
 
+## Test a LangGraph agent
+
+Install the optional integration from this checkout and run the controlled example:
+
+```shell
+python -m pip install -e '.[langgraph]'
+thadam run examples/langgraph_cases.json \
+  --agent examples.langgraph_agent:agent \
+  --report artifacts/langgraph-report.json
+```
+
+All three cases pass. The example uses a real compiled LangGraph, a scripted model, and local tools. Its token counts are fixture metadata; no paid model is called.
+
+The buggy variant returns the same final answers but skips the required order lookup:
+
+```shell
+thadam run examples/langgraph_cases.json \
+  --agent examples.langgraph_agent:agent_buggy \
+  --report artifacts/langgraph-buggy-report.json
+```
+
+All three cases fail their tool checks. Failure reports show observed model/tool events and their IDs. JSON reports retain arguments, results, errors, durations, and reported usage, including partial events when graph execution raises an exception.
+
+Wrap your own compiled graph with `LangGraphAgent` from `thadam.adapters.langgraph`, optionally supplying input/output mappers and graph config. See the [LangGraph guide](docs/milestones/02-langgraph.md) for integration code, tool assertion formats, coverage limits, and checkpoint isolation.
+
+Reports now use **schema version 2**: case records add `events`, `trace_complete`, and `trace_warnings`; assertions add `event_ids`. Uninstrumented Python runs have `events: null`, not an observed empty trace. Existing case files still use schema version 1 and continue to work.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -90,8 +119,9 @@ Terminals advertising RGB support through `COLORTERM=truecolor` or `24bit` use t
 
 - [Roadmap](ROADMAP.md): ordered milestones, completion criteria, and future ideas
 - [Design decisions](DESIGN.md): agreed stack, rationale, and decision history
-- [First milestone](docs/milestones/01-local-runner.md): the next implementation and its acceptance criteria
-- [Architecture](docs/architecture.md): data flow, contracts, and planned module boundaries
+- [Local runner](docs/milestones/01-local-runner.md): SDK, suite format, and report contracts
+- [LangGraph integration](docs/milestones/02-langgraph.md): callbacks, tool assertions, and execution evidence
+- [Architecture](docs/architecture.md): data flow, contracts, and module boundaries
 - [Agent guide](AGENTS.md): repository map and working rules for AI coding agents
 - [Contributing](CONTRIBUTING.md): development setup and code conventions
 
@@ -104,6 +134,8 @@ python -m pytest -q
 python -m ruff check .
 python -m ruff format --check .
 ```
+
+Install `'.[dev,langgraph]'` to include the real-graph integration tests. They also use controlled fixtures and need no model credentials. Without the extra, those tests are skipped.
 
 ## Name
 

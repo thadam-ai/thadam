@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** milestone 1 implemented; local Python runner, SDK, CLI, and reports.
-**Next build:** milestone 2, LangGraph integration and observable tool behavior.
+**Current state:** milestones 1 and 2 implemented; local runner, optional LangGraph integration, tool assertions, and execution reports.
+**Next build:** milestone 3, regression comparison and CI integration.
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
@@ -37,12 +37,14 @@ Completion requires a runnable example showing a passing case, a failed assertio
 
 **Outcome:** a developer tests an existing LangGraph agent and sees evidence about its tools when a case fails.
 
-- [ ] Add one documented LangGraph integration using an optional dependency.
-- [ ] Define execution events for observable model and tool calls.
-- [ ] Support required/forbidden tool checks and selected tool-argument checks.
-- [ ] Record latency and token usage when the integration exposes them; distinguish unavailable values from zero.
-- [ ] Link assertion failures to relevant execution events in the report.
-- [ ] Add a LangGraph example and integration tests using controlled model/tool fixtures.
+Implementation, coverage boundaries, and report schema: [LangGraph guide](docs/milestones/02-langgraph.md).
+
+- [x] Add one documented LangGraph integration using an optional dependency.
+- [x] Define execution events for observable model and tool calls.
+- [x] Support required/forbidden tool checks and selected tool-argument checks.
+- [x] Record latency and token usage when the integration exposes them; distinguish unavailable values from zero.
+- [x] Link assertion failures to relevant execution events in the report.
+- [x] Add a LangGraph example and integration tests using controlled model/tool fixtures.
 
 Instrumentation must use explicit hooks or supported framework interfaces. A custom agent's unreported tool activity is unknown. Internal model reasoning is outside the tracing contract.
 

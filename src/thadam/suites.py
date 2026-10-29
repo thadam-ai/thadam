@@ -7,7 +7,16 @@ from pathlib import Path
 
 from thadam._json import validate_json
 from thadam.errors import SuiteValidationError
-from thadam.models import OutputEquals, OutputHasKeys, TestCase, Verifier
+from thadam.models import (
+    Assertion,
+    OutputEquals,
+    OutputHasKeys,
+    TestCase,
+    ToolArgumentsMatch,
+    ToolCalled,
+    ToolNotCalled,
+    Verifier,
+)
 
 
 def load_suite(path: str | Path) -> tuple[TestCase, ...]:
@@ -98,6 +107,17 @@ def _validate_assertion(assertion: object, location: str) -> None:
             raise SuiteValidationError(
                 f"{location}: keys must be a non-empty sequence of unique strings"
             )
+    elif isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch)):
+        if not isinstance(assertion.tool, str) or not assertion.tool.strip():
+            raise SuiteValidationError(f"{location}: tool must be a non-empty string")
+        try:
+            validate_json(assertion.tool)
+            if isinstance(assertion, ToolArgumentsMatch):
+                if not isinstance(assertion.expected, dict) or not assertion.expected:
+                    raise ValueError("Expected tool arguments must be a non-empty object")
+                validate_json(assertion.expected)
+        except ValueError as error:
+            raise SuiteValidationError(f"{location}: {error}") from error
     else:
         raise SuiteValidationError(f"{location}: unsupported assertion {type(assertion).__name__}")
 
@@ -119,9 +139,11 @@ def _validate_verifier(verifier: Verifier, location: str) -> None:
         ) from error
 
 
-def _parse_assertion(raw: object, location: str) -> OutputEquals | OutputHasKeys:
+def _parse_assertion(raw: object, location: str) -> Assertion:
     if not isinstance(raw, dict):
         raise SuiteValidationError(f"{location} must be an object")
+    if not isinstance(raw.get("type"), str):
+        raise SuiteValidationError(f"{location}: assertion type must be a string")
     if raw.get("type") == "output_equals":
         _require_fields(raw, {"id", "type", "expected"}, location)
         return OutputEquals(id=raw["id"], expected=raw["expected"])
@@ -130,6 +152,13 @@ def _parse_assertion(raw: object, location: str) -> OutputEquals | OutputHasKeys
         if not isinstance(raw["keys"], list):
             raise SuiteValidationError(f"{location}.keys must be an array")
         return OutputHasKeys(id=raw["id"], keys=tuple(raw["keys"]))
+    if raw.get("type") in {"tool_called", "tool_not_called"}:
+        _require_fields(raw, {"id", "type", "tool"}, location)
+        assertion_type = ToolCalled if raw["type"] == "tool_called" else ToolNotCalled
+        return assertion_type(id=raw["id"], tool=raw["tool"])
+    if raw.get("type") == "tool_arguments_match":
+        _require_fields(raw, {"id", "type", "tool", "expected"}, location)
+        return ToolArgumentsMatch(id=raw["id"], tool=raw["tool"], expected=raw["expected"])
     raise SuiteValidationError(f"{location}: unknown assertion type {raw.get('type')!r}")
 
 

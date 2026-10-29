@@ -2,7 +2,7 @@
 
 This document records the agreed stack and visual identity. Update it as decisions evolve, including why we changed direction and what the change affects.
 
-The Python runner, SDK, and CLI are implemented. The interface, API service, and TypeScript agent support below remain planned.
+The Python runner, SDK, CLI, and optional LangGraph integration are implemented. The interface, API service, and TypeScript agent support below remain planned.
 
 ## Stack
 
@@ -59,3 +59,5 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-29 | Implement the local runner using Python's standard library | Validate the test execution and reporting contracts without requiring model services | The core has no runtime dependencies; pytest and Ruff are development tools |
 | 2026-10-29 | Add logo-inspired terminal presentation | Give passes and context a teal/blue identity while retaining conventional failure and error colors | Optional styling, explicit statuses, wrapped evidence, and plain redirected output; report data and exit codes retain their contracts |
 | 2026-10-29 | Adopt teal/blue as the shared interface theme | Preserve the logo's identity across future product surfaces | Reuse the palette and semantic roles in the CLI, report viewer, and dashboard; keep amber/red failure and error meanings |
+| 2026-10-29 | Add LangGraph through public callbacks and an optional extra | Observe real tool/model execution while keeping the core dependency-free | Per-invocation collectors, fresh checkpoint threads, and explicit event availability; no inferred hidden reasoning |
+| 2026-10-29 | Version execution reports as schema 2 | Make event records, availability flags, and assertion-event links explicit for consumers | Report readers must support the new version; existing schema-1 case files and CLI exit codes remain valid |

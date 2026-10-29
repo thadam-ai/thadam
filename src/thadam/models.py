@@ -7,7 +7,6 @@ from typing import Callable, Literal, TypeAlias, Union
 from uuid import uuid4
 
 JSONValue: TypeAlias = Union[None, bool, int, float, str, list["JSONValue"], dict[str, "JSONValue"]]
-Agent: TypeAlias = Callable[[JSONValue], JSONValue]
 CaseStatus: TypeAlias = Literal["passed", "failed", "error"]
 
 
@@ -25,6 +24,85 @@ class OutputHasKeys:
 
     id: str
     keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ToolCalled:
+    """Require at least one observed invocation of the named tool, including errors."""
+
+    id: str
+    tool: str
+
+
+@dataclass(frozen=True)
+class ToolNotCalled:
+    """Forbid any observed attempt to invoke the named tool."""
+
+    id: str
+    tool: str
+
+
+@dataclass(frozen=True)
+class ToolArgumentsMatch:
+    """Require every invocation of a tool to match selected top-level arguments."""
+
+    id: str
+    tool: str
+    expected: dict[str, JSONValue]
+
+
+Assertion: TypeAlias = (
+    OutputEquals | OutputHasKeys | ToolCalled | ToolNotCalled | ToolArgumentsMatch
+)
+
+
+@dataclass(frozen=True)
+class TokenUsage:
+    """Provider-reported counts. None means unavailable; zero is a reported value."""
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+
+
+@dataclass(frozen=True)
+class EventError:
+    """An error observed inside a tool or model call."""
+
+    type: str
+    message: str
+
+
+@dataclass(frozen=True)
+class ExecutionEvent:
+    """An observed tool/model span, in start order, correlated by framework run IDs."""
+
+    id: str
+    kind: Literal["tool", "model"]
+    name: str
+    status: Literal["completed", "error", "incomplete"]
+    started_at_ms: float
+    parent_id: str | None = None
+    duration_ms: float | None = None
+    input: JSONValue = None
+    input_available: bool = False
+    output: JSONValue = None
+    output_available: bool = False
+    error: EventError | None = None
+    usage: TokenUsage | None = None
+
+
+@dataclass(frozen=True)
+class AgentResult:
+    """An explicitly instrumented result; plain Python results have unknown tracing."""
+
+    output: JSONValue
+    events: tuple[ExecutionEvent, ...] = ()
+    trace_complete: bool = True
+    trace_warnings: tuple[str, ...] = ()
+
+
+Agent: TypeAlias = Callable[[JSONValue], JSONValue | AgentResult]
 
 
 @dataclass(frozen=True)
@@ -54,7 +132,7 @@ class TestCase:
 
     id: str
     input: JSONValue
-    assertions: tuple[OutputEquals | OutputHasKeys, ...] = ()
+    assertions: tuple[Assertion, ...] = ()
     verifiers: tuple[Verifier, ...] = ()
 
 
@@ -67,13 +145,14 @@ class AssertionResult:
     message: str
     expected: JSONValue
     actual: JSONValue
+    event_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class CaseError:
     """An execution or evaluation error, distinct from a failed expectation."""
 
-    source: Literal["agent", "output", "verifier"]
+    source: Literal["agent", "output", "verifier", "assertion", "trace"]
     type: str
     message: str
     assertion_id: str | None = None
@@ -91,6 +170,9 @@ class CaseResult:
     output_available: bool = False
     assertions: tuple[AssertionResult, ...] = ()
     errors: tuple[CaseError, ...] = ()
+    events: tuple[ExecutionEvent, ...] | None = None
+    trace_complete: bool | None = None
+    trace_warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -109,7 +191,7 @@ class RunReport:
 
     cases: tuple[CaseResult, ...]
     run_id: str = field(default_factory=lambda: str(uuid4()))
-    schema_version: int = field(default=1, init=False)
+    schema_version: int = field(default=2, init=False)
 
     @property
     def summary(self) -> RunSummary:
