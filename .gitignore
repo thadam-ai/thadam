@@ -14,6 +14,9 @@ venv/
 .coverage
 htmlcov/
 
+# Generated run artifacts
+artifacts/
+
 # Editors and operating systems
 .DS_Store
 .idea/

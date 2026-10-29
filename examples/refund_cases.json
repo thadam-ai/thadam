@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "eligible-refund",
+      "input": {"order_id": "order-001", "days_since_purchase": 7},
+      "assertions": [
+        {
+          "id": "refund-decision",
+          "type": "output_equals",
+          "expected": {"approved": true, "amount_cents": 2500, "reason": "eligible"}
+        }
+      ]
+    },
+    {
+      "id": "expired-refund",
+      "input": {"order_id": "order-001", "days_since_purchase": 31},
+      "assertions": [
+        {
+          "id": "reject-expired",
+          "type": "output_equals",
+          "expected": {"approved": false, "amount_cents": 0, "reason": "outside_refund_window"}
+        }
+      ]
+    },
+    {
+      "id": "refund-window-boundary",
+      "input": {"order_id": "order-001", "days_since_purchase": 30},
+      "assertions": [
+        {
+          "id": "inclusive-window",
+          "type": "output_equals",
+          "expected": {"approved": true, "amount_cents": 2500, "reason": "eligible"}
+        }
+      ]
+    },
+    {
+      "id": "second-order-refund",
+      "input": {"order_id": "order-002", "days_since_purchase": 1},
+      "assertions": [
+        {
+          "id": "order-amount",
+          "type": "output_equals",
+          "expected": {"approved": true, "amount_cents": 6000, "reason": "eligible"}
+        }
+      ]
+    },
+    {
+      "id": "unknown-order",
+      "input": {"order_id": "missing-order", "days_since_purchase": 0},
+      "assertions": [
+        {"id": "response-fields", "type": "output_has_keys", "keys": ["approved", "amount_cents", "reason"]},
+        {
+          "id": "reject-unknown-order",
+          "type": "output_equals",
+          "expected": {"approved": false, "amount_cents": 0, "reason": "order_not_found"}
+        }
+      ]
+    }
+  ]
+}

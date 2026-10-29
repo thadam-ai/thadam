@@ -26,9 +26,10 @@ Run the formatter and linter before opening a pull request:
 ```shell
 python -m ruff format .
 python -m ruff check .
+python -m pytest -q
 ```
 
-When behavior is added, include focused tests for it. Add pytest to the development extra with the first runner implementation. Use controlled agents and tools so default tests run without network access, model credentials, or hosted services.
+When behavior is added, include focused tests for it. Use controlled agents and tools so default tests run without network access, model credentials, or hosted services. The current suite covers input validation, error handling, verifier contracts, report artifacts, and CLI/SDK agreement. Live model checks should be separate and explicitly configured.
 
 ## Code that humans and AI agents can understand
 

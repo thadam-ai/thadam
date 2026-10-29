@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** pre-MVP; documentation and package scaffold only.
-**Next build:** milestone 1, the local Python test runner.
+**Current state:** milestone 1 implemented; local Python runner, SDK, CLI, and reports.
+**Next build:** milestone 2, LangGraph integration and observable tool behavior.
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
@@ -12,7 +12,7 @@ Milestones below are ordered by dependency and user value, not promised release 
 - [x] Define the product and first implementation scope.
 - [x] Provide a repository guide in `AGENTS.md` and a map in `docs/architecture.md`.
 - [x] Establish a Python package scaffold, contributor setup, and code conventions.
-- [ ] Demonstrate those conventions in the first working feature and its tests.
+- [x] Demonstrate those conventions in the first working feature and its tests.
 
 ## 1. Run one agent against saved test cases
 
@@ -20,16 +20,16 @@ Milestones below are ordered by dependency and user value, not promised release 
 
 Implementation details and acceptance criteria: [local runner specification](docs/milestones/01-local-runner.md).
 
-- [ ] Define typed models for test cases, agent results, assertions, and run reports.
-- [ ] Validate a versioned JSON case file before invoking the agent.
-- [ ] Connect a custom Python callable through a small adapter contract.
-- [ ] Run cases sequentially, isolating agent exceptions per case.
-- [ ] Support deterministic checks: exact output and required top-level output fields.
-- [ ] Accept a Python verifier for application-specific correctness through the SDK.
-- [ ] Capture case IDs, actual outputs, assertion evidence, durations, and agent errors.
-- [ ] Add a Python SDK entry point and a CLI with documented exit codes.
-- [ ] Produce a terminal summary and a versioned JSON report.
-- [ ] Include a small agent example, five scenarios, and focused behavior tests that require no model API key.
+- [x] Define typed models for test cases, agent results, assertions, and run reports.
+- [x] Validate a versioned JSON case file before invoking the agent.
+- [x] Connect a custom Python callable through a small adapter contract.
+- [x] Run cases sequentially, isolating agent exceptions per case.
+- [x] Support deterministic checks: exact output and required top-level output fields.
+- [x] Accept a Python verifier for application-specific correctness through the SDK.
+- [x] Capture case IDs, actual outputs, assertion evidence, durations, and agent errors.
+- [x] Add a Python SDK entry point and a CLI with documented exit codes.
+- [x] Produce a terminal summary and a versioned JSON report.
+- [x] Include a small agent example, five scenarios, and focused behavior tests that require no model API key.
 
 Completion requires a runnable example showing a passing case, a failed assertion, and an agent error. None may be silently dropped or confused with one another. No model provider, hosted account, or telemetry backend is required for this milestone.
 

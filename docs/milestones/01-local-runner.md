@@ -1,6 +1,6 @@
 # Milestone 1: local Python test runner
 
-**Status:** planned; the commands and formats below are proposed, not implemented.
+**Status:** implemented. Commands below run from a repository checkout after editable installation. Framework instrumentation, enforced timeouts, and hosted services remain future milestones.
 
 ## User outcome
 
@@ -8,11 +8,11 @@ A developer connects a Python agent, runs five saved scenarios, and gets a reada
 
 ## Supported agent
 
-Start with a synchronous Python callable that accepts one JSON value and returns one JSON-compatible value. A callable may wrap an existing agent. Milestone 1 evaluates its returned output; automatic framework or tool discovery follows later.
+The agent is a synchronous Python callable accepting one positional JSON input and returning one JSON-compatible value. A callable may wrap an existing agent. Milestone 1 evaluates its returned output; automatic framework or tool discovery follows later.
 
-Keep the example small: a refund-policy agent backed by local fixtures. It should make policy mistakes observable without a model dependency. Include one intentionally buggy variant to demonstrate useful failures.
+The example uses a local refund-policy function with order fixtures. `examples.refund_agent:run` passes all five cases; `run_buggy` yields three passes, one failed assertion, and one agent error. It demonstrates the runner without claiming to evaluate an actual LLM. CLI integration tests also load an independently defined user module from a temporary working directory.
 
-## Proposed suite format
+## Suite format
 
 ```json
 {
@@ -20,12 +20,12 @@ Keep the example small: a refund-policy agent backed by local fixtures. It shoul
   "cases": [
     {
       "id": "eligible-refund",
-      "input": {"order_id": "order-123", "days_since_purchase": 7},
+      "input": {"order_id": "order-001", "days_since_purchase": 7},
       "assertions": [
         {
           "id": "refund-decision",
           "type": "output_equals",
-          "expected": {"approved": true, "amount": 25}
+          "expected": {"approved": true, "amount_cents": 2500, "reason": "eligible"}
         }
       ]
     }
@@ -35,14 +35,45 @@ Keep the example small: a refund-policy agent backed by local fixtures. It shoul
 
 Initial built-in assertions:
 
-- `output_equals`: exact JSON equality, ignoring object key order. Compare JSON types strictly, so boolean `true` cannot satisfy numeric `1`; decide and document number semantics in implementation.
-- `output_has_keys`: require specified top-level keys in an object output; report a failed assertion if the output is not an object.
+- `output_equals`: exact JSON equality, ignoring object key order and preserving array order. JSON numbers compare by numeric value, so `1` equals `1.0`; booleans remain distinct, so `true` does not equal `1`. Object outputs must have the same keys as the expected value.
+- `output_has_keys`: require a non-empty `keys` array of unique strings naming top-level object keys. Additional output keys are allowed. A non-object output fails the assertion.
 
-The Python SDK also accepts an explicit verifier callable for domain rules. Define its typed input and assertion-result output as part of implementation. A verifier exception is an evaluation error, not a passed or failed expectation.
+Inputs, expected values, and outputs use null, booleans, finite numbers, valid Unicode strings, arrays, and string-keyed objects. Python tuples, sets, non-finite numbers, cyclic containers, and containers nested beyond 100 levels are rejected. Very large integers must fit the interpreter's JSON serialization limits.
 
-Reject unsupported schema versions, duplicate IDs, unknown assertion types, invalid parameters, empty suites, and cases with no check before invoking any agent. SDK-created cases undergo the same validation.
+## Python SDK and verifiers
 
-## Proposed interfaces
+`load_suite(path)` reads and validates a suite. `run_suite(agent, cases)` also accepts a sequence of Python `TestCase` objects and returns a `RunReport`. `write_report(report, path)` writes JSON; `report_to_dict(report)` returns a JSON-compatible dictionary.
+
+Verifiers are SDK-only callbacks; JSON suites do not execute verifier code. Each callback accepts input and output snapshots and returns `CheckResult(passed, message, expected, actual)`. The runner attaches the stable ID from `Verifier`. A raised exception, wrong return type, non-boolean decision, empty message, or invalid evidence produces a verifier error. A case may have assertions, verifiers, or both, but must have at least one check.
+
+```python
+from thadam import CheckResult, OutputHasKeys, TestCase, Verifier, run_suite
+
+
+def respects_limit(case_input, output):
+    amount = output["amount_cents"]
+    limit = case_input["limit_cents"]
+    return CheckResult(
+        passed=amount <= limit,
+        message="Refund must stay within the approved limit",
+        expected={"maximum_cents": limit},
+        actual=amount,
+    )
+
+
+case = TestCase(
+    id="refund-limit",
+    input={"limit_cents": 2500},
+    assertions=(OutputHasKeys("fields", ("amount_cents",)),),
+    verifiers=(Verifier("within-limit", respects_limit),),
+)
+report = run_suite(agent=lambda _: {"amount_cents": 3000}, cases=[case])
+assert report.cases[0].status == "failed"
+```
+
+Unsupported schema versions, duplicate IDs, duplicate JSON object keys, unknown fields, unknown assertion types, invalid parameters, empty suites, and cases with no check are rejected before invoking any agent. Case IDs must be unique across the suite; assertion/verifier IDs must be unique within each case. SDK-created cases undergo the same validation.
+
+## CLI
 
 The CLI loads an agent explicitly from a Python module and callable name:
 
@@ -52,7 +83,9 @@ thadam run examples/refund_cases.json \
   --report artifacts/refund-report.json
 ```
 
-The Python SDK should expose a small `run_suite` entry point using the same runner and returning a typed report. Keep file parsing and report writing explicit. Finalize parameter names in working code rather than publishing speculative callable examples here.
+The suite is validated before the agent module is imported. Agent imports and execution are trusted Python code; their standard output is redirected to standard error to keep the CLI summary readable. `--report` is optional, creates missing parent directories, and writes the artifact atomically. It cannot target the suite file. An existing report is replaced only after a new report is successfully written.
+
+`--color auto|always|never` controls terminal styling and can appear before or after `run`. Auto mode detects TTYs, respects a non-empty `NO_COLOR` and `TERM=dumb`, and leaves redirected output plain. Explicit modes override that detection. The summary includes a compact heading, suite/agent context, case statuses, durations, and wrapped failure evidence. Teal indicates passes, amber failed expectations, and red errors. JSON artifacts and exit codes use the same contracts in every color mode.
 
 CLI exit codes:
 
@@ -64,7 +97,9 @@ CLI exit codes:
 
 ## Report requirements
 
-Include schema version, run ID, stable case IDs, summary counts, per-case duration, actual output when available, and assertion evidence. Record error type, source, and message for agent or verifier exceptions. Terminal output should identify failed cases and explain which expectation was violated. A supported JSON report must remain parseable even when a case produces an error.
+The report contains `schema_version`, `run_id`, `summary`, and an ordered `cases` array. Summary fields are `total`, `passed`, `failed`, and `errors`. Each case contains `id`, `status`, `duration_ms`, `input`, `output`, `output_available`, `assertions`, and `errors`. Input is the original case snapshot, even if the agent mutates its argument. A returned JSON null has `output_available: true`; an agent error has `output_available: false`.
+
+Assertions contain `id`, `passed`, `message`, `expected`, and `actual`. Errors contain `source` (`agent`, `output`, or `verifier`), `type`, `message`, and an optional `assertion_id`. Invalid agent output becomes an `output` error and is omitted from the JSON evidence. Verifier errors retain valid output and any other completed checks. Errors take precedence over assertion failures in a case's status. Case errors do not stop subsequent cases. `KeyboardInterrupt` propagates; `SystemExit`, including exit code zero, from an agent or verifier becomes a case error. An agent import that raises `SystemExit` is a configuration error.
 
 Do not imply the runner can reproduce a probabilistic agent exactly. Milestone 1 runs sequentially, without automatic retries, enforced execution timeouts, or concurrent state management. These behaviors need explicit contracts in later milestones.
 
