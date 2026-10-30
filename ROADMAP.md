@@ -15,7 +15,10 @@ Milestones below are ordered by dependency and user value, not promised release 
 - [x] Demonstrate those conventions in the first working feature and its tests.
 - [x] Document security maintenance, private vulnerability reporting, and execution/data boundaries in `SECURITY.md`.
 - [x] Add repository CI for core and optional LangGraph tests, Ruff checks, and package build/install validation.
-- [ ] Require the repository CI checks before merging to `main`, after their first successful GitHub run.
+- [x] Prepare `thadam-ai` distribution metadata and a validated GitHub-to-PyPI Trusted Publishing workflow.
+- [x] Configure the `pypi` release environment with owner approval and version-tag restrictions.
+- [ ] Complete owner PyPI 2FA/pending-publisher setup and publish the first `thadam-ai` release.
+- [x] Require the repository CI checks before merging to `main`, after their first successful GitHub run.
 
 ## 1. Run one agent against saved test cases
 

@@ -17,7 +17,7 @@ try:
     from langgraph.graph.state import CompiledStateGraph
 except ImportError as error:
     raise ImportError(
-        "Install the optional integration with: pip install 'thadam[langgraph]'"
+        "Install the optional integration with: pip install 'thadam-ai[langgraph]'"
     ) from error
 
 from thadam._json import validate_json
