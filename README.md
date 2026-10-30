@@ -124,6 +124,7 @@ Terminals advertising RGB support through `COLORTERM=truecolor` or `24bit` use t
 - [Architecture](docs/architecture.md): data flow, contracts, and module boundaries
 - [Agent guide](AGENTS.md): repository map and working rules for AI coding agents
 - [Contributing](CONTRIBUTING.md): development setup and code conventions
+- [Security policy](SECURITY.md): supported versions, private reporting, and execution boundaries
 
 ## Development
 
@@ -136,6 +137,8 @@ python -m ruff format --check .
 ```
 
 Install `'.[dev,langgraph]'` to include the real-graph integration tests. They also use controlled fixtures and need no model credentials. Without the extra, those tests are skipped.
+
+The [CI workflow](.github/workflows/ci.yml) runs on pull requests and pushes to `main`. It checks Ruff lint and formatting, core tests on Python 3.10–3.14, LangGraph tests on Python 3.10 and 3.14, and package build and installation. See [the contributor guide](CONTRIBUTING.md#automated-checks) for local equivalents and merge-check guidance.
 
 ## Name
 

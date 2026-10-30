@@ -30,6 +30,8 @@ The engine is sequential and runs trusted code in the current process. LangGraph
 - `docs/milestones/` — concrete specifications for individual builds.
 - `ROADMAP.md` — canonical feature status and future ideas.
 - `CONTRIBUTING.md` — coding conventions shared by human and AI contributors.
+- `SECURITY.md` — private vulnerability reporting, supported revisions, and execution/data boundaries.
+- `.github/workflows/ci.yml` — repository test, lint, formatting, and package build/install checks.
 - `examples/` — plain Python and LangGraph refund suites with correct/buggy callables.
 - `tests/` — core behavior checks and optional real-graph integration checks.
 
@@ -63,6 +65,8 @@ python -m ruff format --check .
 Use focused tests for real contracts and failure paths. Default tests use controlled agents and tools without a model API key or hosted service. Keep live provider checks explicit and separate. CLI tests import a user's module from a temporary working directory and compare the example's outcomes with the SDK.
 
 Install `'.[dev,langgraph]'` for integration work and run `python -m pytest -q tests/test_langgraph.py`. Without compatible optional packages, that module is skipped. Do not import LangGraph or langchain-core from the core package at module load time.
+
+Repository CI runs core tests on Python 3.10–3.14 and LangGraph tests on Python 3.10 and 3.14. It also builds the distribution and checks a clean wheel installation. Keep its commands and the contributor guide aligned; adding a workflow does not enable required merge checks.
 
 Report what changed, what checks ran, and any remaining limitations. A clean lint result is not evidence that an unimplemented feature works.
 

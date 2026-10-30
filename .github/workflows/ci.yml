@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install development tools
+        run: python -m pip install -e '.[dev]'
+      - name: Check lint
+        run: python -m ruff check .
+      - name: Check formatting
+        run: python -m ruff format --check .
+
+  core:
+    name: Core tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install the core and development tools
+        run: python -m pip install -e '.[dev]'
+      - name: Check installed dependencies
+        run: python -m pip check
+      - name: Run core tests without optional integrations
+        run: python -m pytest -q
+
+  langgraph:
+    name: LangGraph tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install the LangGraph integration and development tools
+        run: python -m pip install -e '.[dev,langgraph]'
+      - name: Check installed dependencies
+        run: python -m pip check
+      # A missing integration must fail this job instead of silently skipping its tests.
+      - name: Verify optional imports
+        run: python -c "import langchain_core; import langgraph.graph"
+      - name: Run the full suite with LangGraph installed
+        run: python -m pytest -q
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install build tools
+        run: python -m pip install build twine
+      - name: Build the source distribution and wheel
+        run: python -m build
+      - name: Validate package metadata
+        run: python -m twine check --strict dist/*
+      - name: Install the wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/thadam-wheel"
+          "$RUNNER_TEMP/thadam-wheel/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/thadam-wheel/bin/python" -m pip check
+      - name: Check the installed SDK and CLI outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/thadam-wheel/bin/python" - <<'PY'
+          from importlib.resources import files
+
+          from thadam import OutputEquals, TestCase, run_suite
+
+          assert files("thadam").joinpath("py.typed").is_file()
+          case = TestCase(
+              id="installed-sdk",
+              input={"value": 1},
+              assertions=(OutputEquals("echo", {"value": 1}),),
+          )
+          report = run_suite(agent=lambda value: value, cases=[case])
+          assert report.summary.passed == 1
+          PY
+          "$RUNNER_TEMP/thadam-wheel/bin/thadam" --version
+          "$RUNNER_TEMP/thadam-wheel/bin/python" -m thadam --help

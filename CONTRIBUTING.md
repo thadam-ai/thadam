@@ -9,6 +9,7 @@ Read the [roadmap](ROADMAP.md), [architecture](docs/architecture.md), and [first
 - Check existing issues and discussions before starting a large change.
 - For a new feature or a substantial design change, open an issue first so the direction can be discussed.
 - Keep pull requests focused and explain the user problem they solve.
+- Report suspected vulnerabilities through the [security policy's private reporting route](SECURITY.md#report-a-vulnerability-privately), rather than a public issue.
 
 ## Development setup
 
@@ -32,6 +33,44 @@ python -m pytest -q
 When behavior is added, include focused tests for it. Use controlled agents and tools so default tests run without network access, model credentials, or hosted services. The current suite covers input validation, error handling, verifier contracts, report artifacts, and CLI/SDK agreement. Live model checks should be separate and explicitly configured.
 
 For LangGraph development, install `python -m pip install -e '.[dev,langgraph]'` before running tests. `tests/test_langgraph.py` runs actual compiled graphs with scripted models and local tools; it is skipped when compatible optional dependencies are absent. Run that module when changing callback handling and the full suite when changing shared models, assertions, or reports. Check dependency resolution in a clean environment with `python -m pip check`.
+
+## Automated checks
+
+The [CI workflow](.github/workflows/ci.yml) runs for every pull request and push to `main`, and can also be started manually from GitHub Actions. Its jobs are:
+
+| Check | What it verifies |
+| --- | --- |
+| `Lint` | Ruff lint and formatting on Python 3.14 |
+| `Core tests (Python 3.10)` through `Core tests (Python 3.14)` | Editable installation, dependency consistency, and pytest without optional integrations on each minor version |
+| `LangGraph tests (Python 3.10)` and `LangGraph tests (Python 3.14)` | Optional imports, dependency consistency, and the full test suite (including the LangGraph module) with that extra installed |
+| `Package` | Isolated source/wheel build, strict metadata checks, clean wheel installation, and installed SDK/CLI checks outside the checkout |
+
+Tests use controlled fixtures and require no model credentials. The workflow has read-only repository permissions, does not persist checkout credentials, and pins actions to full commit hashes. Review upstream changes when updating those pins. The workflow does not publish packages or upload execution reports.
+
+Run lint and formatting checks locally with `python -m ruff check .` and `python -m ruff format --check .`. To reproduce the optional integration checks:
+
+```shell
+python -m pip install -e '.[dev,langgraph]'
+python -m pip check
+python -m pytest -q tests/test_langgraph.py
+python -m pytest -q
+```
+
+To check packaging locally, first remove stale build output if present, then run:
+
+```shell
+python -m pip install build twine
+python -m build
+python -m twine check --strict dist/*
+```
+
+The workflow creates a fresh virtual environment to install the resulting wheel and check its CLI and type marker. An editable source installation alone does not verify that the distribution includes the required files.
+
+### Maintainer merge settings
+
+After the workflow has run successfully on GitHub, maintainers should configure a rule for `main` requiring all checks listed above before merging. Workflow files do not enable branch protection by themselves. Select the exact check names from a completed run, keep the names unique, and update the rule when changing the Python matrix. See GitHub's [required status checks guidance](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-status-checks-before-merging).
+
+Keep repository CI separate from the planned product features for comparing user-agent regression reports and providing a reusable Thadam CI example.
 
 ## Code that humans and AI agents can understand
 

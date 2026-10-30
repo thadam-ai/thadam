@@ -13,6 +13,9 @@ Milestones below are ordered by dependency and user value, not promised release 
 - [x] Provide a repository guide in `AGENTS.md` and a map in `docs/architecture.md`.
 - [x] Establish a Python package scaffold, contributor setup, and code conventions.
 - [x] Demonstrate those conventions in the first working feature and its tests.
+- [x] Document security maintenance, private vulnerability reporting, and execution/data boundaries in `SECURITY.md`.
+- [x] Add repository CI for core and optional LangGraph tests, Ruff checks, and package build/install validation.
+- [ ] Require the repository CI checks before merging to `main`, after their first successful GitHub run.
 
 ## 1. Run one agent against saved test cases
 
