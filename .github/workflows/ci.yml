@@ -104,20 +104,6 @@ jobs:
       - name: Check the installed SDK and CLI outside the checkout
         working-directory: ${{ runner.temp }}
         run: |
-          "$RUNNER_TEMP/thadam-wheel/bin/python" - <<'PY'
-          from importlib.resources import files
-
-          from thadam import OutputEquals, TestCase, compare_reports, run_suite
-
-          assert files("thadam").joinpath("py.typed").is_file()
-          case = TestCase(
-              id="installed-sdk",
-              input={"value": 1},
-              assertions=(OutputEquals("echo", {"value": 1}),),
-          )
-          report = run_suite(agent=lambda value: value, cases=[case])
-          assert report.summary.passed == 1
-          assert compare_reports(report, report).exit_code == 0
-          PY
+          "$RUNNER_TEMP/thadam-wheel/bin/python" "$GITHUB_WORKSPACE/scripts/check_installed_package.py"
           "$RUNNER_TEMP/thadam-wheel/bin/thadam" --version
           "$RUNNER_TEMP/thadam-wheel/bin/python" -m thadam --help

@@ -1,0 +1,100 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  # Manual runs validate artifacts; they never upload to PyPI.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Validate release distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Verify release tag and reviewed source
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import tomllib
+
+          project = tomllib.loads(Path("pyproject.toml").read_text())['project']
+          if project['name'] != 'thadam-ai':
+              raise SystemExit("Release distribution must be thadam-ai")
+          expected = f"v{project['version']}"
+          if os.environ['RELEASE_TAG'] != expected:
+              raise SystemExit(f"Release tag must match package version: {expected}")
+          PY
+          git merge-base --is-ancestor HEAD origin/main
+      - name: Install development, integration, and build tools
+        run: python -m pip install -e '.[dev,langgraph]' build twine
+      - name: Check dependencies, formatting, and tests
+        run: |
+          python -m pip check
+          python -m ruff check .
+          python -m ruff format --check .
+          python -c "import langchain_core; import langgraph.graph"
+          python -m pytest -q tests examples/regression_test.py
+      - name: Build source distribution and wheel
+        run: python -m build
+      - name: Validate package metadata
+        run: python -m twine check --strict dist/*
+      - name: Install the wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/thadam-wheel"
+          "$RUNNER_TEMP/thadam-wheel/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/thadam-wheel/bin/python" -m pip check
+      - name: Check installed distribution, SDK, and CLI
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/thadam-wheel/bin/python" "$GITHUB_WORKSPACE/scripts/check_installed_package.py"
+          "$RUNNER_TEMP/thadam-wheel/bin/thadam" --version
+          "$RUNNER_TEMP/thadam-wheel/bin/python" -m thadam --help
+      - name: Save validated distributions
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish validated distributions
+    if: github.event_name == 'release' && github.repository == 'thadam-ai/thadam'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/thadam-ai/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download validated distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist
+          attestations: true

@@ -18,6 +18,31 @@ Open-source testing, evaluation, and reliability for AI agents. Thadam helps dev
 
 Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
+## Package installation
+
+The first PyPI release is being prepared. Once it is published, install the **`thadam-ai`** distribution with Python 3.10 or newer:
+
+```shell
+python -m pip install thadam-ai
+thadam --help
+```
+
+For LangGraph support, install `python -m pip install 'thadam-ai[langgraph]'`. The Python import remains `thadam`, and the command remains `thadam`. The separate PyPI package named `thadam` is unrelated to this project.
+
+The installed SDK works with your own agents without checking out this repository:
+
+```python
+from thadam import OutputEquals, TestCase, run_suite
+
+cases = [
+    TestCase("echo", {"message": "hello"}, (OutputEquals("answer", {"message": "hello"}),)),
+]
+report = run_suite(agent=lambda request: request, cases=cases)
+print(report.summary)
+```
+
+See the [publishing guide](https://github.com/thadam-ai/thadam/blob/main/docs/publishing.md) for release setup and status. The following example suites and agent modules live in the repository checkout; they are not installed by pip.
+
 ## Try it locally
 
 From a checkout of this repository, using Python 3.10 or newer:
@@ -67,7 +92,7 @@ write_report(report, "artifacts/sdk-report.json")
 print(report.summary)
 ```
 
-Cases can also be constructed in Python with `TestCase`, `OutputEquals`, `OutputHasKeys`, and custom `Verifier` callbacks. See the [suite and verifier contracts](docs/milestones/01-local-runner.md) for formats, examples, and error semantics.
+Cases can also be constructed in Python with `TestCase`, `OutputEquals`, `OutputHasKeys`, and custom `Verifier` callbacks. See the [suite and verifier contracts](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/01-local-runner.md) for formats, examples, and error semantics.
 
 ## Test a LangGraph agent
 
@@ -92,7 +117,7 @@ thadam run examples/langgraph_cases.json \
 
 All three cases fail their tool checks. Failure reports show observed model/tool events and their IDs. JSON reports retain arguments, results, errors, durations, and reported usage, including partial events when graph execution raises an exception.
 
-Wrap your own compiled graph with `LangGraphAgent` from `thadam.adapters.langgraph`, optionally supplying input/output mappers and graph config. See the [LangGraph guide](docs/milestones/02-langgraph.md) for integration code, tool assertion formats, coverage limits, and checkpoint isolation.
+Wrap your own compiled graph with `LangGraphAgent` from `thadam.adapters.langgraph`, optionally supplying input/output mappers and graph config. See the [LangGraph guide](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/02-langgraph.md) for integration code, tool assertion formats, coverage limits, and checkpoint isolation.
 
 Reports now use **schema version 3**. They retain execution events and availability fields from schema 2 and add declared check definitions, an evaluation version, and optional application revision metadata. Uninstrumented Python runs have `events: null`, not an observed empty trace. Existing case files still use schema version 1 and continue to work. Comparing older reports requires fresh runs because those reports lack declared check contracts.
 
@@ -126,7 +151,7 @@ write_comparison(comparison, "artifacts/comparison.json")
 print(comparison.summary)
 ```
 
-The [comparison guide](docs/milestones/03-regression-comparison.md) documents contracts, verifier revisions, classifications, and limitations. Run the [pytest example](examples/regression_test.py) with `python -m pytest -q examples/regression_test.py`. The [consumer GitHub Actions example](docs/examples/agent-regression.yml) reads the reviewed baseline from the PR's target commit and gates on the comparison result. Adapt its paths and application installation before copying it into your own workflow.
+The [comparison guide](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/03-regression-comparison.md) documents contracts, verifier revisions, classifications, and limitations. Run the [pytest example](https://github.com/thadam-ai/thadam/blob/main/examples/regression_test.py) with `python -m pytest -q examples/regression_test.py`. The [consumer GitHub Actions example](https://github.com/thadam-ai/thadam/blob/main/docs/examples/agent-regression.yml) reads the reviewed baseline from the PR's target commit and gates on the comparison result. Adapt its paths and application installation before copying it into your own workflow.
 
 ## Exit codes
 
@@ -150,15 +175,15 @@ Terminals advertising RGB support through `COLORTERM=truecolor` or `24bit` use t
 
 ## Start here
 
-- [Roadmap](ROADMAP.md): ordered milestones, completion criteria, and future ideas
-- [Design decisions](DESIGN.md): agreed stack, rationale, and decision history
-- [Local runner](docs/milestones/01-local-runner.md): SDK, suite format, and report contracts
-- [LangGraph integration](docs/milestones/02-langgraph.md): callbacks, tool assertions, and execution evidence
-- [Regression comparison](docs/milestones/03-regression-comparison.md): reviewed baselines, report compatibility, and CI gates
-- [Architecture](docs/architecture.md): data flow, contracts, and module boundaries
-- [Agent guide](AGENTS.md): repository map and working rules for AI coding agents
-- [Contributing](CONTRIBUTING.md): development setup and code conventions
-- [Security policy](SECURITY.md): supported versions, private reporting, and execution boundaries
+- [Roadmap](https://github.com/thadam-ai/thadam/blob/main/ROADMAP.md): ordered milestones, completion criteria, and future ideas
+- [Design decisions](https://github.com/thadam-ai/thadam/blob/main/DESIGN.md): agreed stack, rationale, and decision history
+- [Local runner](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/01-local-runner.md): SDK, suite format, and report contracts
+- [LangGraph integration](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/02-langgraph.md): callbacks, tool assertions, and execution evidence
+- [Regression comparison](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/03-regression-comparison.md): reviewed baselines, report compatibility, and CI gates
+- [Architecture](https://github.com/thadam-ai/thadam/blob/main/docs/architecture.md): data flow, contracts, and module boundaries
+- [Agent guide](https://github.com/thadam-ai/thadam/blob/main/AGENTS.md): repository map and working rules for AI coding agents
+- [Contributing](https://github.com/thadam-ai/thadam/blob/main/CONTRIBUTING.md): development setup and code conventions
+- [Security policy](https://github.com/thadam-ai/thadam/blob/main/SECURITY.md): supported versions, private reporting, and execution boundaries
 
 ## Development
 
@@ -172,7 +197,7 @@ python -m ruff format --check .
 
 Install `'.[dev,langgraph]'` to include the real-graph integration tests. They also use controlled fixtures and need no model credentials. Without the extra, those tests are skipped.
 
-The [CI workflow](.github/workflows/ci.yml) runs on pull requests and pushes to `main`. It checks Ruff lint and formatting, core tests on Python 3.10–3.14, LangGraph tests on Python 3.10 and 3.14, and package build and installation. See [the contributor guide](CONTRIBUTING.md#automated-checks) for local equivalents and merge-check guidance.
+The [CI workflow](https://github.com/thadam-ai/thadam/blob/main/.github/workflows/ci.yml) runs on pull requests and pushes to `main`. It checks Ruff lint and formatting, core tests on Python 3.10–3.14, LangGraph tests on Python 3.10 and 3.14, and package build and installation. See [the contributor guide](https://github.com/thadam-ai/thadam/blob/main/CONTRIBUTING.md#automated-checks) for local equivalents and merge-check guidance.
 
 ## Name
 
@@ -180,4 +205,4 @@ The [CI workflow](.github/workflows/ci.yml) runs on pull requests and pushes to 
 
 ## License
 
-Thadam is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+Thadam is licensed under the Apache License 2.0. See [LICENSE](https://github.com/thadam-ai/thadam/blob/main/LICENSE).

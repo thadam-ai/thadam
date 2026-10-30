@@ -53,6 +53,8 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/cli.py` | Parse arguments, load the selected agent, invoke SDK, and set exit code | Share engine behavior with Python callers |
 | `examples/` | Small runnable agent and suites | Demonstrate actual public APIs |
 | `tests/` | Contract and behavior checks | Controlled agent/tool fixtures by default |
+| `scripts/check_installed_package.py` | Validate an installed distribution outside the checkout | Check distribution name/version, packaged types, and a real SDK/report round trip |
+| `.github/workflows/publish.yml` | Build, validate, and publish reviewed release distributions | Separate upload job with OIDC; manual runs validate without publishing |
 
 Add further framework and provider adapters in their roadmap milestones. Evolve this map when implementation shows a better boundary.
 
@@ -73,6 +75,8 @@ Saved report comparison follows `load_report -> validate evidence -> match case/
 ## Dependencies and extension points
 
 The core has no runtime dependencies. Add dependencies when required by a working feature. Model providers, framework integrations, OpenTelemetry export, and hosted services are optional extensions. Importing Thadam must not select a provider or start a run.
+
+The distribution name `thadam-ai` is separate from the import/CLI name `thadam`. Build and publishing tools remain CI/development dependencies; they are not imported by the installed SDK. The [publishing guide](publishing.md) records the first-release prerequisites and the environment-gated release boundary.
 
 Cases and their JSON data are validated and snapshotted before the first invocation. Each agent receives a copy of its input; each verifier receives its own input/output snapshots. Callback objects retain their identity. This protects recorded evidence from agent/verifier mutations without claiming process isolation or automatically resetting a user's agent state.
 

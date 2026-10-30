@@ -22,6 +22,8 @@ python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 ```
 
+The distribution is named `thadam-ai`; source imports and the CLI remain `thadam`. Editable installation is for contributors. The public PyPI release is pending; see the [publishing guide](docs/publishing.md) for owner setup and release instructions.
+
 Run the formatter and linter before opening a pull request:
 
 ```shell
@@ -65,6 +67,8 @@ python -m twine check --strict dist/*
 ```
 
 The workflow creates a fresh virtual environment to install the resulting wheel and check its CLI and type marker. An editable source installation alone does not verify that the distribution includes the required files.
+
+The shared `scripts/check_installed_package.py` also checks installed distribution identity/version and a real SDK/report/comparison round trip. The release workflow uses the same check, grants publishing permissions only to its separate upload job, and treats a manual run as validation only.
 
 ### Maintainer merge settings
 

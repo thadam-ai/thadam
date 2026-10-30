@@ -20,6 +20,12 @@ The Python runner, SDK, CLI, optional LangGraph integration, and saved-report re
 - **FastAPI service:** expose the existing Python engine when live execution and result access need an API. Keep execution and evaluation rules in the engine so SDK, CLI, and API agree.
 - **TypeScript agent support:** add an adapter or SDK when real use cases establish how JavaScript and TypeScript agents should connect.
 
+## Package and release names
+
+The distribution name is `thadam-ai`; the import package and CLI remain `thadam`. Installation will use `python -m pip install thadam-ai` and optional extras such as `'thadam-ai[langgraph]'`. Distribution and import names are separate Python packaging concepts. Keeping the existing import/command avoids an unnecessary SDK and CLI rename. The PyPI project named `thadam` is unrelated to this repository.
+
+The first upload is pending. The [release workflow](.github/workflows/publish.yml) validates builds on manual runs and publishes only after a matching GitHub release, successful checks, and the configured `pypi` environment approval. Trusted Publishing supplies short-lived credentials; no PyPI API token is stored. See the [publishing guide](docs/publishing.md) for owner setup, candidate-name limitations, and release steps.
+
 ## Brand and color theme
 
 Thadam's identity is **teal and blue**, inspired by the supplied Thadam logo. Use this palette across the CLI, future report viewer, dashboard, and other interfaces. These are reusable color roles; the CLI is the first implemented surface.
@@ -63,3 +69,4 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-29 | Version execution reports as schema 2 | Make event records, availability flags, and assertion-event links explicit for consumers | Report readers must support the new version; existing schema-1 case files and CLI exit codes remain valid |
 | 2026-10-30 | Add deterministic saved-report comparison and run schema 3 | Prevent changed expectations or missing evidence from masquerading as improvements | Snapshot declared checks before execution; require explicit verifier revisions; compare schema-3 reports and emit comparison schema 1 without rerunning agents |
 | 2026-10-30 | Gate on individual checks and errors on either side | Case totals can hide a newly failing check, and errored baselines do not establish usable verdicts | Explicitly selected baselines can acknowledge existing assertion failures; regressions/errors return 1 and incompatible contracts return 2 |
+| 2026-10-30 | Prepare `thadam-ai` distribution and OIDC publishing | The PyPI name `thadam` belongs to an unrelated SDK; provide a repeatable release path | Preserve `import thadam` and the `thadam` CLI; validate source/wheel artifacts and isolate publishing permissions; first upload awaits owner account/publisher setup |

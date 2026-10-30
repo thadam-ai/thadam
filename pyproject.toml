@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "thadam"
+name = "thadam-ai"
 version = "0.3.0"
 description = "Open-source testing, evaluation, and reliability for AI agents"
 readme = "README.md"
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
@@ -34,6 +35,8 @@ thadam = "thadam.cli:main"
 Homepage = "https://github.com/thadam-ai/thadam"
 Repository = "https://github.com/thadam-ai/thadam"
 Issues = "https://github.com/thadam-ai/thadam/issues"
+Documentation = "https://github.com/thadam-ai/thadam/blob/main/README.md"
+Changelog = "https://github.com/thadam-ai/thadam/releases"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

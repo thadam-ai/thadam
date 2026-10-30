@@ -11,7 +11,7 @@
 
 For instrumentation and tool assertions, also read `docs/milestones/02-langgraph.md`.
 
-This is a Python package for testing and evaluating AI agents. The product is **Thadam (தடம்)**. Use `thadam` for Python package and CLI names.
+This is a Python package for testing and evaluating AI agents. The product is **Thadam (தடம்)**. The distribution/install name is `thadam-ai`; use `thadam` for Python imports, module commands, and the CLI. The separate PyPI project named `thadam` is unrelated. First public publication is pending; do not claim the package is available until a PyPI upload succeeds.
 
 ## Current implementation
 
@@ -38,6 +38,8 @@ The engine is sequential and runs trusted code in the current process. LangGraph
 - `CONTRIBUTING.md` — coding conventions shared by human and AI contributors.
 - `SECURITY.md` — private vulnerability reporting, supported revisions, and execution/data boundaries.
 - `.github/workflows/ci.yml` — repository test, lint, formatting, and package build/install checks.
+- `.github/workflows/publish.yml` and `docs/publishing.md` — validated release flow and owner setup; manual workflow runs never publish.
+- `scripts/check_installed_package.py` — installed distribution identity, SDK, type marker, and report round-trip checks outside the checkout.
 - `examples/` — plain Python and LangGraph refund suites with correct/buggy callables.
 - `tests/` — core behavior checks and optional real-graph integration checks.
 
@@ -75,6 +77,8 @@ Install `'.[dev,langgraph]'` for integration work and run `python -m pytest -q t
 Repository CI runs core tests on Python 3.10–3.14 and LangGraph tests on Python 3.10 and 3.14. It also builds the distribution and checks a clean wheel installation. Keep its commands and the contributor guide aligned; adding a workflow does not enable required merge checks.
 
 Run `python -m pytest -q examples/regression_test.py` to exercise the consumer pytest example. Validate both workflow files with actionlint when editing `.github/workflows/ci.yml` or `docs/examples/agent-regression.yml`. Baseline updates are explicit reviewable changes; the consumer CI example reads its baseline from the target commit on pull requests.
+
+For packaging work, also validate `.github/workflows/publish.yml`, build source/wheel distributions, run strict metadata checks, and exercise `scripts/check_installed_package.py` with a clean wheel installation outside the checkout. Publishing is a separate release action, not part of CI or a manual validation run. Do not expose OIDC permissions to build/test jobs.
 
 Report what changed, what checks ran, and any remaining limitations. A clean lint result is not evidence that an unimplemented feature works.
 
