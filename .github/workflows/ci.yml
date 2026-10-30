@@ -52,7 +52,7 @@ jobs:
       - name: Check installed dependencies
         run: python -m pip check
       - name: Run core tests without optional integrations
-        run: python -m pytest -q
+        run: python -m pytest -q tests examples/regression_test.py
 
   langgraph:
     name: LangGraph tests (Python ${{ matrix.python-version }})
@@ -77,7 +77,7 @@ jobs:
       - name: Verify optional imports
         run: python -c "import langchain_core; import langgraph.graph"
       - name: Run the full suite with LangGraph installed
-        run: python -m pytest -q
+        run: python -m pytest -q tests examples/regression_test.py
 
   package:
     name: Package
@@ -107,7 +107,7 @@ jobs:
           "$RUNNER_TEMP/thadam-wheel/bin/python" - <<'PY'
           from importlib.resources import files
 
-          from thadam import OutputEquals, TestCase, run_suite
+          from thadam import OutputEquals, TestCase, compare_reports, run_suite
 
           assert files("thadam").joinpath("py.typed").is_file()
           case = TestCase(
@@ -117,6 +117,7 @@ jobs:
           )
           report = run_suite(agent=lambda value: value, cases=[case])
           assert report.summary.passed == 1
+          assert compare_reports(report, report).exit_code == 0
           PY
           "$RUNNER_TEMP/thadam-wheel/bin/thadam" --version
           "$RUNNER_TEMP/thadam-wheel/bin/python" -m thadam --help

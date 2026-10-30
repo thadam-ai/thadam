@@ -2,7 +2,7 @@
 
 This document records the agreed stack and visual identity. Update it as decisions evolve, including why we changed direction and what the change affects.
 
-The Python runner, SDK, CLI, and optional LangGraph integration are implemented. The interface, API service, and TypeScript agent support below remain planned.
+The Python runner, SDK, CLI, optional LangGraph integration, and saved-report regression comparison are implemented. The interface, API service, and TypeScript agent support below remain planned.
 
 ## Stack
 
@@ -61,3 +61,5 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-29 | Adopt teal/blue as the shared interface theme | Preserve the logo's identity across future product surfaces | Reuse the palette and semantic roles in the CLI, report viewer, and dashboard; keep amber/red failure and error meanings |
 | 2026-10-29 | Add LangGraph through public callbacks and an optional extra | Observe real tool/model execution while keeping the core dependency-free | Per-invocation collectors, fresh checkpoint threads, and explicit event availability; no inferred hidden reasoning |
 | 2026-10-29 | Version execution reports as schema 2 | Make event records, availability flags, and assertion-event links explicit for consumers | Report readers must support the new version; existing schema-1 case files and CLI exit codes remain valid |
+| 2026-10-30 | Add deterministic saved-report comparison and run schema 3 | Prevent changed expectations or missing evidence from masquerading as improvements | Snapshot declared checks before execution; require explicit verifier revisions; compare schema-3 reports and emit comparison schema 1 without rerunning agents |
+| 2026-10-30 | Gate on individual checks and errors on either side | Case totals can hide a newly failing check, and errored baselines do not establish usable verdicts | Explicitly selected baselines can acknowledge existing assertion failures; regressions/errors return 1 and incompatible contracts return 2 |

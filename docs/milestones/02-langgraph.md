@@ -101,6 +101,8 @@ Custom instrumentation can return `AgentResult(output, events, trace_complete, t
 
 Report schema 2 extends the local runner's records. Input case files remain schema 1. Consumers of report schema 1 should check the version and adopt the fields below.
 
+Current Thadam writes [schema-3 run reports](03-regression-comparison.md), which retain all of these event fields and add declared check definitions and comparison metadata. The table below describes the tracing additions originally introduced in schema 2; schema-2 files lack the contracts required by `thadam compare`.
+
 | Field | Meaning |
 | --- | --- |
 | `cases[].events` | Ordered event records, or null when instrumentation is unknown |

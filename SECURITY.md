@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Thadam is in early development. Security fixes target the latest code on `main`, currently version `0.2.0`. Use the latest revision when reporting or verifying an issue.
+Thadam is in early development. Security fixes target the latest code on `main`. Check `pyproject.toml` for the source version and include the exact commit in reports. Use the latest revision when reporting or verifying an issue.
 
 | Version | Security maintenance |
 | --- | --- |

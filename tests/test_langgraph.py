@@ -35,9 +35,12 @@ from thadam import (
     OutputEquals,
     ToolCalled,
     ToolNotCalled,
+    compare_reports,
+    load_report,
     load_suite,
     report_to_dict,
     run_suite,
+    write_report,
 )
 from thadam import TestCase as AgentTestCase
 from thadam.adapters.langgraph import LangGraphAgent, _EventCollector
@@ -381,7 +384,7 @@ def test_cli_uses_same_traced_graph_outcomes_and_versioned_artifact(tmp_path):
     assert process.returncode == 1, process.stderr
     data = json.loads(destination.read_text())
     sdk = report_to_dict(run_suite(agent_buggy, load_suite(ROOT / "examples/langgraph_cases.json")))
-    assert data["schema_version"] == 2
+    assert data["schema_version"] == 3
     assert data["summary"] == sdk["summary"]
     assert "lookup-required" in process.stdout
     assert "model FakeMessagesListChatModel" in process.stdout
@@ -406,3 +409,21 @@ def test_core_import_does_not_require_or_load_langgraph():
         timeout=10,
     )
     assert process.returncode == 0, process.stderr
+
+
+def test_real_graph_reports_compare_tool_regressions_despite_identical_answers(tmp_path):
+    cases = load_suite(ROOT / "examples/langgraph_cases.json")
+    baseline = run_suite(agent, cases)
+    candidate = run_suite(agent_buggy, cases)
+    for name, report in (("baseline", baseline), ("candidate", candidate)):
+        write_report(report, tmp_path / f"{name}.json")
+    result = compare_reports(
+        load_report(tmp_path / "baseline.json"), load_report(tmp_path / "candidate.json")
+    )
+    assert [case.output for case in baseline.cases] == [case.output for case in candidate.cases]
+    assert result.exit_code == 1
+    assert result.summary.regressions == 3
+    first = next(check for check in result.cases[0].checks if check.id == "lookup-required")
+    assert first.change == "regression"
+    assert first.baseline.event_ids
+    assert first.candidate.event_ids == ()

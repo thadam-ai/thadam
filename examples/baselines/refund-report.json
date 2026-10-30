@@ -1,0 +1,291 @@
+{
+  "schema_version": 3,
+  "evaluation_version": 1,
+  "agent_revision": "refund-fixture-v1",
+  "run_id": "refund-reviewed-v1",
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "errors": 0
+  },
+  "cases": [
+    {
+      "id": "eligible-refund",
+      "status": "passed",
+      "duration_ms": 0.0,
+      "input": {
+        "order_id": "order-001",
+        "days_since_purchase": 7
+      },
+      "output": {
+        "approved": true,
+        "amount_cents": 2500,
+        "reason": "eligible"
+      },
+      "output_available": true,
+      "assertions": [
+        {
+          "id": "refund-decision",
+          "passed": true,
+          "message": "Output matches expected JSON",
+          "expected": {
+            "approved": true,
+            "amount_cents": 2500,
+            "reason": "eligible"
+          },
+          "actual": {
+            "approved": true,
+            "amount_cents": 2500,
+            "reason": "eligible"
+          },
+          "event_ids": []
+        }
+      ],
+      "errors": [],
+      "events": null,
+      "trace_complete": null,
+      "trace_warnings": [],
+      "check_definitions": [
+        {
+          "id": "refund-decision",
+          "type": "output_equals",
+          "parameters": {
+            "expected": {
+              "approved": true,
+              "amount_cents": 2500,
+              "reason": "eligible"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "expired-refund",
+      "status": "passed",
+      "duration_ms": 0.0,
+      "input": {
+        "order_id": "order-001",
+        "days_since_purchase": 31
+      },
+      "output": {
+        "approved": false,
+        "amount_cents": 0,
+        "reason": "outside_refund_window"
+      },
+      "output_available": true,
+      "assertions": [
+        {
+          "id": "reject-expired",
+          "passed": true,
+          "message": "Output matches expected JSON",
+          "expected": {
+            "approved": false,
+            "amount_cents": 0,
+            "reason": "outside_refund_window"
+          },
+          "actual": {
+            "approved": false,
+            "amount_cents": 0,
+            "reason": "outside_refund_window"
+          },
+          "event_ids": []
+        }
+      ],
+      "errors": [],
+      "events": null,
+      "trace_complete": null,
+      "trace_warnings": [],
+      "check_definitions": [
+        {
+          "id": "reject-expired",
+          "type": "output_equals",
+          "parameters": {
+            "expected": {
+              "approved": false,
+              "amount_cents": 0,
+              "reason": "outside_refund_window"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-window-boundary",
+      "status": "passed",
+      "duration_ms": 0.0,
+      "input": {
+        "order_id": "order-001",
+        "days_since_purchase": 30
+      },
+      "output": {
+        "approved": true,
+        "amount_cents": 2500,
+        "reason": "eligible"
+      },
+      "output_available": true,
+      "assertions": [
+        {
+          "id": "inclusive-window",
+          "passed": true,
+          "message": "Output matches expected JSON",
+          "expected": {
+            "approved": true,
+            "amount_cents": 2500,
+            "reason": "eligible"
+          },
+          "actual": {
+            "approved": true,
+            "amount_cents": 2500,
+            "reason": "eligible"
+          },
+          "event_ids": []
+        }
+      ],
+      "errors": [],
+      "events": null,
+      "trace_complete": null,
+      "trace_warnings": [],
+      "check_definitions": [
+        {
+          "id": "inclusive-window",
+          "type": "output_equals",
+          "parameters": {
+            "expected": {
+              "approved": true,
+              "amount_cents": 2500,
+              "reason": "eligible"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "second-order-refund",
+      "status": "passed",
+      "duration_ms": 0.0,
+      "input": {
+        "order_id": "order-002",
+        "days_since_purchase": 1
+      },
+      "output": {
+        "approved": true,
+        "amount_cents": 6000,
+        "reason": "eligible"
+      },
+      "output_available": true,
+      "assertions": [
+        {
+          "id": "order-amount",
+          "passed": true,
+          "message": "Output matches expected JSON",
+          "expected": {
+            "approved": true,
+            "amount_cents": 6000,
+            "reason": "eligible"
+          },
+          "actual": {
+            "approved": true,
+            "amount_cents": 6000,
+            "reason": "eligible"
+          },
+          "event_ids": []
+        }
+      ],
+      "errors": [],
+      "events": null,
+      "trace_complete": null,
+      "trace_warnings": [],
+      "check_definitions": [
+        {
+          "id": "order-amount",
+          "type": "output_equals",
+          "parameters": {
+            "expected": {
+              "approved": true,
+              "amount_cents": 6000,
+              "reason": "eligible"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "unknown-order",
+      "status": "passed",
+      "duration_ms": 0.0,
+      "input": {
+        "order_id": "missing-order",
+        "days_since_purchase": 0
+      },
+      "output": {
+        "approved": false,
+        "amount_cents": 0,
+        "reason": "order_not_found"
+      },
+      "output_available": true,
+      "assertions": [
+        {
+          "id": "response-fields",
+          "passed": true,
+          "message": "Output contains all required keys",
+          "expected": [
+            "approved",
+            "amount_cents",
+            "reason"
+          ],
+          "actual": {
+            "approved": false,
+            "amount_cents": 0,
+            "reason": "order_not_found"
+          },
+          "event_ids": []
+        },
+        {
+          "id": "reject-unknown-order",
+          "passed": true,
+          "message": "Output matches expected JSON",
+          "expected": {
+            "approved": false,
+            "amount_cents": 0,
+            "reason": "order_not_found"
+          },
+          "actual": {
+            "approved": false,
+            "amount_cents": 0,
+            "reason": "order_not_found"
+          },
+          "event_ids": []
+        }
+      ],
+      "errors": [],
+      "events": null,
+      "trace_complete": null,
+      "trace_warnings": [],
+      "check_definitions": [
+        {
+          "id": "response-fields",
+          "type": "output_has_keys",
+          "parameters": {
+            "keys": [
+              "approved",
+              "amount_cents",
+              "reason"
+            ]
+          }
+        },
+        {
+          "id": "reject-unknown-order",
+          "type": "output_equals",
+          "parameters": {
+            "expected": {
+              "approved": false,
+              "amount_cents": 0,
+              "reason": "order_not_found"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

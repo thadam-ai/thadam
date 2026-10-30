@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** milestones 1 and 2 implemented. Regression comparison, scenario generation, and hosted services remain planned.
+**Status:** milestones 1 and 2 and the first regression-comparison build are implemented. Repeated runs, scenario generation, and hosted services remain planned.
 
 See [DESIGN.md](../DESIGN.md) for the agreed technology stack, rationale, and decision history.
 
@@ -43,6 +43,10 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/adapters/langgraph.py` | Execute compiled graphs with public model/tool callbacks | Optional imports, per-invocation collectors, JSON state mapping, fresh checkpoint threads |
 | `src/thadam/events.py` | Validate and snapshot execution evidence | Reject invalid traces; preserve unknown-versus-empty semantics |
 | `src/thadam/assertions.py` | Built-in assertions and Python verifier contract | Return evidence; do not invoke the agent |
+| `src/thadam/contracts.py` | Snapshot and compare declared check definitions | Keep declared expectations separate from observed results |
+| `src/thadam/report_loading.py` | Strict run-report parsing and evidence validation | Reject missing, inconsistent, or unsupported data without importing agent code |
+| `src/thadam/comparison.py` | Typed comparison results, compatibility checks, and regression classification | Pure SDK behavior; validate/snapshot both reports, with no agent execution |
+| `src/thadam/comparison_reporting.py` | Comparison JSON and terminal formatting | Preserve evidence and gate result; reuse atomic artifact writes and color roles |
 | `src/thadam/runner.py` | Execute cases, measure duration, and collect results | No CLI formatting or framework-specific code |
 | `src/thadam/reporting.py` | JSON serialization and terminal summaries | Preserve status, IDs, errors, and assertion evidence |
 | `src/thadam/terminal.py` | Semantic color roles and terminal capability detection | Styling is optional; do not change execution results or JSON report data |
@@ -62,7 +66,9 @@ Add further framework and provider adapters in their roadmap milestones. Evolve 
 
 Case states are `passed`, `failed`, and `error`. A failed expectation is `failed`; an execution exception, invalid output/trace, unavailable tool evidence, or broken verifier is `error` with an explicit source. Invalid suite configuration is rejected before execution. CLI and SDK use the same rules.
 
-The first milestone specifies [suite formats, SDK verifiers, and CLI exit codes](milestones/01-local-runner.md). The second specifies [LangGraph coverage, tool checks, and execution events](milestones/02-langgraph.md). `reporting.report_to_dict` defines the version-2 report shape. Existing schema-1 case files remain supported.
+The first milestone specifies [suite formats, SDK verifiers, and CLI exit codes](milestones/01-local-runner.md). The second specifies [LangGraph coverage, tool checks, and execution events](milestones/02-langgraph.md). The third specifies [report compatibility, verifier revisions, comparison classifications, and CI gates](milestones/03-regression-comparison.md). `reporting.report_to_dict` defines the version-3 run report; `comparison_reporting.comparison_to_dict` defines comparison schema 1. Existing schema-1 case files remain supported.
+
+Saved report comparison follows `load_report -> validate evidence -> match case/check contracts -> classify each check -> summarize cases -> terminal/JSON`. Schema 3 snapshots declared checks before execution, including for errored cases. Built-in results are checked against their recorded output and events; custom verifiers require developer-supplied revisions for compatibility and are never executed while loading or comparing. Report validation establishes internal consistency, not authenticity: selecting and reviewing trusted baselines remains the caller's responsibility.
 
 ## Dependencies and extension points
 
