@@ -15,6 +15,10 @@ class ReportWriteError(OSError):
     """A run report could not be written to its destination."""
 
 
+class ReportValidationError(ValueError):
+    """A saved or SDK report is invalid or lacks comparable evaluation contracts."""
+
+
 class TraceUnavailableError(ValueError):
     """A tool assertion lacks the execution evidence needed to reach a verdict."""
 

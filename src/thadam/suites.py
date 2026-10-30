@@ -1,11 +1,10 @@
 """Load versioned JSON suites and validate SDK cases before execution."""
 
 import inspect
-import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from thadam._json import validate_json
+from thadam._json import read_json, validate_json
 from thadam.errors import SuiteValidationError
 from thadam.models import (
     Assertion,
@@ -22,12 +21,7 @@ from thadam.models import (
 def load_suite(path: str | Path) -> tuple[TestCase, ...]:
     """Read a schema-version-1 JSON suite, raising SuiteValidationError on errors."""
     try:
-        data = json.loads(
-            Path(path).read_text(encoding="utf-8"),
-            object_pairs_hook=_unique_object,
-            parse_constant=_invalid_constant,
-        )
-        validate_json(data, "suite")
+        data = read_json(path)
     except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise SuiteValidationError(f"Cannot load suite {path}: {error}") from error
 
@@ -44,7 +38,7 @@ def load_suite(path: str | Path) -> tuple[TestCase, ...]:
         if not isinstance(raw["assertions"], list):
             raise SuiteValidationError(f"{location}.assertions must be an array")
         assertions = tuple(
-            _parse_assertion(assertion, f"{location}.assertions[{i}]")
+            parse_assertion(assertion, f"{location}.assertions[{i}]")
             for i, assertion in enumerate(raw["assertions"])
         )
         cases.append(TestCase(id=raw["id"], input=raw["input"], assertions=assertions))
@@ -123,6 +117,13 @@ def _validate_assertion(assertion: object, location: str) -> None:
 
 
 def _validate_verifier(verifier: Verifier, location: str) -> None:
+    if verifier.revision is not None:
+        if not isinstance(verifier.revision, str) or not verifier.revision.strip():
+            raise SuiteValidationError(f"{location}: verifier revision must be non-empty or None")
+        try:
+            validate_json(verifier.revision)
+        except ValueError as error:
+            raise SuiteValidationError(str(error)) from error
     callback = verifier.check
     target = callback if inspect.isroutine(callback) else getattr(callback, "__call__", callback)
     if (
@@ -139,7 +140,11 @@ def _validate_verifier(verifier: Verifier, location: str) -> None:
         ) from error
 
 
-def _parse_assertion(raw: object, location: str) -> Assertion:
+def parse_assertion(raw: object, location: str) -> Assertion:
+    """Parse a built-in declaration, raising SuiteValidationError for invalid fields.
+
+    Value and ID validation is completed by validate_suite before execution.
+    """
     if not isinstance(raw, dict):
         raise SuiteValidationError(f"{location} must be an object")
     if not isinstance(raw.get("type"), str):
@@ -170,16 +175,3 @@ def _require_fields(value: object, fields: set[str], location: str) -> None:
         raise SuiteValidationError(
             f"{location}: missing fields {sorted(missing)}, unknown fields {sorted(extra)}"
         )
-
-
-def _unique_object(pairs: list[tuple[str, object]]) -> dict:
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise SuiteValidationError(f"Duplicate JSON object key {key!r}")
-        result[key] = value
-    return result
-
-
-def _invalid_constant(value: str) -> None:
-    raise SuiteValidationError(f"Non-finite JSON constant {value!r}")

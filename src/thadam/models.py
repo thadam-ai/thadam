@@ -120,10 +120,21 @@ class Verifier:
     """Check independent input/output snapshots and return a CheckResult.
 
     Exceptions and invalid return values become per-case verifier errors.
+    Comparison requires a non-empty revision; change it when evaluation criteria change.
     """
 
     id: str
     check: Callable[[JSONValue, JSONValue], CheckResult]
+    revision: str | None = None
+
+
+@dataclass(frozen=True)
+class CheckDefinition:
+    """Declared evaluation contract, independent of a particular check outcome."""
+
+    id: str
+    type: str
+    parameters: dict[str, JSONValue]
 
 
 @dataclass(frozen=True)
@@ -173,6 +184,7 @@ class CaseResult:
     events: tuple[ExecutionEvent, ...] | None = None
     trace_complete: bool | None = None
     trace_warnings: tuple[str, ...] = ()
+    check_definitions: tuple[CheckDefinition, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -191,7 +203,9 @@ class RunReport:
 
     cases: tuple[CaseResult, ...]
     run_id: str = field(default_factory=lambda: str(uuid4()))
-    schema_version: int = field(default=2, init=False)
+    agent_revision: str | None = None
+    evaluation_version: int = 1
+    schema_version: int = field(default=3, init=False)
 
     @property
     def summary(self) -> RunSummary:

@@ -46,6 +46,8 @@ Inputs, expected values, and outputs use null, booleans, finite numbers, valid U
 
 Verifiers are SDK-only callbacks; JSON suites do not execute verifier code. Each callback accepts input and output snapshots and returns `CheckResult(passed, message, expected, actual)`. The runner attaches the stable ID from `Verifier`. A raised exception, wrong return type, non-boolean decision, empty message, or invalid evidence produces a verifier error. A case may have assertions, verifiers, or both, but must have at least one check.
 
+For saved-report comparison, supply `Verifier(id, check, revision="policy-v1")` and update that revision whenever its behavior or external criteria change. An unversioned verifier can still run, but cannot establish comparable evaluation contracts. See the [comparison guide](03-regression-comparison.md).
+
 ```python
 from thadam import CheckResult, OutputHasKeys, TestCase, Verifier, run_suite
 
@@ -97,7 +99,7 @@ CLI exit codes:
 
 ## Report requirements
 
-Current reports use schema version 2 and contain `schema_version`, `run_id`, `summary`, and an ordered `cases` array. Summary fields are `total`, `passed`, `failed`, and `errors`. Cases contain `id`, `status`, `duration_ms`, `input`, `output`, `output_available`, `assertions`, `errors`, `events`, `trace_complete`, and `trace_warnings`. Plain Python runs have null events/completeness and an empty warning list. Input is the original case snapshot, even if the agent mutates its argument. A returned JSON null has `output_available: true`; an agent error has `output_available: false`.
+Current reports use schema version 3 and contain `schema_version`, `evaluation_version`, `agent_revision`, `run_id`, `summary`, and an ordered `cases` array. Summary fields are `total`, `passed`, `failed`, and `errors`. Cases contain `id`, `status`, `duration_ms`, `input`, `output`, `output_available`, `assertions`, `errors`, `events`, `trace_complete`, `trace_warnings`, and `check_definitions`. Declared checks are snapshotted before execution, including on error paths. Optional `agent_revision` is supplied explicitly through the SDK keyword or CLI `--agent-revision`. Plain Python runs have null events/completeness and an empty warning list. Input is the original case snapshot, even if the agent mutates its argument. A returned JSON null has `output_available: true`; an agent error has `output_available: false`.
 
 Assertions contain `id`, `passed`, `message`, `expected`, `actual`, and `event_ids`. Output checks and SDK verifiers have empty event links. Errors contain `source` (`agent`, `output`, `verifier`, `assertion`, or `trace`), `type`, `message`, and an optional `assertion_id`. Invalid output becomes an `output` error and is omitted from JSON evidence; valid trace events are retained. Errors take precedence over failed expectations. Later cases continue. `KeyboardInterrupt` propagates; `SystemExit`, including exit code zero, from tested code becomes a case error. An agent import that raises `SystemExit` is a configuration error. See milestone 2 for event validation and trace availability semantics.
 

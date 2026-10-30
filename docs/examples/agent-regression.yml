@@ -1,0 +1,46 @@
+# Copy into .github/workflows/agent-regression.yml and adapt the suite/agent/baseline paths.
+name: Agent regression
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Agent regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # On a PR, read the baseline from its target commit, independently of candidate edits.
+      - name: Check out reviewed baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: baseline-source
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install Thadam and the application
+        run: python -m pip install -e .
+      - name: Run candidate and compare
+        run: |
+          candidate_status=0
+          thadam run examples/refund_cases.json \
+            --agent examples.refund_agent:run \
+            --agent-revision "$GITHUB_SHA" \
+            --report artifacts/candidate.json || candidate_status=$?
+          if [ "$candidate_status" -gt 1 ]; then
+            exit "$candidate_status"
+          fi
+          thadam compare baseline-source/examples/baselines/refund-report.json \
+            artifacts/candidate.json --report artifacts/comparison.json

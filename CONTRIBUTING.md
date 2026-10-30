@@ -70,7 +70,9 @@ The workflow creates a fresh virtual environment to install the resulting wheel 
 
 After the workflow has run successfully on GitHub, maintainers should configure a rule for `main` requiring all checks listed above before merging. Workflow files do not enable branch protection by themselves. Select the exact check names from a completed run, keep the names unique, and update the rule when changing the Python matrix. See GitHub's [required status checks guidance](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-status-checks-before-merging).
 
-Keep repository CI separate from the planned product features for comparing user-agent regression reports and providing a reusable Thadam CI example.
+Keep repository CI separate from consumer workflows that test a user's agent. The saved-report comparison and [consumer CI example](docs/examples/agent-regression.yml) are implemented; repeated runs and a dedicated pytest plugin remain planned. See the [comparison contract](docs/milestones/03-regression-comparison.md). Run the consumer pytest example with `python -m pytest -q examples/regression_test.py`.
+
+When changing report formats, preserve declared checks and distinguish run schema 3 from comparison schema 1. Compared custom verifiers need explicit revisions. Test new failures inside already-failing cases, changed/missing contracts, invalid saved evidence, and errors on both sides. Review baseline changes as changes to accepted behavior; never regenerate a baseline automatically in a candidate job.
 
 ## Code that humans and AI agents can understand
 

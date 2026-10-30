@@ -17,6 +17,8 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
     """Return the JSON report contract, including computed summary counts."""
     return {
         "schema_version": report.schema_version,
+        "evaluation_version": report.evaluation_version,
+        "agent_revision": report.agent_revision,
         "run_id": report.run_id,
         "summary": asdict(report.summary),
         "cases": [
@@ -35,6 +37,7 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
                 "events": None if case.events is None else [asdict(event) for event in case.events],
                 "trace_complete": case.trace_complete,
                 "trace_warnings": list(case.trace_warnings),
+                "check_definitions": [asdict(check) for check in case.check_definitions],
             }
             for case in report.cases
         ],
@@ -46,10 +49,15 @@ def write_report(report: RunReport, path: str | Path) -> None:
 
     Raises ReportWriteError and preserves any existing artifact if writing fails.
     """
+    write_json_artifact(report_to_dict(report), path)
+
+
+def write_json_artifact(data: dict[str, JSONValue], path: str | Path) -> None:
+    """Atomically write JSON data; raise ReportWriteError and preserve old artifacts."""
     destination = Path(path)
     temporary: Path | None = None
     try:
-        content = json.dumps(report_to_dict(report), ensure_ascii=False, allow_nan=False, indent=2)
+        content = json.dumps(data, ensure_ascii=False, allow_nan=False, indent=2)
         destination.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=destination.parent, delete=False

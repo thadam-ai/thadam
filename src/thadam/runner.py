@@ -3,13 +3,15 @@
 import inspect
 from collections.abc import Sequence
 from copy import deepcopy
+from dataclasses import replace
 from time import perf_counter
 from typing import Literal
 
 from thadam._json import validate_json
 from thadam.adapters.python import validate_agent
 from thadam.assertions import evaluate_assertion, evaluate_verifier
-from thadam.errors import AgentExecutionError, TraceUnavailableError
+from thadam.contracts import snapshot_definitions
+from thadam.errors import AgentExecutionError, SuiteValidationError, TraceUnavailableError
 from thadam.events import snapshot_trace
 from thadam.models import (
     Agent,
@@ -24,7 +26,9 @@ from thadam.models import (
 from thadam.suites import validate_suite
 
 
-def run_suite(agent: Agent, cases: Sequence[TestCase]) -> RunReport:
+def run_suite(
+    agent: Agent, cases: Sequence[TestCase], *, agent_revision: str | None = None
+) -> RunReport:
     """Validate the whole suite, then execute each case exactly once in input order.
 
     Raises SuiteValidationError or AgentConfigurationError before agent execution
@@ -32,7 +36,15 @@ def run_suite(agent: Agent, cases: Sequence[TestCase]) -> RunReport:
     KeyboardInterrupt propagates. SystemExit from tested code is a case error,
     including exit(0), so an aborted case cannot masquerade as a passing run.
     No retries or timeouts are imposed.
+    agent_revision is optional explicit application metadata, not an inferred Git revision.
     """
+    if agent_revision is not None:
+        if not isinstance(agent_revision, str) or not agent_revision.strip():
+            raise SuiteValidationError("agent_revision must be a non-empty string or None")
+        try:
+            validate_json(agent_revision, "agent_revision")
+        except ValueError as error:
+            raise SuiteValidationError(str(error)) from error
     validated = tuple(
         TestCase(
             id=case.id,
@@ -43,7 +55,14 @@ def run_suite(agent: Agent, cases: Sequence[TestCase]) -> RunReport:
         for case in validate_suite(cases)
     )
     validate_agent(agent)
-    return RunReport(cases=tuple(_run_case(agent, case) for case in validated))
+    definitions = tuple(snapshot_definitions(case) for case in validated)
+    return RunReport(
+        cases=tuple(
+            replace(_run_case(agent, case), check_definitions=checks)
+            for case, checks in zip(validated, definitions)
+        ),
+        agent_revision=agent_revision,
+    )
 
 
 def _run_case(agent: Agent, case: TestCase) -> CaseResult:

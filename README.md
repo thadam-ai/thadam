@@ -4,7 +4,7 @@
 
 Open-source testing, evaluation, and reliability for AI agents. Thadam helps developers test expected behavior, understand failures, and catch regressions before deployment.
 
-> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, and tool assertions work. Scenario generation, regression comparison, and the dashboard are planned.
+> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, tool assertions, and saved-report regression comparison work. Scenario generation, repeated-run statistics, and the dashboard are planned.
 
 ## What works today
 
@@ -14,6 +14,7 @@ Open-source testing, evaluation, and reliability for AI agents. Thadam helps dev
 - An optional LangGraph adapter capturing supported model/tool callbacks and reported token usage
 - Assertions for required/forbidden tool calls and selected arguments, linked to execution events
 - Terminal summaries and versioned JSON reports with output, assertion evidence, errors, and duration
+- Compare reviewed baselines with candidate reports, detecting newly failing checks and incompatible tests
 
 Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
@@ -93,15 +94,47 @@ All three cases fail their tool checks. Failure reports show observed model/tool
 
 Wrap your own compiled graph with `LangGraphAgent` from `thadam.adapters.langgraph`, optionally supplying input/output mappers and graph config. See the [LangGraph guide](docs/milestones/02-langgraph.md) for integration code, tool assertion formats, coverage limits, and checkpoint isolation.
 
-Reports now use **schema version 2**: case records add `events`, `trace_complete`, and `trace_warnings`; assertions add `event_ids`. Uninstrumented Python runs have `events: null`, not an observed empty trace. Existing case files still use schema version 1 and continue to work.
+Reports now use **schema version 3**. They retain execution events and availability fields from schema 2 and add declared check definitions, an evaluation version, and optional application revision metadata. Uninstrumented Python runs have `events: null`, not an observed empty trace. Existing case files still use schema version 1 and continue to work. Comparing older reports requires fresh runs because those reports lack declared check contracts.
+
+## Catch regressions after a change
+
+Generate a candidate report and compare it with the committed example baseline:
+
+```shell
+thadam run examples/refund_cases.json --agent examples.refund_agent:run \
+  --agent-revision my-change --report artifacts/candidate.json
+thadam compare examples/baselines/refund-report.json artifacts/candidate.json \
+  --report artifacts/comparison.json
+```
+
+This comparison exits `0`. The saved baseline uses local refund fixtures; its revision label and zero timings are fixture data, not a performance measurement. With your own agent, explicitly generate and review a baseline before committing it. Baselines are never selected or updated automatically.
+
+Try `examples.refund_agent:run_buggy` to see a new failed check and an agent error. `run` exits `1` but still writes its report; run `compare` afterward to inspect the differences. A newly failing check is caught even if its case was already failing another check.
+
+Comparison matches case/check IDs and verifies that inputs and declared expectations agree. Changed or missing cases/checks, changed expectations, and unversioned/changed custom verifiers are incompatible. Existing assertion failures stay visible and may be acknowledged through a reviewed baseline; errors on either side always block a clean gate.
+
+SDK usage:
+
+```python
+from thadam import compare_reports, load_report, write_comparison
+
+comparison = compare_reports(
+    load_report("examples/baselines/refund-report.json"),
+    load_report("artifacts/candidate.json"),
+)
+write_comparison(comparison, "artifacts/comparison.json")
+print(comparison.summary)
+```
+
+The [comparison guide](docs/milestones/03-regression-comparison.md) documents contracts, verifier revisions, classifications, and limitations. Run the [pytest example](examples/regression_test.py) with `python -m pytest -q examples/regression_test.py`. The [consumer GitHub Actions example](docs/examples/agent-regression.yml) reads the reviewed baseline from the PR's target commit and gates on the comparison result. Adapt its paths and application installation before copying it into your own workflow.
 
 ## Exit codes
 
-| Code | Meaning |
-| --- | --- |
-| `0` | Every case passed |
-| `1` | One or more cases failed or errored |
-| `2` | Invalid configuration, agent reference, arguments, or report destination |
+| Code | `run` | `compare` |
+| --- | --- | --- |
+| `0` | Every case passed | Compatible reports, no regressions or errors |
+| `1` | One or more cases failed or errored | A newly failing check or an error on either side |
+| `2` | Invalid configuration, agent reference, arguments, or report destination | Invalid/incompatible reports or artifact write failure |
 
 ## Terminal appearance
 
@@ -121,6 +154,7 @@ Terminals advertising RGB support through `COLORTERM=truecolor` or `24bit` use t
 - [Design decisions](DESIGN.md): agreed stack, rationale, and decision history
 - [Local runner](docs/milestones/01-local-runner.md): SDK, suite format, and report contracts
 - [LangGraph integration](docs/milestones/02-langgraph.md): callbacks, tool assertions, and execution evidence
+- [Regression comparison](docs/milestones/03-regression-comparison.md): reviewed baselines, report compatibility, and CI gates
 - [Architecture](docs/architecture.md): data flow, contracts, and module boundaries
 - [Agent guide](AGENTS.md): repository map and working rules for AI coding agents
 - [Contributing](CONTRIBUTING.md): development setup and code conventions

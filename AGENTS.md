@@ -15,7 +15,9 @@ This is a Python package for testing and evaluating AI agents. The product is **
 
 ## Current implementation
 
-Milestones 1 and 2 are implemented: the local runner, SDK verifiers, optional LangGraph adapter, model/tool events, tool assertions, terminal/JSON reports, and the CLI. `src/thadam/__init__.py` exports the core SDK; `thadam.adapters.langgraph` is an explicit optional import. Input suites remain schema 1; reports are schema 2 with event links and availability flags. `python -m thadam` and the installed command use the same entry point.
+Milestones 1 and 2 and the first part of milestone 3 are implemented: local execution, optional LangGraph tracing, tool assertions, and saved-report regression comparison. `src/thadam/__init__.py` exports the core SDK; `thadam.adapters.langgraph` is an explicit optional import. Input suites remain schema 1; run reports use schema 3 with declared checks, event links, and availability flags. Comparisons use their own schema 1 and `kind: "comparison"`. `python -m thadam` and the installed command use the same entry point.
+
+For comparison work, read `docs/milestones/03-regression-comparison.md`. Schema-1/2 run reports cannot be compared: generate fresh reports. Custom verifiers require matching explicit revisions. Errors on either side block a clean comparison; changed/missing tests are incompatible. Compare individual checks even when both cases are already failed. Comparison must not execute agents or verifiers.
 
 The engine is sequential and runs trusted code in the current process. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. There is no enforced timeout, sandbox, scenario generator, or hidden-reasoning capture. Re-read the code before assuming an API exists.
 
@@ -23,6 +25,10 @@ The engine is sequential and runs trusted code in the current process. LangGraph
 
 - `src/thadam/` — core models, validation, assertions, runner, reports, and CLI.
 - `src/thadam/events.py` — validation and snapshots of explicit trace evidence.
+- `src/thadam/contracts.py` — declared check snapshots and compatibility.
+- `src/thadam/report_loading.py` — strict report/evidence parsing.
+- `src/thadam/comparison.py` — pure comparison behavior and typed results.
+- `src/thadam/comparison_reporting.py` — comparison JSON and terminal presentation.
 - `src/thadam/adapters/langgraph.py` — optional graph adapter and callback collector.
 - `pyproject.toml` — packaging, Python support, development dependencies, and lint settings.
 - `DESIGN.md` — current stack decisions and the reasons behind future changes.
@@ -67,6 +73,8 @@ Use focused tests for real contracts and failure paths. Default tests use contro
 Install `'.[dev,langgraph]'` for integration work and run `python -m pytest -q tests/test_langgraph.py`. Without compatible optional packages, that module is skipped. Do not import LangGraph or langchain-core from the core package at module load time.
 
 Repository CI runs core tests on Python 3.10–3.14 and LangGraph tests on Python 3.10 and 3.14. It also builds the distribution and checks a clean wheel installation. Keep its commands and the contributor guide aligned; adding a workflow does not enable required merge checks.
+
+Run `python -m pytest -q examples/regression_test.py` to exercise the consumer pytest example. Validate both workflow files with actionlint when editing `.github/workflows/ci.yml` or `docs/examples/agent-regression.yml`. Baseline updates are explicit reviewable changes; the consumer CI example reads its baseline from the target commit on pull requests.
 
 Report what changed, what checks ran, and any remaining limitations. A clean lint result is not evidence that an unimplemented feature works.
 

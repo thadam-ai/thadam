@@ -3,7 +3,7 @@
 import inspect
 from copy import deepcopy
 
-from thadam._json import validate_json
+from thadam._json import json_equal, validate_json
 from thadam.errors import TraceUnavailableError
 from thadam.models import (
     Assertion,
@@ -30,7 +30,7 @@ def evaluate_assertion(
     if isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch)):
         return _evaluate_tool(assertion, events, trace_complete)
     if isinstance(assertion, OutputEquals):
-        passed = _json_equal(assertion.expected, output)
+        passed = json_equal(assertion.expected, output)
         return AssertionResult(
             id=assertion.id,
             passed=passed,
@@ -72,7 +72,7 @@ def _evaluate_tool(
             )
         passed = bool(calls) and all(
             all(
-                key in call.input and _json_equal(value, call.input[key])
+                key in call.input and json_equal(value, call.input[key])
                 for key, value in assertion.expected.items()
             )
             for call in calls
@@ -117,20 +117,3 @@ def evaluate_verifier(
         expected=deepcopy(result.expected),
         actual=deepcopy(result.actual),
     )
-
-
-def _json_equal(expected: JSONValue, actual: JSONValue) -> bool:
-    # JSON has one number category; Python bool is deliberately excluded from it.
-    if type(expected) in (int, float) and type(actual) in (int, float):
-        return expected == actual
-    if type(expected) is not type(actual):
-        return False
-    if isinstance(expected, dict) and isinstance(actual, dict):
-        return expected.keys() == actual.keys() and all(
-            _json_equal(value, actual[key]) for key, value in expected.items()
-        )
-    if isinstance(expected, list) and isinstance(actual, list):
-        return len(expected) == len(actual) and all(
-            _json_equal(left, right) for left, right in zip(expected, actual)
-        )
-    return expected == actual
