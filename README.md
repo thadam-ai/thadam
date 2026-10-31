@@ -19,6 +19,32 @@ Open-source testing, evaluation, and reliability for AI agents. Thadam helps dev
 
 Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
+## Explore the CLI
+
+Run `thadam` without arguments for an overview, a getting-started guide, and the
+available workflows. It exits successfully without loading or executing an agent.
+`thadam --help` shows the same overview. Each command has its own explanation,
+copyable application examples, and exit-code guidance:
+
+```shell
+thadam
+thadam run --help
+thadam compare --help
+thadam repeat --help
+thadam compare-repeated --help
+```
+
+Replace `cases.json` and `my_agent:run` in the help examples with your application's
+suite and callable. The refund example labeled as a repository example requires
+a checkout. In VS Code, open **Terminal → New Terminal** in the repository root
+and use `.venv/bin/python -m thadam` or
+`.venv/bin/python -m thadam repeat --help` with the development environment.
+
+Help uses Thadam's teal branding and blue section headings automatically in an
+interactive terminal. `--color never` disables styling and `--color always`
+forces it, including when passed alongside `--help`. Redirected output,
+`NO_COLOR`, and `TERM=dumb` follow the same policy as execution summaries.
+
 ## Package installation
 
 The first PyPI release is being prepared. Once it is published, install the **`thadam-ai`** distribution with Python 3.10 or newer:
