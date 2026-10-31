@@ -35,12 +35,14 @@ jobs:
       - name: Run candidate and compare
         run: |
           candidate_status=0
-          thadam run examples/refund_cases.json \
+          thadam repeat examples/refund_cases.json \
             --agent examples.refund_agent:run \
+            --attempts 5 \
             --agent-revision "$GITHUB_SHA" \
             --report artifacts/candidate.json || candidate_status=$?
           if [ "$candidate_status" -gt 1 ]; then
             exit "$candidate_status"
           fi
-          thadam compare baseline-source/examples/baselines/refund-report.json \
-            artifacts/candidate.json --report artifacts/comparison.json
+          thadam compare-repeated baseline-source/examples/baselines/refund-repeated.json \
+            artifacts/candidate.json --max-pass-rate-drop 0 \
+            --report artifacts/comparison.json

@@ -9,9 +9,15 @@ from thadam import (
     OutputEquals,
     TestCase,
     __version__,
+    compare_repeated,
     compare_reports,
+    load_reliability_comparison,
+    load_repeated,
     load_report,
+    run_repeated,
     run_suite,
+    write_reliability_comparison,
+    write_repeated,
     write_report,
 )
 
@@ -37,6 +43,14 @@ def main() -> None:
         comparison = compare_reports(report, load_report(path))
         if comparison.exit_code != 0:
             raise SystemExit("Installed report round trip failed comparison")
+        repeated = run_repeated(agent=lambda value: value, cases=[case], attempts=2)
+        repeated_path = Path(directory) / "repeated.json"
+        write_repeated(repeated, repeated_path)
+        reliability = compare_repeated(repeated, load_repeated(repeated_path))
+        comparison_path = Path(directory) / "reliability.json"
+        write_reliability_comparison(reliability, comparison_path)
+        if load_reliability_comparison(comparison_path).exit_code != 0:
+            raise SystemExit("Installed reliability round trip failed comparison")
     print(f"thadam-ai {installed.version}: installed SDK and report comparison passed")
 
 

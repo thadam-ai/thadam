@@ -70,7 +70,19 @@ def test_incompatible_reports_write_actionable_artifact(tmp_path, capsys):
 
 
 @pytest.mark.parametrize("placement", ["before", "after"])
-def test_color_policy_applies_to_compare_without_styling_json(tmp_path, capsys, placement):
+@pytest.mark.parametrize(
+    "colorterm,background,expected",
+    [
+        ("", "", "\x1b[33mREGRESSION"),
+        ("truecolor", "", "\x1b[38;2;251;191;36mREGRESSION"),
+        ("24bit", "0;15", "\x1b[38;2;146;64;14mREGRESSION"),
+    ],
+)
+def test_color_policy_applies_to_compare_without_styling_json(
+    tmp_path, capsys, monkeypatch, placement, colorterm, background, expected
+):
+    monkeypatch.setenv("COLORTERM", colorterm)
+    monkeypatch.setenv("COLORFGBG", background)
     paths, _ = reports(tmp_path)
     destination = tmp_path / "comparison.json"
     arguments = ["compare", *map(str, paths), "--report", str(destination)]
@@ -80,7 +92,7 @@ def test_color_policy_applies_to_compare_without_styling_json(tmp_path, capsys, 
         else [*arguments, "--color", "always"]
     )
     assert main(arguments) == 1
-    assert "\x1b[33mREGRESSION" in capsys.readouterr().out
+    assert expected in capsys.readouterr().out
     assert "\x1b[" not in destination.read_text()
 
 

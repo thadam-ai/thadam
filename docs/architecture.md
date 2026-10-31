@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** milestones 1 and 2 and the first regression-comparison build are implemented. Repeated runs, scenario generation, and hosted services remain planned.
+**Status:** milestones 1 and 2, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. Scenario generation, async execution, and hosted services remain planned.
 
 See [DESIGN.md](../DESIGN.md) for the agreed technology stack, rationale, and decision history.
 
@@ -47,6 +47,12 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/report_loading.py` | Strict run-report parsing and evidence validation | Reject missing, inconsistent, or unsupported data without importing agent code |
 | `src/thadam/comparison.py` | Typed comparison results, compatibility checks, and regression classification | Pure SDK behavior; validate/snapshot both reports, with no agent execution |
 | `src/thadam/comparison_reporting.py` | Comparison JSON and terminal formatting | Preserve evidence and gate result; reuse atomic artifact writes and color roles |
+| `src/thadam/repetition.py` | Repeated evaluation, lifecycle validation, and typed outcome/runtime summaries | Sequential attempts, shared callable or per-case agent factory; reuse the single-run engine |
+| `src/thadam/repetition_loading.py` | Strict repeated-run parsing and snapshots | Validate all nested runs, identical contracts across attempts, and recomputed summaries |
+| `src/thadam/repetition_reporting.py` | Repeated-run JSON and terminal evidence | Preserve complete schema-3 attempts inside repeated-run schema 1 |
+| `src/thadam/reliability.py` | Pure per-case/check reliability comparison and CI policy | Require equal attempts/modes/contracts; errors always block; tolerance never hides individual drops |
+| `src/thadam/reliability_reporting.py` | Standalone reliability comparison and terminal evidence | Embed both full repeated reports; display rates and unsuccessful attempt evidence |
+| `src/thadam/reliability_loading.py` | Reload and recompute saved reliability comparisons | Reject altered counts, decisions, policy fields, and evidence without executing application code |
 | `src/thadam/runner.py` | Execute cases, measure duration, and collect results | No CLI formatting or framework-specific code |
 | `src/thadam/reporting.py` | JSON serialization and terminal summaries | Preserve status, IDs, errors, and assertion evidence |
 | `src/thadam/terminal.py` | Semantic color roles and terminal capability detection | Styling is optional; do not change execution results or JSON report data |
@@ -71,6 +77,18 @@ Case states are `passed`, `failed`, and `error`. A failed expectation is `failed
 The first milestone specifies [suite formats, SDK verifiers, and CLI exit codes](milestones/01-local-runner.md). The second specifies [LangGraph coverage, tool checks, and execution events](milestones/02-langgraph.md). The third specifies [report compatibility, verifier revisions, comparison classifications, and CI gates](milestones/03-regression-comparison.md). `reporting.report_to_dict` defines the version-3 run report; `comparison_reporting.comparison_to_dict` defines comparison schema 1. Existing schema-1 case files remain supported.
 
 Saved report comparison follows `load_report -> validate evidence -> match case/check contracts -> classify each check -> summarize cases -> terminal/JSON`. Schema 3 snapshots declared checks before execution, including for errored cases. Built-in results are checked against their recorded output and events; custom verifiers require developer-supplied revisions for compatibility and are never executed while loading or comparing. Report validation establishes internal consistency, not authenticity: selecting and reviewing trusted baselines remains the caller's responsibility.
+
+[Repeated evaluation](milestones/03-reliability.md) snapshots the suite before user code,
+then runs complete suites in attempt order through the existing engine. It either
+reuses one callable or invokes a factory inside every case's timed/error boundary.
+Summaries use every attempt as the denominator; unavailable check verdicts count
+as errors. Repeated-run schema 1 (`kind: repeated_run`) wraps full schema-3 runs.
+Reliability comparison validates both inputs, checks matching attempt counts,
+lifecycle mode and contracts, and evaluates each case/check independently under
+an explicit fractional drop policy. Its schema 1 (`kind: reliability_comparison`)
+embeds both reports and the gate decision; its loader recomputes that decision.
+All existing single-run contracts remain unchanged. Factory state/resource
+isolation is caller-owned, and observed-rate gates make no significance claim.
 
 ## Dependencies and extension points
 

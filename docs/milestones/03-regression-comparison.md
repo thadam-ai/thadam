@@ -1,6 +1,6 @@
 # Milestone 3: compare saved agent runs
 
-**Status:** implemented in Thadam 0.3.0. This first part of milestone 3 adds report comparison, a pytest example, and a consumer CI example. Repeated runs, a pytest plugin, and async execution remain planned.
+**Status:** implemented in Thadam 0.3.0. This document specifies single-run comparison. [Repeated evaluation and reliability comparison](03-reliability.md) are also implemented with separate artifact kinds and commands; a pytest plugin and async execution remain planned.
 
 ## Outcome
 
@@ -58,7 +58,7 @@ Comparison JSON has its own schema 1 and `kind: "comparison"`, baseline/candidat
 
 The [pytest example](../../examples/regression_test.py) is a normal test using the SDK, not a plugin. Run it with `python -m pytest -q examples/regression_test.py`.
 
-The [GitHub Actions example](../examples/agent-regression.yml) installs the application, runs a candidate, and compares against a committed baseline. Commit and review the initial baseline on the target branch before enabling this workflow. On pull requests a second checkout reads that target commit's baseline independently of candidate changes. Candidate run exit 1 still permits comparison, so existing acknowledged assertion failures can be distinguished from regressions; configuration errors stop immediately. The comparison result decides the final job status.
+The [GitHub Actions example](../examples/agent-regression.yml) now uses repeated reliability evaluation: it installs the application, runs a candidate five times, and compares against a committed repeated baseline. For a single-run gate, substitute `run`/`compare` and the single-run baseline. Commit and review the initial baseline on the target branch before enabling this workflow. On pull requests a second checkout reads that target commit's baseline independently of candidate changes. Candidate run exit 1 still permits comparison, so existing acknowledged assertion failures can be distinguished from regressions; configuration errors stop immediately. The comparison result decides the final job status.
 
 Adapt the installation command, suite path, agent reference, and baseline path for your application. Intentional test/expectation changes fail this strict gate until a maintainer explicitly reviews and promotes a matching baseline. Automated baseline promotion is outside this build. Do not enable `pull_request_target` to run untrusted candidate code or give test jobs production credentials. The example does not upload potentially sensitive execution artifacts.
 

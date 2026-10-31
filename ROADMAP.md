@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** milestones 1 and 2 plus the first part of milestone 3 implemented: saved-report comparison, SDK/CLI gates, and pytest/consumer CI examples.
-**Next build:** continue milestone 3 with repeated-run variability and explicit execution contracts.
+**Current state:** milestones 1 and 2 plus saved-report and repeated-evaluation reliability comparison in milestone 3 implemented, including SDK/CLI gates and pytest/consumer CI examples.
+**Next build:** continue milestone 3 with explicit suite revisions and review of intentional contract changes.
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
@@ -63,14 +63,16 @@ Instrumentation must use explicit hooks or supported framework interfaces. A cus
 - [x] Report new failures separately from already accepted failures, including inside already-failing cases.
 - [x] Record input/check contracts and require explicit revisions for compared custom verifiers.
 - [x] Add optional application revision metadata to run reports.
-- [ ] Support repeated runs and report pass counts, variability, and runtime.
+- [x] Support repeated runs and report pass counts, variability, and runtime.
+- [x] Compare repeated baseline/candidate case and check pass rates with configurable drop tolerance, strict compatibility, and error-blocking CI gates.
+- [x] Define sequential shared-callable and per-invocation factory execution contracts, preserving evidence for every attempt.
 - [ ] Add explicit suite revisions and a review workflow for intentional contract changes.
 - [x] Record missing/changed cases and evaluator errors explicitly rather than counting them as passes.
 - [ ] Add async execution and bounded concurrency when the adapter and report contracts can support them.
 
 Deterministic assertion logic does not make an LLM's execution deterministic. Reports must retain that distinction.
 
-The [first comparison build](docs/milestones/03-regression-comparison.md) uses run schema 3 and comparison schema 1. It compares single-run evidence, not statistical significance or timing/cost budgets. A dedicated pytest plugin remains a possible future integration; the working example uses normal pytest assertions.
+The [single-run comparison](docs/milestones/03-regression-comparison.md) uses run schema 3 and comparison schema 1. [Repeated evaluation](docs/milestones/03-reliability.md) adds repeated-run schema 1 and reliability-comparison schema 1 with distinct kinds, equal attempt counts, per-case/per-check rate gates, and complete attempt evidence. These compare observed outcomes, not statistical significance or timing/cost budgets. A dedicated pytest plugin remains a possible future integration; the working examples use normal pytest assertions.
 
 ## 4. Suggest test scenarios with AI
 
