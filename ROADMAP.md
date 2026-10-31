@@ -34,6 +34,8 @@ Implementation details and acceptance criteria: [local runner specification](doc
 - [x] Accept a Python verifier for application-specific correctness through the SDK.
 - [x] Capture case IDs, actual outputs, assertion evidence, durations, and agent errors.
 - [x] Add a Python SDK entry point and a CLI with documented exit codes.
+- [x] Show a useful CLI overview without arguments and task-focused help with executable examples for every command.
+- [x] Style every help page with Thadam branding and a consistent automatic/explicit color policy across supported Python versions.
 - [x] Produce a terminal summary and a versioned JSON report.
 - [x] Include a small agent example, five scenarios, and focused behavior tests that require no model API key.
 

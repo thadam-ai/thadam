@@ -152,6 +152,64 @@ def test_cli_help_and_argument_errors():
     assert invoke("run", "examples/refund_cases.json").returncode == 2
 
 
+def test_bare_command_shows_overview_without_configuration_or_execution(tmp_path):
+    overview = invoke(cwd=tmp_path)
+    explicit = invoke("--help", cwd=tmp_path)
+    assert overview.returncode == explicit.returncode == 0
+    assert overview.stdout == explicit.stdout
+    assert overview.stderr == ""
+    assert "Getting started" in overview.stdout
+    assert "expected outcomes" in overview.stdout
+    assert "python -m thadam" in overview.stdout
+    assert "compare-repeated --help" in overview.stdout
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("command", ["run", "compare", "repeat", "compare-repeated"])
+def test_command_help_has_executable_application_examples(tmp_path, command):
+    from thadam import run_repeated, write_repeated
+
+    (tmp_path / "my_agent.py").write_text(
+        "def run(value):\n    return value\ndef create():\n    return run\n"
+    )
+    suite = {
+        "schema_version": 1,
+        "cases": [
+            {
+                "id": "echo",
+                "input": 1,
+                "assertions": [{"id": "answer", "type": "output_equals", "expected": 1}],
+            }
+        ],
+    }
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(suite))
+    cases = load_suite(path)
+    if command == "compare":
+        saved = run_suite(lambda value: value, cases)
+        for side in ("baseline", "candidate"):
+            write_report(saved, tmp_path / f"{side}.json")
+    elif command == "compare-repeated":
+        saved = run_repeated(lambda value: value, cases, attempts=2)
+        for side in ("baseline", "candidate"):
+            write_repeated(saved, tmp_path / f"{side}.json")
+    help_output = invoke(command, "--help", cwd=tmp_path)
+    assert help_output.returncode == 0 and help_output.stderr == ""
+    assert "Examples" in help_output.stdout and "Exit codes:" in help_output.stdout
+    examples = [
+        line.strip().split()[1:]
+        for line in help_output.stdout.splitlines()
+        if line.strip().startswith(f"thadam {command} ") and "examples/" not in line
+    ]
+    assert len(examples) >= 2
+    for arguments in examples:
+        result = invoke(*arguments, cwd=tmp_path)
+        assert result.returncode == 0, result.stderr
+    incomplete = invoke(command, cwd=tmp_path)
+    assert incomplete.returncode == 2
+    assert "required" in incomplete.stderr
+
+
 def test_agent_import_cannot_exit_zero_and_report_a_successful_run(tmp_path):
     (tmp_path / "exiting.py").write_text("raise SystemExit(0)\n")
     command = invoke(

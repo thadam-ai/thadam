@@ -57,6 +57,7 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/reporting.py` | JSON serialization and terminal summaries | Preserve status, IDs, errors, and assertion evidence |
 | `src/thadam/terminal.py` | Semantic color roles and terminal capability detection | Styling is optional; do not change execution results or JSON report data |
 | `src/thadam/cli.py` | Parse arguments, load the selected agent, invoke SDK, and set exit code | Share engine behavior with Python callers |
+| `src/thadam/cli_help.py` | Help layout styling and early color-policy selection | Apply Thadam's palette after plain-text layout; no application imports or execution |
 | `examples/` | Small runnable agent and suites | Demonstrate actual public APIs |
 | `tests/` | Contract and behavior checks | Controlled agent/tool fixtures by default |
 | `scripts/check_installed_package.py` | Validate an installed distribution outside the checkout | Check distribution name/version, packaged types, and a real SDK/report round trip |

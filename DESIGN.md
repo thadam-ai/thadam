@@ -53,6 +53,16 @@ The CLI is a task-focused interface. Use compact branding, aligned results and t
 
 The implementation lives in `src/thadam/terminal.py`; presentation stays separate from execution and JSON report contracts. Native ANSI colors provide the fallback when RGB support is unknown. Auto mode respects TTY detection, `NO_COLOR`, and `TERM=dumb`; explicit `--color` flags override automatic decisions.
 
+Invoking `thadam` without arguments displays the overview and returns 0. It is a
+discovery action, equivalent to `--help`. Incomplete execution/comparison commands
+still return 2. Command help explains the user task, gives copyable application
+examples, and describes exit codes; repository-only examples are labeled.
+
+Help pages begin with the teal product heading, use blue section/option labels,
+and teal command examples. Styling is applied after argparse lays out plain
+text, preserving alignment. Python's native help colors are disabled where
+available so the same Thadam palette and color policy apply on Python 3.10–3.14.
+
 ## Updating this document
 
 When a decision changes, update the stack and rationale above, then add a dated entry below describing the change, the reason, and its impact. Keep planned choices distinct from implemented components. Update the [architecture](docs/architecture.md) and [roadmap](ROADMAP.md) when a decision changes module boundaries or delivery order.
