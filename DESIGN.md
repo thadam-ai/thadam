@@ -2,7 +2,7 @@
 
 This document records the agreed stack and visual identity. Update it as decisions evolve, including why we changed direction and what the change affects.
 
-The Python runner, SDK, CLI, optional LangGraph integration, and saved-report regression comparison are implemented. The interface, API service, and TypeScript agent support below remain planned.
+The Python runner, SDK, CLI, optional LangGraph integration, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. The interface, API service, and TypeScript agent support below remain planned.
 
 ## Stack
 
@@ -70,3 +70,5 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-30 | Add deterministic saved-report comparison and run schema 3 | Prevent changed expectations or missing evidence from masquerading as improvements | Snapshot declared checks before execution; require explicit verifier revisions; compare schema-3 reports and emit comparison schema 1 without rerunning agents |
 | 2026-10-30 | Gate on individual checks and errors on either side | Case totals can hide a newly failing check, and errored baselines do not establish usable verdicts | Explicitly selected baselines can acknowledge existing assertion failures; regressions/errors return 1 and incompatible contracts return 2 |
 | 2026-10-30 | Prepare `thadam-ai` distribution and OIDC publishing | The PyPI name `thadam` belongs to an unrelated SDK; provide a repeatable release path | Preserve `import thadam` and the `thadam` CLI; validate source/wheel artifacts and isolate publishing permissions; first upload awaits owner account/publisher setup |
+| 2026-10-31 | Add complete repeated-evaluation reliability comparison | Review a change using repeated case/check outcomes rather than trusting a single attempt | Preserve schema-3 runs inside distinct repeated-run and reliability-comparison schema-1 envelopes; require equal attempts/modes/contracts, block any errors, and apply an explicit per-case/check drop tolerance |
+| 2026-10-31 | Support shared callables and per-invocation agent factories sequentially | Make state ownership explicit without assuming an agent can be copied or reset | Factories construct one agent per case attempt; application resources and verifier state remain caller-owned; no concurrency, retry, or implicit cleanup protocol |

@@ -4,7 +4,7 @@
 
 Open-source testing, evaluation, and reliability for AI agents. Thadam helps developers test expected behavior, understand failures, and catch regressions before deployment.
 
-> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, tool assertions, and saved-report regression comparison work. Scenario generation, repeated-run statistics, and the dashboard are planned.
+> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, tool assertions, saved-report regression comparison, and repeated-evaluation reliability gates work. Scenario generation and the dashboard are planned.
 
 ## What works today
 
@@ -15,6 +15,7 @@ Open-source testing, evaluation, and reliability for AI agents. Thadam helps dev
 - Assertions for required/forbidden tool calls and selected arguments, linked to execution events
 - Terminal summaries and versioned JSON reports with output, assertion evidence, errors, and duration
 - Compare reviewed baselines with candidate reports, detecting newly failing checks and incompatible tests
+- Repeat evaluations, inspect case/check pass rates and runtime, and gate changes on observed reliability drops
 
 Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
@@ -153,6 +154,73 @@ print(comparison.summary)
 
 The [comparison guide](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/03-regression-comparison.md) documents contracts, verifier revisions, classifications, and limitations. Run the [pytest example](https://github.com/thadam-ai/thadam/blob/main/examples/regression_test.py) with `python -m pytest -q examples/regression_test.py`. The [consumer GitHub Actions example](https://github.com/thadam-ai/thadam/blob/main/docs/examples/agent-regression.yml) reads the reviewed baseline from the PR's target commit and gates on the comparison result. Adapt its paths and application installation before copying it into your own workflow.
 
+## Compare agent reliability across repeated attempts
+
+Evaluate the candidate five times against the reviewed local fixture baseline:
+
+```shell
+thadam repeat examples/refund_cases.json --agent examples.refund_agent:run \
+  --attempts 5 --agent-revision my-change --report artifacts/repeated-candidate.json
+thadam compare-repeated examples/baselines/refund-repeated.json \
+  artifacts/repeated-candidate.json --report artifacts/reliability-comparison.json
+```
+
+Both commands exit `0`. The baseline contains five attempts using the controlled
+refund fixture; its zero timings and revision labels are fixture data, not LLM
+performance measurements. Try `examples.refund_agent:run_buggy` to see failures
+and errors. `repeat` still saves all attempts when it exits `1`; comparison must
+run afterward and its exit code decides the regression gate.
+
+Each case and check shows pass/fail/error counts and observed pass rates. Reports
+also retain runtime summaries and every attempt's outputs, errors, checks, and
+available traces. A comparison artifact includes both full evaluations, so the
+failed attempts remain inspectable without the original files. For scripted
+variation from 80% to 60%, run `python -m examples.reliability_demo` (expected exit
+`1`); it writes all three artifacts under `artifacts/reliability-demo/`.
+
+Comparison requires equal attempt counts, execution modes, and input/check
+contracts. It checks each case and each individual assertion, including inside
+already-failing cases. By default any observed pass-rate decrease blocks.
+`--max-pass-rate-drop 0.05` allows a drop of up to **five percentage points** per
+case/check; equality is allowed. Errors on either side always block, regardless
+of tolerance. Existing failures and tolerated drops stay visible. These are
+observed rates, not significance tests or proof that a change caused a difference.
+
+Python SDK:
+
+```python
+from examples.refund_agent import run
+from thadam import compare_repeated, load_repeated, load_suite, run_repeated, write_repeated
+
+baseline = load_repeated("examples/baselines/refund-repeated.json")
+candidate = run_repeated(
+    agent=run,
+    cases=load_suite("examples/refund_cases.json"),
+    attempts=baseline.attempts,
+    agent_revision="my-change",
+)
+write_repeated(candidate, "artifacts/repeated-candidate.json")
+comparison = compare_repeated(baseline, candidate, max_pass_rate_drop=0.0)
+print(comparison.exit_code, comparison.summary)
+```
+
+`--agent` reuses one callable for all case invocations. For stateful agents, use
+`--agent-factory my_agent:create` instead: a synchronous zero-argument factory
+must construct an agent for each case invocation. The SDK equivalent is
+`run_repeated(cases=cases, agent_factory=create, attempts=20)`. Reports record
+`shared` or `factory` mode, and comparison rejects a mode change. Factories do
+not reset external services, globals, or verifier state; developers own that
+isolation and resource lifecycle. Execution remains sequential with no retries
+or enforced timeouts.
+
+`write_reliability_comparison` saves a standalone comparison, and
+`load_reliability_comparison` validates and recomputes its gate without executing
+application code. See the [full execution/report contract](docs/milestones/03-reliability.md),
+[pytest gates](examples/regression_test.py), and
+[consumer CI example](docs/examples/agent-regression.yml). For your own agent,
+explicitly generate, inspect, and review a baseline before committing it. Candidate
+jobs never update it; pull requests read the baseline from the target commit.
+
 ## Exit codes
 
 | Code | `run` | `compare` |
@@ -160,6 +228,9 @@ The [comparison guide](https://github.com/thadam-ai/thadam/blob/main/docs/milest
 | `0` | Every case passed | Compatible reports, no regressions or errors |
 | `1` | One or more cases failed or errored | A newly failing check or an error on either side |
 | `2` | Invalid configuration, agent reference, arguments, or report destination | Invalid/incompatible reports or artifact write failure |
+
+`repeat` uses the `run` exit-code meanings for all invocations.
+`compare-repeated` uses the `compare` meanings, with the configured pass-rate policy.
 
 ## Terminal appearance
 
@@ -180,6 +251,7 @@ Terminals advertising RGB support through `COLORTERM=truecolor` or `24bit` use t
 - [Local runner](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/01-local-runner.md): SDK, suite format, and report contracts
 - [LangGraph integration](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/02-langgraph.md): callbacks, tool assertions, and execution evidence
 - [Regression comparison](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/03-regression-comparison.md): reviewed baselines, report compatibility, and CI gates
+- [Repeated reliability](docs/milestones/03-reliability.md): attempt evidence, agent lifecycle, pass-rate comparisons, and CI policy
 - [Architecture](https://github.com/thadam-ai/thadam/blob/main/docs/architecture.md): data flow, contracts, and module boundaries
 - [Agent guide](https://github.com/thadam-ai/thadam/blob/main/AGENTS.md): repository map and working rules for AI coding agents
 - [Contributing](https://github.com/thadam-ai/thadam/blob/main/CONTRIBUTING.md): development setup and code conventions

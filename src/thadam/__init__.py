@@ -39,12 +39,48 @@ from thadam.models import (
     ToolNotCalled,
     Verifier,
 )
+from thadam.reliability import (
+    CaseReliabilityComparison,
+    RateComparison,
+    ReliabilityComparison,
+    compare_repeated,
+)
+from thadam.reliability_loading import load_reliability_comparison
+from thadam.reliability_reporting import reliability_to_dict, write_reliability_comparison
+from thadam.repetition import (
+    AgentFactory,
+    CaseReliability,
+    CheckReliability,
+    OutcomeCounts,
+    RepeatedReport,
+    RuntimeSummary,
+    run_repeated,
+)
+from thadam.repetition_loading import load_repeated
+from thadam.repetition_reporting import repeated_to_dict, write_repeated
 from thadam.report_loading import load_report
 from thadam.reporting import report_to_dict, write_report
 from thadam.runner import run_suite
 from thadam.suites import load_suite
 
 __all__ = [
+    "AgentFactory",
+    "CaseReliability",
+    "CaseReliabilityComparison",
+    "CheckReliability",
+    "OutcomeCounts",
+    "RateComparison",
+    "ReliabilityComparison",
+    "RepeatedReport",
+    "RuntimeSummary",
+    "compare_repeated",
+    "load_reliability_comparison",
+    "load_repeated",
+    "reliability_to_dict",
+    "repeated_to_dict",
+    "run_repeated",
+    "write_reliability_comparison",
+    "write_repeated",
     "Agent",
     "AgentResult",
     "AgentExecutionError",

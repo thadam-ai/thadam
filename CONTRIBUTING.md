@@ -74,7 +74,18 @@ The shared `scripts/check_installed_package.py` also checks installed distributi
 
 After the workflow has run successfully on GitHub, maintainers should configure a rule for `main` requiring all checks listed above before merging. Workflow files do not enable branch protection by themselves. Select the exact check names from a completed run, keep the names unique, and update the rule when changing the Python matrix. See GitHub's [required status checks guidance](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-status-checks-before-merging).
 
-Keep repository CI separate from consumer workflows that test a user's agent. The saved-report comparison and [consumer CI example](docs/examples/agent-regression.yml) are implemented; repeated runs and a dedicated pytest plugin remain planned. See the [comparison contract](docs/milestones/03-regression-comparison.md). Run the consumer pytest example with `python -m pytest -q examples/regression_test.py`.
+Keep repository CI separate from consumer workflows that test a user's agent. Single-run comparison, repeated reliability gates, and the [consumer CI example](docs/examples/agent-regression.yml) are implemented; a dedicated pytest plugin remains planned. See the [single-run comparison contract](docs/milestones/03-regression-comparison.md) and [reliability contract](docs/milestones/03-reliability.md). Run both consumer pytest gates with `python -m pytest -q examples/regression_test.py`.
+
+For repeated-evaluation changes, check every attempt's evidence and per-case/per-check
+denominators, factory construction/error continuation, shared-state snapshots,
+equal attempt/mode compatibility, and tolerance equality boundaries. Any errors
+on either side block regardless of tolerance. Repeated-run and reliability-comparison
+artifacts each use schema 1 with distinct kinds; they wrap existing schema-3 runs.
+Their strict loaders must reject inconsistent summaries and changed decisions
+without invoking application code. The committed repeated refund baseline uses
+five controlled attempts with zero timings; it is a reviewed test fixture, not
+a measurement of LLM reliability. Validate edited consumer workflow YAML with
+actionlint as well as the repository workflow.
 
 When changing report formats, preserve declared checks and distinguish run schema 3 from comparison schema 1. Compared custom verifiers need explicit revisions. Test new failures inside already-failing cases, changed/missing contracts, invalid saved evidence, and errors on both sides. Review baseline changes as changes to accepted behavior; never regenerate a baseline automatically in a candidate job.
 

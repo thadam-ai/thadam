@@ -3,8 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
-from thadam._json import json_equal
-from thadam.contracts import equivalent_definitions
+from thadam.contracts import case_contract_issues
 from thadam.models import AssertionResult, CaseError, CaseResult, CaseStatus, RunReport
 from thadam.report_loading import validate_report
 
@@ -121,7 +120,7 @@ def compare_reports(baseline: RunReport, candidate: RunReport) -> ComparisonRepo
 def _compare_case(
     case_id: str, baseline: CaseResult | None, candidate: CaseResult | None
 ) -> CaseComparison:
-    issues = _compatibility(baseline, candidate)
+    issues = case_contract_issues(baseline, candidate)
     if issues:
         return CaseComparison(
             id=case_id,
@@ -161,30 +160,6 @@ def _compare_case(
         baseline_errors=baseline.errors,
         candidate_errors=candidate.errors,
     )
-
-
-def _compatibility(baseline: CaseResult | None, candidate: CaseResult | None) -> list[str]:
-    if baseline is None:
-        return ["Case added in candidate; review it and generate a matching baseline"]
-    if candidate is None:
-        return ["Case missing from candidate"]
-    issues = []
-    if not json_equal(baseline.input, candidate.input):
-        issues.append("Case input changed")
-    old = {check.id: check for check in baseline.check_definitions}
-    new = {check.id: check for check in candidate.check_definitions}
-    for check_id, definition in old.items():
-        if check_id not in new:
-            issues.append(f"Check {check_id!r} missing from candidate")
-        elif not equivalent_definitions(definition, new[check_id]):
-            if definition.type == "verifier" and not definition.parameters["revision"]:
-                issues.append(f"Verifier {check_id!r} requires an explicit revision")
-            else:
-                issues.append(f"Check {check_id!r} definition or verifier revision changed")
-    issues.extend(
-        f"Check {check_id!r} added in candidate" for check_id in new if check_id not in old
-    )
-    return issues
 
 
 def _check_change(left: AssertionResult | None, right: AssertionResult | None) -> Change:
