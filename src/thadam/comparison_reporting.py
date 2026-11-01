@@ -1,14 +1,14 @@
 """Machine-readable comparison artifacts and human-readable terminal evidence."""
 
 import json
-import textwrap
 from dataclasses import asdict
 from pathlib import Path
 
 from thadam.comparison import ComparisonReport
 from thadam.models import JSONValue
 from thadam.reporting import write_json_artifact
-from thadam.terminal import ColorRole, TerminalStyle, display_text
+from thadam.terminal import TerminalStyle
+from thadam.terminal_reporting import ROLES, ReportView, assertion_evidence, error_evidence, label
 
 
 def comparison_to_dict(report: ComparisonReport) -> dict[str, JSONValue]:
@@ -28,76 +28,95 @@ def write_comparison(report: ComparisonReport, path: str | Path) -> None:
 
 
 def format_comparison(
-    report: ComparisonReport, *, style: TerminalStyle | None = None, width: int = 88
+    report: ComparisonReport,
+    *,
+    style: TerminalStyle | None = None,
+    width: int = 88,
+    verbose: bool = False,
 ) -> str:
-    """Render wrapped, escaped status labels and evidence with optional semantic color."""
-    style = style or TerminalStyle()
-    width = max(20, min(width, 96))
-    lines = ["", style.paint("  THADAM", "brand", bold=True)]
-
-    def add(value: str, role: ColorRole = "muted", *, indent: int = 4) -> None:
-        for line in textwrap.wrap(
-            display_text(value), width=width - indent, break_on_hyphens=False
-        ) or [""]:
-            lines.append(" " * indent + style.paint(line, role))
-
-    add("Regression comparison", "info", indent=2)
-    lines.append("")
-    add(f"Baseline: {report.baseline_run_id}", "info", indent=2)
-    add(f"Candidate: {report.candidate_run_id}", "info", indent=2)
-    for label, revision in (
-        ("Baseline revision", report.baseline_agent_revision),
-        ("Candidate revision", report.candidate_agent_revision),
-    ):
-        if revision is not None:
-            add(f"{label}: {revision}", "info", indent=2)
-    lines.append("")
-    roles: dict[str, ColorRole] = {
-        "regression": "failed",
-        "fixed": "brand",
-        "existing_failure": "failed",
-        "unchanged_pass": "brand",
-        "error": "error",
-        "incompatible": "error",
-    }
+    """Show comparison verdict first, case rows, and changed or all recorded checks."""
+    view = ReportView(style, width)
+    view.header("Regression comparison")
+    summary = report.summary
+    counts = [
+        (
+            f"{summary.regressions} {'regression' if summary.regressions == 1 else 'regressions'}",
+            "failed" if summary.regressions else "muted",
+        ),
+        (f"{summary.fixed} fixed", "brand" if summary.fixed else "muted"),
+        (
+            f"{summary.existing_failures} existing failures",
+            "failed" if summary.existing_failures else "muted",
+        ),
+        (f"{summary.unchanged_passes} unchanged", "muted"),
+        (f"{summary.errors} errors", "error" if summary.errors else "muted"),
+        (f"{summary.incompatible} incompatible", "error" if summary.incompatible else "muted"),
+    ]
+    view.summary(
+        "INCOMPATIBLE" if not report.compatible else "BLOCKED" if report.exit_code else "PASSED",
+        "error"
+        if not report.compatible or summary.errors
+        else "failed"
+        if report.exit_code
+        else "brand",
+        counts,
+    )
+    view.field("Baseline", report.baseline_agent_revision or report.baseline_run_id)
+    view.field("Candidate", report.candidate_agent_revision or report.candidate_run_id)
+    if verbose:
+        view.field("Baseline run", report.baseline_run_id)
+        view.field("Candidate run", report.candidate_run_id)
+    view.table(
+        ("CASE", "BASELINE", "CANDIDATE", "CHANGE"),
+        [
+            (
+                case.id,
+                label(case.baseline_status) if case.baseline_status else "MISSING",
+                label(case.candidate_status) if case.candidate_status else "MISSING",
+                label(case.change),
+            )
+            for case in report.cases
+        ],
+        [
+            (
+                "info",
+                ROLES.get(case.baseline_status, "muted"),
+                ROLES.get(case.candidate_status, "muted"),
+                ROLES[case.change],
+            )
+            for case in report.cases
+        ],
+    )
     for case in report.cases:
-        add(f"{case.change.replace('_', ' ').upper()}: {case.id}", roles[case.change], indent=2)
+        if case.change != "unchanged_pass" or verbose:
+            view.section(f"{label(case.change)}: {case.id}", ROLES[case.change])
         for issue in case.issues:
-            add(issue, "error")
+            view.add(issue, "error", indent=4)
         for check in case.checks:
-            if check.change == "unchanged_pass":
+            if check.change == "unchanged_pass" and not verbose:
                 continue
-            add(f"{check.id}: {check.change.replace('_', ' ').upper()}", roles[check.change])
-            for label, result in (("baseline", check.baseline), ("candidate", check.candidate)):
-                if result is None:
-                    add(f"{label}: no verdict; see recorded errors", "error", indent=6)
-                    continue
-                add(
-                    f"{label}: {'passed' if result.passed else 'failed'} — {result.message}",
-                    roles[check.change],
-                    indent=6,
+            view.add(f"{check.id}: {label(check.change)}", ROLES[check.change], indent=4)
+            for side, result in (("baseline", check.baseline), ("candidate", check.candidate)):
+                view.add(
+                    f"{side}: "
+                    + (
+                        "no verdict; see recorded errors"
+                        if result is None
+                        else "passed"
+                        if result.passed
+                        else "failed"
+                    ),
+                    ROLES[check.change],
+                    indent=4,
                 )
-                add(f"expected: {json.dumps(result.expected, ensure_ascii=False)}", indent=6)
-                add(f"actual: {json.dumps(result.actual, ensure_ascii=False)}", indent=6)
-                if result.event_ids:
-                    add(f"events: {', '.join(result.event_ids)}", indent=6)
-        for label, errors in (
+                if result is not None:
+                    assertion_evidence(view, result)
+        for side, errors in (
             ("baseline", case.baseline_errors),
             ("candidate", case.candidate_errors),
         ):
             for error in errors:
-                check_id = f" [{error.assertion_id}]" if error.assertion_id else ""
-                add(f"{label} {error.source}{check_id}: {error.type}: {error.message}", "error")
-    lines.append("")
-    summary = report.summary
-    for count, singular, plural, role in (
-        (summary.regressions, "regression", "regressions", "failed"),
-        (summary.fixed, "fixed case", "fixed cases", "brand"),
-        (summary.existing_failures, "existing failure", "existing failures", "failed"),
-        (summary.unchanged_passes, "unchanged pass", "unchanged passes", "brand"),
-        (summary.errors, "error", "errors", "error"),
-        (summary.incompatible, "incompatible case", "incompatible cases", "error"),
-    ):
-        add(f"{count} {singular if count == 1 else plural}", role if count else "muted", indent=2)
-    add(f"Comparison exit code: {report.exit_code}", "info", indent=2)
-    return "\n".join(lines)
+                view.add(side + " error", "error", indent=4)
+                error_evidence(view, error)
+    view.section(f"Comparison exit code: {report.exit_code}")
+    return view.finish()

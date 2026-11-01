@@ -262,6 +262,29 @@ jobs never update it; pull requests read the baseline from the target commit.
 
 Thadam uses logo-inspired teal for passes and branding, blue for suite and agent details, amber for failed assertions, and red for execution and configuration errors. Each result also has an explicit status label. Timings align beside cases and failure evidence wraps beneath them.
 
+All four commands show the overall verdict and counts first, followed by case
+tables. Narrow terminals use stacked rows with wrapped names and values. Repeated
+evaluations group identical failure evidence by case/check and list every
+occurrence's attempt number; baseline and candidate groups remain separate.
+Different actual values, expectations, or errors produce separate groups. Trace
+details in grouped output are explicitly labeled as a representative attempt.
+
+Use `--verbose` before or after any command to expand passing/unchanged checks,
+every repeated attempt with its run ID, and all available trace evidence:
+
+```shell
+thadam run cases.json --agent my_agent:run --verbose
+thadam compare baseline.json candidate.json --verbose
+thadam repeat cases.json --agent my_agent:run --attempts 5 --verbose
+thadam compare-repeated baseline.json candidate.json --verbose
+```
+
+For `compare`, trace evidence consists of recorded assertion event links; full
+traces remain in the original run reports. Repeated comparisons embed both
+evaluations and can expand their full available traces. Verbosity affects only
+terminal presentation; JSON artifacts and gate decisions retain the same contracts.
+See [terminal output design and local test commands](docs/terminal-output-proposal.md).
+
 Color is automatic in interactive terminals and disabled for redirected output, `TERM=dumb`, or a non-empty `NO_COLOR`. Use `--color always` to force color or `--color never` for plain text. An explicit flag takes precedence over `NO_COLOR`. These flags work before or after `run`:
 
 ```shell

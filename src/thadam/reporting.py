@@ -10,7 +10,8 @@ from pathlib import Path
 
 from thadam.errors import ReportWriteError
 from thadam.models import JSONValue, RunReport
-from thadam.terminal import ColorRole, TerminalStyle, display_text
+from thadam.terminal import TerminalStyle, display_text
+from thadam.terminal_reporting import ROLES, ReportView, case_evidence, run_counts
 
 
 def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
@@ -80,121 +81,34 @@ def format_summary(
     width: int = 88,
     suite: str | None = None,
     agent: str | None = None,
+    verbose: bool = False,
 ) -> str:
-    """Render a compact report with optional color, explicit statuses, and wrapping.
+    """Render verdict/counts, adaptive case rows, and failure or full case evidence.
 
-    The SDK defaults to plain text. Styling never changes the JSON report or
-    evaluation rules. Width is measured in text columns before adding ANSI codes.
+    Verbose expands passing checks and all available trace evidence. Formatting
+    does not execute application code or modify the report. SDK output is plain
+    unless a style is explicitly supplied.
     """
-    style = style or TerminalStyle()
-    width = max(20, min(width, 96))
-    rule = style.paint("  " + "-" * (width - 4), "muted")
-    heading = "  " + style.paint("THADAM", "brand", bold=True)
-    heading += "  Agent test report" if width >= 28 else "\n  Agent test report"
-    lines = ["", heading, rule]
-    for label, value in (("Suite", suite), ("Agent", agent)):
-        if value is not None:
-            lines.extend(_field(label, value, style, width))
-    lines.append("")
-    for case in report.cases:
-        role: ColorRole = {"passed": "brand", "failed": "failed", "error": "error"}[case.status]
-        label = style.paint(f"{case.status.upper():6}", role, bold=True)
-        duration = f"{case.duration_ms:.2f} ms"
-        names = _wrapped(case.id, width - 12)
-        for index, name in enumerate(names):
-            prefix = "  " + label + "  " if index == 0 else " " * 10
-            padding = width - 12 - len(name) - len(duration)
-            if index == 0 and padding >= 2:
-                lines.append(prefix + name + " " * padding + style.paint(duration, "muted"))
-            else:
-                lines.append(prefix + name)
-        if width - 12 - len(names[0]) - len(duration) < 2:
-            lines.append(" " * 10 + style.paint(duration, "muted"))
-        for assertion in case.assertions:
-            if not assertion.passed:
-                lines.extend(
-                    _detail(f"{assertion.id}: {assertion.message}", style, "failed", width)
-                )
-                lines.extend(
-                    _detail(
-                        f"expected: {json.dumps(assertion.expected, ensure_ascii=False)}",
-                        style,
-                        "muted",
-                        width,
-                    )
-                )
-                lines.extend(
-                    _detail(
-                        f"actual:   {json.dumps(assertion.actual, ensure_ascii=False)}",
-                        style,
-                        "failed",
-                        width,
-                    )
-                )
-                if assertion.event_ids:
-                    lines.extend(
-                        _detail("events: " + ", ".join(assertion.event_ids), style, "muted", width)
-                    )
-        for error in case.errors:
-            check = f" [{error.assertion_id}]" if error.assertion_id is not None else ""
-            lines.extend(
-                _detail(
-                    f"{error.source}{check}: {error.type}: {error.message}", style, "error", width
-                )
-            )
-        if case.status != "passed" and case.events is not None:
-            for event in case.events:
-                event_role: ColorRole = "error" if event.status == "error" else "muted"
-                duration = (
-                    "unknown duration"
-                    if event.duration_ms is None
-                    else f"{event.duration_ms:.2f} ms"
-                )
-                lines.extend(
-                    _detail(
-                        f"{event.kind} {event.name}: {event.status} ({duration}) [{event.id}]",
-                        style,
-                        event_role,
-                        width,
-                    )
-                )
-                if event.kind == "tool" and event.input_available:
-                    lines.extend(
-                        _detail(
-                            "arguments: " + json.dumps(event.input, ensure_ascii=False),
-                            style,
-                            event_role,
-                            width,
-                        )
-                    )
-                if event.error:
-                    lines.extend(
-                        _detail(f"{event.error.type}: {event.error.message}", style, "error", width)
-                    )
-        for warning in case.trace_warnings:
-            lines.extend(_detail("trace: " + warning, style, "failed", width))
-        if case.errors or any(not item.passed for item in case.assertions):
-            lines.append("")
-    counts = report.summary
-    case_noun = "case" if counts.total == 1 else "cases"
-    error_noun = "error" if counts.errors == 1 else "errors"
-    lines.extend([rule, ""])
-    totals = [
-        style.paint(f"{counts.passed} passed", "brand" if counts.passed else "muted", bold=True),
-        style.paint(f"{counts.failed} failed", "failed" if counts.failed else "muted", bold=True),
-        style.paint(
-            f"{counts.errors} {error_noun}", "error" if counts.errors else "muted", bold=True
-        ),
-    ]
-    summary_length = len(
-        f"  {counts.total} {case_noun}: {counts.passed} passed, "
-        f"{counts.failed} failed, {counts.errors} {error_noun}"
+    view = ReportView(style, width)
+    view.header("Agent evaluation")
+    view.summary(
+        "FAILED" if report.has_failures else "PASSED",
+        "error" if report.summary.errors else "failed" if report.has_failures else "brand",
+        run_counts(report),
     )
-    if summary_length <= width:
-        lines.append(f"  {counts.total} {case_noun}: " + ", ".join(totals))
-    else:
-        lines.extend([f"  {counts.total} {case_noun}", *("  " + total for total in totals)])
-    return "\n".join(lines)
+    for name, value in (("Suite", suite), ("Agent", agent), ("Revision", report.agent_revision)):
+        if value is not None:
+            view.field(name, value)
+    if verbose:
+        view.field("Run", report.run_id)
+    view.table(
+        ("CASE", "RESULT", "DURATION"),
+        [(case.id, case.status.upper(), f"{case.duration_ms:.2f} ms") for case in report.cases],
+        [("info", ROLES[case.status], "muted") for case in report.cases],
+    )
+    for case in report.cases:
+        case_evidence(view, case, verbose=verbose)
+    return view.finish()
 
 
 def _wrapped(value: str, width: int) -> list[str]:
@@ -213,7 +127,3 @@ def _field(label: str, value: str, style: TerminalStyle, width: int) -> list[str
         prefix = style.paint(label, "muted") if index == 0 else " " * len(label)
         lines.append(prefix + style.paint(part, "info"))
     return lines
-
-
-def _detail(value: str, style: TerminalStyle, role: ColorRole, width: int) -> list[str]:
-    return [" " * 10 + style.paint(part, role) for part in _wrapped(value, width - 12)]

@@ -36,6 +36,7 @@ Implementation details and acceptance criteria: [local runner specification](doc
 - [x] Add a Python SDK entry point and a CLI with documented exit codes.
 - [x] Show a useful CLI overview without arguments and task-focused help with executable examples for every command.
 - [x] Style every help page with Thadam branding and a consistent automatic/explicit color policy across supported Python versions.
+- [x] Unify report layouts with verdicts/counts first, adaptive case tables, grouped repeated failures, and verbose evidence across all four commands.
 - [x] Produce a terminal summary and a versioned JSON report.
 - [x] Include a small agent example, five scenarios, and focused behavior tests that require no model API key.
 

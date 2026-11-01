@@ -1,13 +1,13 @@
 """Repeated-run JSON and terminal summaries, preserving complete attempt evidence."""
 
-import textwrap
 from dataclasses import asdict
 from pathlib import Path
 
 from thadam.models import JSONValue
 from thadam.repetition import OutcomeCounts, RepeatedReport
-from thadam.reporting import format_summary, report_to_dict, write_json_artifact
-from thadam.terminal import ColorRole, TerminalStyle, display_text
+from thadam.reporting import report_to_dict, write_json_artifact
+from thadam.terminal import TerminalStyle
+from thadam.terminal_reporting import ReportView, grouped_evidence, verbose_attempts
 
 
 def counts_to_dict(counts: OutcomeCounts) -> dict[str, JSONValue]:
@@ -56,72 +56,88 @@ def write_repeated(report: RepeatedReport, path: str | Path) -> None:
     write_json_artifact(repeated_to_dict(report), path)
 
 
-def append_line(
-    lines: list[str],
-    value: str,
-    style: TerminalStyle,
-    width: int,
-    role: ColorRole = "muted",
-    indent: int = 2,
-) -> None:
-    """Append wrapped terminal text, escaping control characters before coloring."""
-    for part in textwrap.wrap(
-        display_text(value), width=width - indent, break_on_hyphens=False
-    ) or [""]:
-        lines.append(" " * indent + style.paint(part, role))
-
-
 def format_repeated(
-    report: RepeatedReport, *, style: TerminalStyle | None = None, width: int = 88
+    report: RepeatedReport,
+    *,
+    style: TerminalStyle | None = None,
+    width: int = 88,
+    verbose: bool = False,
 ) -> str:
-    """Display counts, runtime, variability, and all failing/errored attempt evidence."""
-    style = style or TerminalStyle()
-    width = max(20, min(width, 96))
-    lines = ["", style.paint("  THADAM", "brand", bold=True)]
-    append_line(lines, f"Repeated evaluation: {report.attempts} attempts", style, width, "info")
-    append_line(lines, f"Report: {report.report_id}; mode: {report.execution_mode}", style, width)
+    """Show outcome/runtime tables and grouped failures, or full attempt evidence."""
+    view = ReportView(style, width)
+    view.header("Repeated evaluation")
+    cases = report.cases
+    counts = {
+        "passed": sum(case.counts.passed for case in cases),
+        "failed": sum(case.counts.failed for case in cases),
+        "errors": sum(case.counts.errors for case in cases),
+        "total_invocations": report.attempts * len(cases),
+    }
+    view.summary(
+        "FAILED" if report.has_failures else "PASSED",
+        "error" if counts["errors"] else "failed" if report.has_failures else "brand",
+        [
+            (f"{counts['passed']} passed", "brand" if counts["passed"] else "muted"),
+            (f"{counts['failed']} failed", "failed" if counts["failed"] else "muted"),
+            (
+                f"{counts['errors']} {'error' if counts['errors'] == 1 else 'errors'}",
+                "error" if counts["errors"] else "muted",
+            ),
+        ],
+    )
+    view.field(
+        "Attempts",
+        f"{report.attempts} per case / {counts['total_invocations']} invocations / {report.execution_mode} agent",
+    )
     if report.agent_revision is not None:
-        append_line(lines, f"Agent revision: {report.agent_revision}", style, width, "info")
-    for case in report.cases:
-        counts = case.counts
-        role: ColorRole = "error" if counts.errors else "failed" if counts.failed else "brand"
-        append_line(
-            lines,
-            f"{case.id}: {counts.passed}/{counts.total} passed ({counts.pass_rate:.1%}), "
-            f"{counts.failed} failed, {counts.errors} errors; "
-            f"{'VARIABLE' if case.variable else 'STABLE'} observed outcomes",
-            style,
-            width,
-            role,
-        )
-        for check in case.checks:
-            append_line(
-                lines,
-                f"check {check.id}: {check.counts.passed}/{check.counts.total} passed, "
-                f"{check.counts.failed} failed, {check.counts.errors} errors",
-                style,
-                width,
+        view.field("Revision", report.agent_revision)
+    if verbose:
+        view.field("Report ID", report.report_id)
+    view.table(
+        ("CASE", "PASSED", "FAILED", "ERRORS", "MEDIAN"),
+        [
+            (
+                case.id,
+                f"{case.counts.passed}/{case.counts.total} ({case.counts.pass_rate:.1%})",
+                str(case.counts.failed),
+                str(case.counts.errors),
+                f"{case.runtime.median_ms:.2f} ms",
+            )
+            for case in cases
+        ],
+        [
+            (
+                "info",
+                "brand" if case.counts.passed else "muted",
+                "failed" if case.counts.failed else "muted",
+                "error" if case.counts.errors else "muted",
+                "muted",
+            )
+            for case in cases
+        ],
+    )
+    view.add("Runtime ms: median per case", indent=4)
+    for case in cases:
+        if case.variable:
+            view.section(f"VARIABLE: {case.id}", "error" if case.counts.errors else "failed")
+        if verbose or case.variable:
+            for check in case.checks:
+                counts = check.counts
+                view.add(
+                    f"check {check.id}: {counts.passed}/{counts.total} passed, {counts.failed} failed, {counts.errors} errors",
+                    indent=4,
+                )
+        if verbose:
+            runtime = case.runtime
+            view.add(
+                f"Runtime ms / {case.id}: mean {runtime.mean_ms:.2f}, median {runtime.median_ms:.2f}, min {runtime.min_ms:.2f}, max {runtime.max_ms:.2f}, total {runtime.total_ms:.2f}",
                 indent=4,
             )
-        runtime = case.runtime
-        append_line(
-            lines,
-            f"Runtime ms: mean {runtime.mean_ms:.2f}, median {runtime.median_ms:.2f}, "
-            f"min {runtime.min_ms:.2f}, max {runtime.max_ms:.2f}, total {runtime.total_ms:.2f}",
-            style,
-            width,
-            indent=4,
-        )
-    for attempt, run in enumerate(report.runs, 1):
-        if run.has_failures:
-            append_line(lines, f"Attempt {attempt} / run {run.run_id}", style, width, "info")
-            # Existing formatting includes expectations, errors, trace warnings,
-            # and event IDs. Keep the original case/run identity for investigation.
-            lines.append(format_summary(run, style=style, width=width))
-    append_line(
-        lines,
-        "Observed rates describe these attempts; they are not causal or significance tests.",
-        style,
-        width,
+    if verbose:
+        verbose_attempts(view, report.runs)
+    else:
+        grouped_evidence(view, report.runs)
+    view.section(
+        "Observed rates describe these attempts; they are not causal or significance tests."
     )
-    return "\n".join(lines)
+    return view.finish()
