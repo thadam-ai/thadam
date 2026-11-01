@@ -93,7 +93,7 @@ def test_real_cli_imports_consumer_module_and_preserves_evidence(tmp_path, selec
     assert saved.cases[0].counts.passed == 3
     assert saved.execution_mode == ("factory" if selection == "--agent-factory" else "shared")
     assert "agent log" in process.stderr and "agent log" not in process.stdout
-    assert "3/3 passed" in process.stdout and "Runtime ms" in process.stdout
+    assert "3/3 (100.0%)" in process.stdout and "MEDIAN" in process.stdout
 
 
 def test_comparison_cli_matches_sdk_with_standalone_artifact(tmp_path, capsys):
@@ -159,7 +159,9 @@ def test_repeat_failed_cases_write_report_and_later_attempts_run(tmp_path, capsy
     saved = load_repeated(path)
     assert all(run.summary.errors == 1 and run.summary.failed == 1 for run in saved.runs)
     assert len(saved.runs) == 2
-    assert "Attempt 2" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "attempts 1-2 / 2 occurrences" in output
+    assert output.count("THADAM") == 1
 
 
 def test_repeat_protects_suite_path_and_invalid_count_prevents_import(tmp_path, capsys):

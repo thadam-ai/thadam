@@ -89,6 +89,14 @@ Both commands honor the existing color policy and atomic/path protection rules.
 Terminal evidence identifies side, one-based attempt, run ID, case/check, errors,
 and available event IDs. No report is styled with ANSI escapes.
 
+The default terminal view now groups identical findings per side/case/check and
+lists their occurrence attempt numbers. Each group identifies its representative
+attempt/run and trace; different expected/actual/error evidence stays separate.
+`--verbose` expands all attempts and full available evidence under one report
+heading. Runtime tables emphasize median case duration; verbose output and JSON
+retain all runtime statistics. This changes presentation, not artifact schemas
+or comparison rules. See the [terminal design](../terminal-output-proposal.md).
+
 Consumer examples must read the reviewed baseline from the PR target commit,
 continue comparison after candidate exit 1, and never promote baselines
 automatically. Users review generation settings, state/reset behavior, evidence,

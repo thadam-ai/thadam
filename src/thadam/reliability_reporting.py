@@ -6,9 +6,11 @@ from pathlib import Path
 
 from thadam.models import JSONValue
 from thadam.reliability import RateComparison, ReliabilityComparison
-from thadam.repetition_reporting import append_line, counts_to_dict, repeated_to_dict
-from thadam.reporting import format_summary, write_json_artifact
-from thadam.terminal import ColorRole, TerminalStyle
+from thadam.repetition import CaseReliability
+from thadam.repetition_reporting import counts_to_dict, repeated_to_dict
+from thadam.reporting import write_json_artifact
+from thadam.terminal import TerminalStyle
+from thadam.terminal_reporting import ROLES, ReportView, grouped_evidence, label, verbose_attempts
 
 
 def reliability_to_dict(report: ReliabilityComparison) -> dict[str, JSONValue]:
@@ -57,83 +59,115 @@ def write_reliability_comparison(report: ReliabilityComparison, path: str | Path
 
 
 def format_reliability_comparison(
-    report: ReliabilityComparison, *, style: TerminalStyle | None = None, width: int = 88
+    report: ReliabilityComparison,
+    *,
+    style: TerminalStyle | None = None,
+    width: int = 88,
+    verbose: bool = False,
 ) -> str:
-    """Show case/check rates, tolerated changes, policy, and failing attempt evidence."""
-    style = style or TerminalStyle()
-    width = max(20, min(width, 96))
-    lines = ["", style.paint("  THADAM", "brand", bold=True)]
-    append_line(lines, "Reliability comparison", style, width, "info")
+    """Show reliability verdict/rates and grouped evidence, or every recorded attempt."""
+    view = ReportView(style, width)
+    view.header("Reliability comparison")
+    summary = report.summary
+    nouns = {
+        "regression": ("regression", "regressions"),
+        "tolerated_drop": ("tolerated drop", "tolerated drops"),
+        "improved": ("improved", "improved"),
+        "unchanged": ("unchanged", "unchanged"),
+        "error": ("error", "errors"),
+        "incompatible": ("incompatible", "incompatible"),
+    }
+    view.summary(
+        "INCOMPATIBLE" if not report.compatible else "BLOCKED" if report.exit_code else "PASSED",
+        "error"
+        if not report.compatible or summary["error"]
+        else "failed"
+        if report.exit_code
+        else "brand",
+        [
+            (f"{count} {nouns[name][0 if count == 1 else 1]}", ROLES[name] if count else "muted")
+            for name, count in summary.items()
+            if name != "total"
+        ],
+    )
     for side, evidence in (("Baseline", report.baseline), ("Candidate", report.candidate)):
-        append_line(
-            lines,
-            f"{side}: {evidence.report_id}; revision {evidence.agent_revision}; "
-            f"{evidence.attempts} attempts; {evidence.execution_mode}",
-            style,
-            width,
-            "info",
+        view.field(
+            side,
+            f"{evidence.agent_revision or evidence.report_id} / {evidence.attempts} attempts / {evidence.execution_mode} agent",
         )
-    append_line(
-        lines,
-        f"Allowed pass-rate drop: {report.max_pass_rate_drop * 100:g} percentage points",
-        style,
-        width,
-        "info",
+        if verbose:
+            view.field(side + " ID", evidence.report_id)
+    view.field(
+        "Policy",
+        f"Allow a drop of up to {report.max_pass_rate_drop * 100:g} percentage points per case/check",
     )
     for issue in report.issues:
-        append_line(lines, issue, style, width, "error")
-    roles: dict[str, ColorRole] = {
-        "regression": "failed",
-        "tolerated_drop": "failed",
-        "improved": "brand",
-        "unchanged": "brand",
-        "error": "error",
-        "incompatible": "error",
-    }
-    for case in report.cases:
-        append_line(
-            lines,
-            f"{case.change.replace('_', ' ').upper()}: {case.id}",
-            style,
-            width,
-            roles[case.change],
+        view.add(issue, "error", indent=4)
+
+    def rate_text(case: CaseReliability | None) -> str:
+        return (
+            "MISSING"
+            if case is None
+            else f"{case.counts.passed}/{case.counts.total} ({case.counts.pass_rate:.1%})"
         )
+
+    view.table(
+        ("CASE", "BASELINE", "CANDIDATE", "CHANGE"),
+        [
+            (
+                case.id,
+                rate_text(case.baseline),
+                rate_text(case.candidate),
+                label(case.change)
+                + (f" / {case.case_rate.pass_rate_delta * 100:+.1f} pp" if case.case_rate else ""),
+            )
+            for case in report.cases
+        ],
+        [
+            (
+                "info",
+                "error" if case.baseline and case.baseline.counts.errors else "muted",
+                "error" if case.candidate and case.candidate.counts.errors else "muted",
+                "failed"
+                if case.change == "unchanged"
+                and (
+                    (case.baseline and case.baseline.counts.failed)
+                    or (case.candidate and case.candidate.counts.failed)
+                )
+                else ROLES[case.change],
+            )
+            for case in report.cases
+        ],
+    )
+    for case in report.cases:
+        if case.change != "unchanged" or verbose:
+            view.section(f"{label(case.change)}: {case.id}", ROLES[case.change])
         for issue in case.issues:
-            append_line(lines, issue, style, width, "error", indent=4)
-        for label, rate in [("case", case.case_rate), *(("check", check) for check in case.checks)]:
-            if rate is None:
+            view.add(issue, "error", indent=4)
+        for scope, rate in [("case", case.case_rate), *(("check", check) for check in case.checks)]:
+            if rate is None or (
+                not verbose
+                and rate.change == "unchanged"
+                and not rate.baseline.failed
+                and not rate.candidate.failed
+            ):
                 continue
             left, right = rate.baseline, rate.candidate
-            role = roles[rate.change]
+            role = ROLES[rate.change]
             if rate.change == "unchanged" and (left.failed or right.failed):
                 role = "failed"
-            append_line(
-                lines,
-                f"{label} {rate.id}: {left.passed}/{left.total} ({left.pass_rate:.1%}) -> "
-                f"{right.passed}/{right.total} ({right.pass_rate:.1%}); "
-                f"{rate.pass_rate_delta * 100:+.2f} pp; {rate.change.replace('_', ' ').upper()}; "
-                f"errors {left.errors} -> {right.errors}",
-                style,
-                width,
+            view.add(
+                f"{scope} {rate.id}: {left.passed}/{left.total} ({left.pass_rate:.1%}) -> {right.passed}/{right.total} ({right.pass_rate:.1%}); {rate.pass_rate_delta * 100:+.2f} pp; {label(rate.change)}; errors {left.errors} -> {right.errors}",
                 role,
                 indent=4,
             )
-    # Print every unsuccessful attempt on both sides, including already accepted
-    # failures. Do not hide evidence behind case-level precedence or tolerance.
     for side, evidence in (("Baseline", report.baseline), ("Candidate", report.candidate)):
-        for attempt, run in enumerate(evidence.runs, 1):
-            if run.has_failures:
-                append_line(
-                    lines, f"{side} attempt {attempt} / run {run.run_id}", style, width, "info"
-                )
-                lines.append(format_summary(run, style=style, width=width))
-    for label, count in report.summary.items():
-        append_line(lines, f"{label}: {count}", style, width)
-    append_line(lines, f"Comparison exit code: {report.exit_code}", style, width, "info")
-    append_line(
-        lines,
-        "Observed rates are not a significance test or proof that the change caused a difference.",
-        style,
-        width,
+        if verbose:
+            verbose_attempts(view, evidence.runs, side=side)
+        else:
+            grouped_evidence(view, evidence.runs, side=side)
+    view.section(f"Comparison exit code: {report.exit_code}")
+    view.add(
+        "Observed rates are not a significance test or proof that the change caused a difference."
     )
-    return "\n".join(lines)
+    return view.finish()

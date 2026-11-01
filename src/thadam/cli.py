@@ -70,6 +70,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--version", action="version", version=f"thadam {__version__}")
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show all checks, attempts, and available trace evidence",
+    )
+    parser.add_argument(
         "--color",
         choices=("auto", "always", "never"),
         default="auto",
@@ -193,6 +198,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     for command in (run, compare, repeat, reliability):
         command.add_argument(
+            "--verbose",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help="Show all checks, attempts, and available trace evidence",
+        )
+        command.add_argument(
             "--color",
             choices=("auto", "always", "never"),
             default=argparse.SUPPRESS,
@@ -223,7 +234,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     load_report(arguments.baseline), load_report(arguments.candidate)
                 )
                 formatter, writer = format_comparison, write_comparison
-            print(formatter(comparison, style=style, width=shutil.get_terminal_size().columns))
+            print(
+                formatter(
+                    comparison,
+                    style=style,
+                    width=shutil.get_terminal_size().columns,
+                    verbose=arguments.verbose,
+                )
+            )
             if arguments.report:
                 writer(comparison, arguments.report)
                 print(
@@ -257,7 +275,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 agent = _load_agent(arguments.agent)
                 report = run_suite(agent, cases, agent_revision=arguments.agent_revision)
         if arguments.command == "repeat":
-            print(format_repeated(report, style=style, width=shutil.get_terminal_size().columns))
+            print(
+                format_repeated(
+                    report,
+                    style=style,
+                    width=shutil.get_terminal_size().columns,
+                    verbose=arguments.verbose,
+                )
+            )
         else:
             print(
                 format_summary(
@@ -266,6 +291,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     width=shutil.get_terminal_size().columns,
                     suite=str(arguments.suite),
                     agent=arguments.agent,
+                    verbose=arguments.verbose,
                 )
             )
         if arguments.report:

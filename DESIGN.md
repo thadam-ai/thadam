@@ -63,6 +63,14 @@ and teal command examples. Styling is applied after argparse lays out plain
 text, preserving alignment. Python's native help colors are disabled where
 available so the same Thadam palette and color policy apply on Python 3.10–3.14.
 
+Execution/comparison reports share a verdict-first layout and adaptive case
+tables, switching to stacked rows below 60 columns or when full columns cannot
+fit. Repeated failures are grouped by side, case/check, and matching evidence;
+attempt/run/event IDs and timing do not split identical findings. Representative
+traces are labeled. `--verbose` expands every attempt and available evidence
+under one top-level heading. Formatting remains independent of JSON contracts,
+evaluation rules, and gate exit codes.
+
 ## Updating this document
 
 When a decision changes, update the stack and rationale above, then add a dated entry below describing the change, the reason, and its impact. Keep planned choices distinct from implemented components. Update the [architecture](docs/architecture.md) and [roadmap](ROADMAP.md) when a decision changes module boundaries or delivery order.
@@ -82,3 +90,4 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-30 | Prepare `thadam-ai` distribution and OIDC publishing | The PyPI name `thadam` belongs to an unrelated SDK; provide a repeatable release path | Preserve `import thadam` and the `thadam` CLI; validate source/wheel artifacts and isolate publishing permissions; first upload awaits owner account/publisher setup |
 | 2026-10-31 | Add complete repeated-evaluation reliability comparison | Review a change using repeated case/check outcomes rather than trusting a single attempt | Preserve schema-3 runs inside distinct repeated-run and reliability-comparison schema-1 envelopes; require equal attempts/modes/contracts, block any errors, and apply an explicit per-case/check drop tolerance |
 | 2026-10-31 | Support shared callables and per-invocation agent factories sequentially | Make state ownership explicit without assuming an agent can be copied or reset | Factories construct one agent per case attempt; application resources and verifier state remain caller-owned; no concurrency, retry, or implicit cleanup protocol |
+| 2026-11-01 | Unify terminal reports and group repeated evidence | Make verdicts easy to scan while retaining an explicit way to inspect every attempt | Adaptive tables, grouped failures with occurrence numbers and representative traces, and `--verbose` for all commands; serialized reports and gate behavior retain their contracts |
