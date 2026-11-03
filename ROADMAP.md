@@ -3,9 +3,24 @@
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
 **Current state:** milestones 1 and 2 plus saved-report and repeated-evaluation reliability comparison in milestone 3 implemented, including SDK/CLI gates and pytest/consumer CI examples.
-**Next build:** continue milestone 3 with explicit suite revisions and review of intentional contract changes.
+**Next build:** minimal, read-only local dashboard for saved reports and comparisons.
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
+
+## Next priority: minimal local dashboard
+
+**Outcome:** a developer opens saved Thadam reports in a clean, read-only local dashboard and can quickly understand results and regressions.
+
+This is the next build, ahead of async execution, scenario generation, and the later milestones below.
+
+- [ ] Open existing versioned JSON artifacts without executing agents or verifiers.
+- [ ] List runs with suite/run identity where available, pass/fail/error counts, and recorded duration.
+- [ ] Inspect cases with expandable checks, expected/actual evidence, errors, and available trace events.
+- [ ] View baseline/candidate regressions and repeated-evaluation reliability changes using the existing report contracts.
+- [ ] Keep the interface minimal and neat: clear typography, generous spacing, restrained teal/blue accents, and labeled amber/red statuses.
+- [ ] Provide a documented local launch workflow and validate the viewer against controlled saved-report fixtures.
+
+The first version needs no login or hosted infrastructure. Keep report validation and evaluation rules in the existing Python SDK; preserve unavailable evidence explicitly.
 
 ## Foundation: a repository humans and AI agents can navigate
 
@@ -106,7 +121,7 @@ Generated expectations are proposals. Coverage and correctness still need a deve
 
 - [ ] Add LangChain, CrewAI, and API adapters based on concrete user demand.
 - [ ] Export execution evidence through OpenTelemetry where it fits the event model.
-- [ ] Add an optional local report viewer and production-trace import.
+- [ ] Add production-trace import compatible with the local dashboard and existing evidence contracts.
 - [ ] Design hosted runs, scheduling, result history, and team collaboration around the existing engine.
 
 Keep local execution, the SDK, CLI, and basic evaluations useful as open source. Hosted services should consume the same contracts.
