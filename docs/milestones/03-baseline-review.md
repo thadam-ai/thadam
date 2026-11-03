@@ -175,8 +175,12 @@ update is involved.
 
 ```python
 from thadam import (
-    approve_review, load_baseline_review, load_evaluation,
-    review_baseline, write_approved_baseline, write_baseline_review,
+    approve_review,
+    load_baseline_review,
+    load_evaluation,
+    review_baseline,
+    write_approved_baseline,
+    write_baseline_review,
 )
 
 review = review_baseline(
@@ -189,8 +193,10 @@ print(review.digest, review.blockers)
 # After independently inspecting the review, copy its displayed digest here.
 review = load_baseline_review("artifacts/review.json")
 approval = approve_review(
-    review, review_digest="COPY_THE_INSPECTED_SHA256",
-    reviewer="YourName", reason="Reviewed policy change",
+    review,
+    review_digest="COPY_THE_INSPECTED_SHA256",
+    reviewer="YourName",
+    reason="Reviewed policy change",
 )
 write_approved_baseline(approval, "baselines/refund.json")
 ```
