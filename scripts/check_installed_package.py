@@ -35,6 +35,19 @@ def main() -> None:
         raise SystemExit("Installed distribution name/version differs from the SDK")
     if not files("thadam").joinpath("py.typed").is_file():
         raise SystemExit("Installed package is missing its type marker")
+    static = files("thadam.dashboard").joinpath("static")
+    if (
+        not static.joinpath("index.html").is_file()
+        or not static.joinpath("THIRD_PARTY_NOTICES.txt").is_file()
+    ):
+        raise SystemExit("Installed package is missing its bundled dashboard")
+    import re
+
+    for asset in re.findall(
+        r'(?:src|href)="(\./assets/[^\"]+)"', static.joinpath("index.html").read_text()
+    ):
+        if not static.joinpath(asset.removeprefix("./")).is_file():
+            raise SystemExit(f"Installed dashboard asset is missing: {asset}")
     case = TestCase(
         id="installed-sdk",
         input={"value": 1},

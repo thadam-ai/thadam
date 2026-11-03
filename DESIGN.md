@@ -92,3 +92,21 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-31 | Support shared callables and per-invocation agent factories sequentially | Make state ownership explicit without assuming an agent can be copied or reset | Factories construct one agent per case attempt; application resources and verifier state remain caller-owned; no concurrency, retry, or implicit cleanup protocol |
 | 2026-11-01 | Unify terminal reports and group repeated evidence | Make verdicts easy to scan while retaining an explicit way to inspect every attempt | Adaptive tables, grouped failures with occurrence numbers and representative traces, and `--verbose` for all commands; serialized reports and gate behavior retain their contracts |
 | 2026-11-03 | Add explicit suite revisions and reviewed baseline promotion | Make intentional test changes reviewable without allowing revision labels to bypass contract checks | Preserve legacy formats; add suite schema 2, run schema 4, single-comparison schema 2, full-evidence review/approval artifacts, exact digest acknowledgement, and stale-destination protection |
+
+## Local dashboard
+
+The user approved an operational local testing workspace extending the original
+read-only viewer. React + TypeScript with self-hosted Inter ships as bundled assets
+in the Python package; FastAPI/Uvicorn are behind the `dashboard` extra. The core
+retains no runtime dependencies. See [the confirmed surface brief](docs/dashboard-design.md).
+
+Navigation is Overview, Suites, Evaluations, Comparisons and Baselines. Dark is the
+default, with a persistent light toggle. Actual outcomes lead; cases, checks,
+expected/actual values and traces expand on demand. Forms and JSON edit suites;
+explicit Run/Save/Approve actions use SDK rules. Desktop tables become compact
+stacked result rows on narrow screens. No invented charts or hosted controls.
+
+The server uses a project-confined authenticated loopback session. Evaluation jobs
+run sequential SDK evaluations in managed subprocesses, with completed-case progress
+and explicit interruption. These are local process controls, not sandboxing or
+new timeout guarantees. Report and approval schemas retain their contracts.

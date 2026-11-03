@@ -4,7 +4,7 @@
 
 Open-source testing, evaluation, and reliability for AI agents. Thadam helps developers test expected behavior, understand failures, and catch regressions before deployment.
 
-> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, tool assertions, saved-report regression comparison, and repeated-evaluation reliability gates work. Scenario generation and the dashboard are planned.
+> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, tool assertions, saved-report regression comparison, and repeated-evaluation reliability gates work. The optional local dashboard works; scenario generation remains planned.
 
 ## What works today
 
@@ -17,6 +17,7 @@ Open-source testing, evaluation, and reliability for AI agents. Thadam helps dev
 - Compare reviewed baselines with candidate reports, detecting newly failing checks and incompatible tests
 - Repeat evaluations, inspect case/check pass rates and runtime, and gate changes on observed reliability drops
 - Version suites, review intentional test changes, and explicitly approve baseline evidence
+- Use a local browser dashboard to edit suites, run agents, inspect all report types, compare results, and review/approve baselines
 
 Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
@@ -47,6 +48,28 @@ Help uses Thadam's teal branding and blue section headings automatically in an
 interactive terminal. `--color never` disables styling and `--color always`
 forces it, including when passed alongside `--help`. Redirected output,
 `NO_COLOR`, and `TERM=dumb` follow the same policy as execution summaries.
+
+## Local dashboard
+
+Install the optional dashboard from this checkout and open a controlled example:
+
+```shell
+python -m pip install -e '.[dashboard]'
+python -m examples.dashboard_demo
+python -m thadam dashboard artifacts/dashboard-demo
+```
+
+The browser workspace includes **Overview, Suites, Evaluations, Comparisons, and
+Baselines**, with dark/light Thadam colors. Edit tests using forms or JSON, configure
+agents by `module:callable`, run single/repeated evaluations with progress and Stop,
+inspect all available evidence, compare saved results, and explicitly approve
+reviewed baselines. The SDK owns evaluation rules in both the CLI and dashboard.
+
+Users need no Node.js, hosted account, or model credentials for the example. For
+your own agent, install its dependencies in the server's Python environment and
+open its project with `thadam dashboard /path/to/project`. Keep the terminal open.
+The demo preserves existing folders; use a fresh `--output` path to repeat it.
+See the [full guide and VS Code testing steps](docs/dashboard.md).
 
 ## Package installation
 

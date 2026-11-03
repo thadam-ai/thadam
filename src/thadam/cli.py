@@ -73,6 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "  thadam compare-repeated --help\n\n"
             "  thadam review-baseline --help\n"
             "  thadam approve-baseline --help\n\n"
+            "  thadam dashboard --help\n\n"
             "You can also use: python -m thadam <command>\n"
             "Color is automatic in interactive terminals."
         ),
@@ -210,7 +211,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--report", type=Path, help="Write a standalone reliability comparison"
     )
     baseline_commands = add_baseline_commands(commands)
-    for command in (run, compare, repeat, reliability, *baseline_commands):
+    dashboard = commands.add_parser(
+        "dashboard",
+        help="Open the local testing dashboard",
+        description="Edit suites, run agents, inspect reports, compare results, and review baselines locally.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Examples (install the dashboard extra first)\n  thadam dashboard .\n  thadam dashboard /path/to/project --port 8766 --no-browser\n\nThe server uses loopback only. End users do not need Node.js. Press Ctrl+C to stop.",
+    )
+    dashboard.add_argument(
+        "project",
+        type=Path,
+        nargs="?",
+        default=Path.cwd(),
+        help="Project folder (default: current directory)",
+    )
+    dashboard.add_argument("--port", type=int, default=8765, help="Local port (default: 8765)")
+    dashboard.add_argument(
+        "--no-browser", action="store_true", help="Print the link without opening the browser"
+    )
+    for command in (run, compare, repeat, reliability, *baseline_commands, dashboard):
         command.add_argument(
             "--verbose",
             action="store_true",
@@ -230,6 +249,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     style = terminal_style(arguments.color, sys.stdout)
 
     try:
+        if arguments.command == "dashboard":
+            if not 1 <= arguments.port <= 65535:
+                raise SuiteValidationError("Dashboard port must be between 1 and 65535")
+            from thadam.dashboard.launch import launch
+
+            try:
+                launch(
+                    arguments.project,
+                    port=arguments.port,
+                    open_browser=not arguments.no_browser,
+                    style=style,
+                )
+            except ValueError as error:
+                raise SuiteValidationError(str(error)) from error
+            return 0
         if getattr(arguments, "report", None):
             protect_approved_baseline(arguments.report)
         if arguments.command in ("review-baseline", "approve-baseline"):

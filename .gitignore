@@ -21,3 +21,7 @@ artifacts/
 .DS_Store
 .idea/
 .vscode/
+
+# Local dashboard development and private session state
+node_modules/
+.thadam/
