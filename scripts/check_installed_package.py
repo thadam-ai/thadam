@@ -7,15 +7,21 @@ from tempfile import TemporaryDirectory
 
 from thadam import (
     OutputEquals,
+    SuiteIdentity,
     TestCase,
     __version__,
+    approve_review,
     compare_repeated,
     compare_reports,
+    load_baseline_review,
     load_reliability_comparison,
     load_repeated,
     load_report,
+    review_baseline,
     run_repeated,
     run_suite,
+    write_approved_baseline,
+    write_baseline_review,
     write_reliability_comparison,
     write_repeated,
     write_report,
@@ -51,6 +57,25 @@ def main() -> None:
         write_reliability_comparison(reliability, comparison_path)
         if load_reliability_comparison(comparison_path).exit_code != 0:
             raise SystemExit("Installed reliability round trip failed comparison")
+        for is_repeated in (False, True):
+            execute = run_repeated if is_repeated else run_suite
+            candidate = execute(lambda value: value, [case], suite=SuiteIdentity("installed", "v1"))
+            review = review_baseline(candidate)
+            review_path = Path(directory) / "review.json"
+            write_baseline_review(review, review_path)
+            reviewed = load_baseline_review(review_path)
+            approval = approve_review(
+                reviewed,
+                review_digest=review.digest,
+                reviewer="Installation check",
+                reason="Controlled fixture",
+            )
+            baseline_path = Path(directory) / f"approved-{is_repeated}.json"
+            write_approved_baseline(approval, baseline_path)
+            loader = load_repeated if is_repeated else load_report
+            compare = compare_repeated if is_repeated else compare_reports
+            if compare(loader(baseline_path), candidate).exit_code != 0:
+                raise SystemExit("Installed suite/baseline review round trip failed")
     print(f"thadam-ai {installed.version}: installed SDK and report comparison passed")
 
 

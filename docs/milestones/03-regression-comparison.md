@@ -84,3 +84,13 @@ Keep the core free of runtime dependencies. Export the useful SDK contracts from
 - Match CLI exit codes and JSON with SDK results, including color policy and protected/atomic output paths.
 - Run real compiled LangGraph reports through comparison using controlled local models/tools.
 - Provide an executable pytest example and a GitHub Actions example using a reviewed baseline, explicit application revision, and a candidate run; baseline files are never silently regenerated.
+
+## Suite revisions and intentional updates
+
+[Suite revisions and baseline review](03-baseline-review.md) now implement explicit
+review and local promotion for intentional contract changes. Suite schema 2
+produces identified run schema 4; single comparisons involving identity use schema
+2 with `baseline_suite`/`candidate_suite`. The legacy formats above remain supported.
+Different suite labels are incompatible, and matching labels never override the
+input/check rules. Approved-baseline wrappers are validated and unwrapped by
+`load_report`. There is still no automatic baseline update or CI gate bypass.

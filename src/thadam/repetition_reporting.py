@@ -89,6 +89,8 @@ def format_repeated(
         "Attempts",
         f"{report.attempts} per case / {counts['total_invocations']} invocations / {report.execution_mode} agent",
     )
+    if report.suite is not None:
+        view.field("Test suite", f"{report.suite.id} @ {report.suite.revision}")
     if report.agent_revision is not None:
         view.field("Revision", report.agent_revision)
     if verbose:

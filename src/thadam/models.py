@@ -148,6 +148,14 @@ class TestCase:
 
 
 @dataclass(frozen=True)
+class SuiteIdentity:
+    """Explicit suite identity/revision; labels never replace contract validation."""
+
+    id: str
+    revision: str
+
+
+@dataclass(frozen=True)
 class AssertionResult:
     """A named check result suitable for display and JSON serialization."""
 
@@ -205,7 +213,12 @@ class RunReport:
     run_id: str = field(default_factory=lambda: str(uuid4()))
     agent_revision: str | None = None
     evaluation_version: int = 1
+    suite: SuiteIdentity | None = None
     schema_version: int = field(default=3, init=False)
+
+    def __post_init__(self) -> None:
+        if self.suite is not None:
+            object.__setattr__(self, "schema_version", 4)
 
     @property
     def summary(self) -> RunSummary:

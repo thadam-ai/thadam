@@ -105,3 +105,29 @@ Capture only what an integration or explicit agent hook exposes. Raw callable re
 LangGraph collectors correlate parallel callbacks by framework run ID using a lock, preserving start order, parent IDs, terminal states, and durations. Existing callbacks/config are merged through the public configuration API. Each graph invocation receives a fresh thread ID to separate checkpoint histories; explicit checkpoint resumption is unsupported. The collector records tool/model callbacks, not every chain/node in the graph.
 
 Keep the execution engine usable locally. A future service may schedule runs and store reports while consuming the same execution and reporting contracts.
+
+## Suite revisions and baseline review
+
+Identified `TestSuite` sequences carry `SuiteIdentity` through the same runner
+and repetition engine. Suite schema 2 produces run schema 4; legacy suite 1 and
+run 3 remain unchanged. Comparators require equal labels plus equal actual
+contracts. Single-comparison schema 2 carries identity metadata; existing
+repeated/reliability envelopes retain schema 1 around schema-3/4 runs.
+
+- `baseline_review.py` owns pure contract diffs, independent full-evidence review
+  snapshots, canonical review digests, acknowledgements, and strict review/approval
+  reloading. It imports/executes no application code. Stored decisions are recomputed.
+- `baseline_reporting.py` renders both sides' outcomes, before/after contracts,
+  blockers, and full verbose evidence, and writes review artifacts.
+- `baseline_approval.py` owns explicit destination checks, coordination between
+  approval writers, stale-baseline detection, and atomic promotion of the complete
+  approved-baseline artifact. Ordinary report writers protect approved destinations.
+- `baseline_cli.py` translates the two commands' arguments and delegates behavior
+  to these SDK modules. `cli.py` protects output paths before application imports.
+
+`load_report`/`load_repeated` recognize approved-baseline wrappers using a local
+import at the file-loading boundary, validate the full embedded review and
+acknowledgement, then return the approved evaluation. Nested evaluation parsers
+accept only raw evaluations, preventing recursive wrapper chains. Approval metadata
+is evidence of an explicit local acknowledgement, not authentication or a signature.
+See the [complete format and review contract](milestones/03-baseline-review.md).

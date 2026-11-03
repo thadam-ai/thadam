@@ -15,9 +15,21 @@ This is a Python package for testing and evaluating AI agents. The product is **
 
 ## Current implementation
 
-Milestones 1 and 2 and the comparison/reliability portions of milestone 3 are implemented: local execution, optional LangGraph tracing, tool assertions, saved-report regression comparison, and repeated evaluation with reliability gates. `src/thadam/__init__.py` exports the core SDK; `thadam.adapters.langgraph` is an explicit optional import. Input suites remain schema 1; run reports use schema 3 with declared checks, event links, and availability flags. Single-run comparisons use their own schema 1 and `kind: "comparison"`. `python -m thadam` and the installed command use the same entry point.
+Milestones 1 and 2 and the comparison/reliability portions of milestone 3 are implemented: local execution, optional LangGraph tracing, tool assertions, saved-report regression comparison, and repeated evaluation with reliability gates. `src/thadam/__init__.py` exports the core SDK; `thadam.adapters.langgraph` is an explicit optional import. Legacy suites/runs use schemas 1/3; identified suites/runs use schemas 2/4. Reports retain declared checks, event links, and availability flags. Single-run comparisons use schema 1 for legacy runs and schema 2 when suite identity is present, with `kind: "comparison"`. `python -m thadam` and the installed command use the same entry point.
 
-For comparison work, read `docs/milestones/03-regression-comparison.md` and `docs/milestones/03-reliability.md`. Repeated evaluations and reliability gates are implemented through `run_repeated`/`compare_repeated` and `repeat`/`compare-repeated`; repeated-run and reliability-comparison artifacts each use schema 1 with distinct kinds and nested schema-3 runs. Require equal attempts and execution modes, apply drop tolerance per case/check, and retain every attempt. Factory mode constructs an agent per case invocation; shared mode retains one callable. Both remain sequential. Schema-1/2 run reports cannot be compared: generate fresh reports. Custom verifiers require matching explicit revisions. Errors on either side block a clean comparison regardless of tolerance; changed/missing tests are incompatible. Compare individual checks even when both cases are already failed. Comparison must not execute agents or verifiers.
+For comparison work, read `docs/milestones/03-regression-comparison.md` and `docs/milestones/03-reliability.md`. Repeated evaluations and reliability gates are implemented through `run_repeated`/`compare_repeated` and `repeat`/`compare-repeated`; repeated-run and reliability-comparison artifacts each use schema 1 with distinct kinds and nested schema-3/4 runs. Require equal attempts and execution modes, apply drop tolerance per case/check, and retain every attempt. Factory mode constructs an agent per case invocation; shared mode retains one callable. Both remain sequential. Schema-1/2 run reports cannot be compared: generate fresh reports. Custom verifiers require matching explicit revisions. Errors on either side block a clean comparison regardless of tolerance; changed/missing tests are incompatible. Compare individual checks even when both cases are already failed. Comparison must not execute agents or verifiers.
+
+Suite revisions and intentional baseline review are also implemented; read
+`docs/milestones/03-baseline-review.md`. Legacy suites/runs/comparisons keep schemas
+1/3/1. Identified suites use schema 2 and run schema 4; identified single-run
+comparisons use schema 2. Repeated/reliability schema-1 wrappers support nested
+schema-3/4 runs. Equal labels never override changed contracts. `review-baseline`
+and `approve-baseline` retain full evidence and explicit acknowledgement in
+distinct schema-1 artifacts. Approval refuses candidate errors, unacknowledged
+failures, changed contracts without a revision bump, and stale destinations/digests.
+Ordinary report writes cannot replace approved baseline artifacts. Approval is a
+local review workflow, not identity authentication, an automatic CI update, or a
+GitHub merge.
 
 The engine is sequential and runs trusted code in the current process. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. There is no enforced timeout, sandbox, scenario generator, or hidden-reasoning capture. Re-read the code before assuming an API exists.
 
@@ -31,6 +43,7 @@ The engine is sequential and runs trusted code in the current process. LangGraph
 - `src/thadam/comparison_reporting.py` — comparison JSON and terminal presentation.
 - `src/thadam/repetition.py` and `repetition_loading.py`/`repetition_reporting.py` — repeated execution, lifecycle contracts, outcome/runtime summaries, and complete attempt artifacts.
 - `src/thadam/reliability.py` and `reliability_loading.py`/`reliability_reporting.py` — per-case/check pass-rate gates, standalone comparison evidence, and strict reloading.
+- `src/thadam/baseline_review.py`, `baseline_approval.py`, `baseline_reporting.py`, and `baseline_cli.py` — pure review/evidence contracts, guarded promotion, terminal artifacts, and CLI translation.
 - `src/thadam/adapters/langgraph.py` — optional graph adapter and callback collector.
 - `pyproject.toml` — packaging, Python support, development dependencies, and lint settings.
 - `DESIGN.md` — current stack decisions and the reasons behind future changes.

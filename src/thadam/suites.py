@@ -2,7 +2,9 @@
 
 import inspect
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import overload
 
 from thadam._json import read_json, validate_json
 from thadam.errors import SuiteValidationError
@@ -10,6 +12,7 @@ from thadam.models import (
     Assertion,
     OutputEquals,
     OutputHasKeys,
+    SuiteIdentity,
     TestCase,
     ToolArgumentsMatch,
     ToolCalled,
@@ -18,16 +21,66 @@ from thadam.models import (
 )
 
 
-def load_suite(path: str | Path) -> tuple[TestCase, ...]:
-    """Read a schema-version-1 JSON suite, raising SuiteValidationError on errors."""
+@dataclass(frozen=True)
+class TestSuite(Sequence[TestCase]):
+    """A versioned SDK suite; sequence access preserves existing runner usage."""
+
+    identity: SuiteIdentity
+    cases: tuple[TestCase, ...]
+
+    @overload
+    def __getitem__(self, index: int) -> TestCase: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple[TestCase, ...]: ...
+
+    def __getitem__(self, index: int | slice) -> TestCase | tuple[TestCase, ...]:
+        return self.cases[index]
+
+    def __len__(self) -> int:
+        return len(self.cases)
+
+
+def suite_identity(
+    cases: Sequence[TestCase], explicit: SuiteIdentity | None = None
+) -> SuiteIdentity | None:
+    """Validate identity before execution; reject conflicting explicit metadata."""
+    embedded = cases.identity if isinstance(cases, TestSuite) else None
+    if isinstance(cases, TestSuite) and not isinstance(embedded, SuiteIdentity):
+        raise SuiteValidationError("TestSuite.identity must be a SuiteIdentity")
+    if embedded is not None and explicit is not None and embedded != explicit:
+        raise SuiteValidationError("Explicit suite identity conflicts with TestSuite.identity")
+    identity = embedded if embedded is not None else explicit
+    if identity is not None:
+        if not isinstance(identity, SuiteIdentity):
+            raise SuiteValidationError("suite must be a SuiteIdentity or None")
+        for name, value in (("id", identity.id), ("revision", identity.revision)):
+            if not isinstance(value, str) or not value.strip():
+                raise SuiteValidationError(f"suite.{name} must be a non-empty string")
+            try:
+                validate_json(value, f"suite.{name}")
+            except ValueError as error:
+                raise SuiteValidationError(str(error)) from error
+    return identity
+
+
+def load_suite(path: str | Path) -> tuple[TestCase, ...] | TestSuite:
+    """Read schema 1 cases or a schema 2 identified suite; raise SuiteValidationError."""
     try:
         data = read_json(path)
     except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise SuiteValidationError(f"Cannot load suite {path}: {error}") from error
 
-    _require_fields(data, {"schema_version", "cases"}, "suite")
-    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
-        raise SuiteValidationError("suite.schema_version must be the integer 1")
+    version = data.get("schema_version") if isinstance(data, dict) else None
+    if type(version) is not int or version not in (1, 2):
+        raise SuiteValidationError("suite.schema_version must be the integer 1 or 2")
+    _require_fields(
+        data, {"schema_version", "cases"} | ({"suite"} if version == 2 else set()), "suite"
+    )
+    identity = None
+    if version == 2:
+        _require_fields(data["suite"], {"id", "revision"}, "suite.suite")
+        identity = suite_identity((), SuiteIdentity(**data["suite"]))
     if not isinstance(data["cases"], list):
         raise SuiteValidationError("suite.cases must be an array")
 
@@ -42,7 +95,8 @@ def load_suite(path: str | Path) -> tuple[TestCase, ...]:
             for i, assertion in enumerate(raw["assertions"])
         )
         cases.append(TestCase(id=raw["id"], input=raw["input"], assertions=assertions))
-    return validate_suite(cases)
+    validated = validate_suite(cases)
+    return TestSuite(identity, validated) if identity is not None else validated
 
 
 def validate_suite(cases: Sequence[TestCase]) -> tuple[TestCase, ...]:

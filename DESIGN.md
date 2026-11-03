@@ -2,7 +2,7 @@
 
 This document records the agreed stack and visual identity. Update it as decisions evolve, including why we changed direction and what the change affects.
 
-The Python runner, SDK, CLI, optional LangGraph integration, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. The interface, API service, and TypeScript agent support below remain planned.
+The Python runner, SDK, CLI, optional LangGraph integration, saved-report regression comparison, repeated-evaluation reliability gates, suite revisions, and explicit baseline review are implemented. The interface, API service, and TypeScript agent support below remain planned.
 
 ## Stack
 
@@ -91,3 +91,4 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-31 | Add complete repeated-evaluation reliability comparison | Review a change using repeated case/check outcomes rather than trusting a single attempt | Preserve schema-3 runs inside distinct repeated-run and reliability-comparison schema-1 envelopes; require equal attempts/modes/contracts, block any errors, and apply an explicit per-case/check drop tolerance |
 | 2026-10-31 | Support shared callables and per-invocation agent factories sequentially | Make state ownership explicit without assuming an agent can be copied or reset | Factories construct one agent per case attempt; application resources and verifier state remain caller-owned; no concurrency, retry, or implicit cleanup protocol |
 | 2026-11-01 | Unify terminal reports and group repeated evidence | Make verdicts easy to scan while retaining an explicit way to inspect every attempt | Adaptive tables, grouped failures with occurrence numbers and representative traces, and `--verbose` for all commands; serialized reports and gate behavior retain their contracts |
+| 2026-11-03 | Add explicit suite revisions and reviewed baseline promotion | Make intentional test changes reviewable without allowing revision labels to bypass contract checks | Preserve legacy formats; add suite schema 2, run schema 4, single-comparison schema 2, full-evidence review/approval artifacts, exact digest acknowledgement, and stale-destination protection |

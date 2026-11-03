@@ -13,9 +13,9 @@ from uuid import uuid4
 from thadam._json import validate_json
 from thadam.adapters.python import validate_agent
 from thadam.errors import AgentConfigurationError, SuiteValidationError
-from thadam.models import Agent, AgentResult, JSONValue, RunReport, TestCase
+from thadam.models import Agent, AgentResult, JSONValue, RunReport, SuiteIdentity, TestCase
 from thadam.runner import run_suite
-from thadam.suites import validate_suite
+from thadam.suites import suite_identity, validate_suite
 
 AgentFactory = Callable[[], Agent]
 ExecutionMode = Literal["shared", "factory"]
@@ -94,6 +94,10 @@ class RepeatedReport:
         return self.runs[0].agent_revision
 
     @property
+    def suite(self) -> SuiteIdentity | None:
+        return self.runs[0].suite
+
+    @property
     def cases(self) -> tuple[CaseReliability, ...]:
         by_run = [{case.id: case for case in run.cases} for run in self.runs]
         results = []
@@ -138,6 +142,7 @@ def run_repeated(
     attempts: int = 10,
     agent_factory: AgentFactory | None = None,
     agent_revision: str | None = None,
+    suite: SuiteIdentity | None = None,
 ) -> RepeatedReport:
     """Run complete suites in order, retaining all case errors and attempt evidence.
 
@@ -147,7 +152,10 @@ def run_repeated(
     SuiteValidationError or AgentConfigurationError before execution. Construction
     and invocation exceptions become per-case agent errors; KeyboardInterrupt
     propagates. There are no retries, enforced timeouts, or implicit cleanup hooks.
+    TestSuite identity is retained automatically; suite explicitly identifies a
+    plain case sequence. Conflicting metadata fails before user code.
     """
+    identity = suite_identity(cases, suite)
     if type(attempts) is not int or attempts < 2:
         raise SuiteValidationError("attempts must be an integer of at least 2")
     if (agent is None) == (agent_factory is None):
@@ -183,7 +191,8 @@ def run_repeated(
         selected = agent
     return RepeatedReport(
         runs=tuple(
-            run_suite(selected, prepared, agent_revision=agent_revision) for _ in range(attempts)
+            run_suite(selected, prepared, agent_revision=agent_revision, suite=identity)
+            for _ in range(attempts)
         ),
         execution_mode="factory" if agent_factory is not None else "shared",
     )

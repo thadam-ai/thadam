@@ -3,8 +3,15 @@
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
-from thadam.contracts import case_contract_issues
-from thadam.models import AssertionResult, CaseError, CaseResult, CaseStatus, RunReport
+from thadam.contracts import case_contract_issues, suite_contract_issues
+from thadam.models import (
+    AssertionResult,
+    CaseError,
+    CaseResult,
+    CaseStatus,
+    RunReport,
+    SuiteIdentity,
+)
 from thadam.report_loading import validate_report
 
 Change: TypeAlias = Literal[
@@ -58,8 +65,14 @@ class ComparisonReport:
     baseline_agent_revision: str | None
     candidate_agent_revision: str | None
     cases: tuple[CaseComparison, ...]
+    baseline_suite: SuiteIdentity | None = None
+    candidate_suite: SuiteIdentity | None = None
     schema_version: int = field(default=1, init=False)
     kind: str = field(default="comparison", init=False)
+
+    def __post_init__(self) -> None:
+        if self.baseline_suite is not None or self.candidate_suite is not None:
+            object.__setattr__(self, "schema_version", 2)
 
     @property
     def summary(self) -> ComparisonSummary:
@@ -113,14 +126,27 @@ def compare_reports(baseline: RunReport, candidate: RunReport) -> ComparisonRepo
         candidate.run_id,
         baseline.agent_revision,
         candidate.agent_revision,
-        tuple(_compare_case(case_id, old.get(case_id), new.get(case_id)) for case_id in case_ids),
+        tuple(
+            _compare_case(
+                case_id,
+                old.get(case_id),
+                new.get(case_id),
+                suite_contract_issues(baseline.suite, candidate.suite),
+            )
+            for case_id in case_ids
+        ),
+        baseline.suite,
+        candidate.suite,
     )
 
 
 def _compare_case(
-    case_id: str, baseline: CaseResult | None, candidate: CaseResult | None
+    case_id: str,
+    baseline: CaseResult | None,
+    candidate: CaseResult | None,
+    suite_issues: list[str],
 ) -> CaseComparison:
-    issues = case_contract_issues(baseline, candidate)
+    issues = [*suite_issues, *case_contract_issues(baseline, candidate)]
     if issues:
         return CaseComparison(
             id=case_id,

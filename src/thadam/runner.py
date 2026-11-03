@@ -21,13 +21,18 @@ from thadam.models import (
     CaseStatus,
     ExecutionEvent,
     RunReport,
+    SuiteIdentity,
     TestCase,
 )
-from thadam.suites import validate_suite
+from thadam.suites import suite_identity, validate_suite
 
 
 def run_suite(
-    agent: Agent, cases: Sequence[TestCase], *, agent_revision: str | None = None
+    agent: Agent,
+    cases: Sequence[TestCase],
+    *,
+    agent_revision: str | None = None,
+    suite: SuiteIdentity | None = None,
 ) -> RunReport:
     """Validate the whole suite, then execute each case exactly once in input order.
 
@@ -37,7 +42,10 @@ def run_suite(
     including exit(0), so an aborted case cannot masquerade as a passing run.
     No retries or timeouts are imposed.
     agent_revision is optional explicit application metadata, not an inferred Git revision.
+    suite supplies explicit identity/revision for plain case sequences; TestSuite
+    carries it automatically. Conflicting identities are rejected before execution.
     """
+    identity = suite_identity(cases, suite)
     if agent_revision is not None:
         if not isinstance(agent_revision, str) or not agent_revision.strip():
             raise SuiteValidationError("agent_revision must be a non-empty string or None")
@@ -62,6 +70,7 @@ def run_suite(
             for case, checks in zip(validated, definitions)
         ),
         agent_revision=agent_revision,
+        suite=identity,
     )
 
 
