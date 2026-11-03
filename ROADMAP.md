@@ -2,25 +2,46 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** milestones 1 and 2 plus saved-report and repeated-evaluation reliability comparison in milestone 3 implemented, including SDK/CLI gates and pytest/consumer CI examples.
-**Next build:** minimal, read-only local dashboard for saved reports and comparisons.
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, and the operational local dashboard are implemented.
+**Next build:** refine the dashboard's visual design and usability.
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
-## Next priority: minimal local dashboard
+## Next priority: dashboard design refinement
 
-**Outcome:** a developer opens saved Thadam reports in a clean, read-only local dashboard and can quickly understand results and regressions.
+**Outcome:** make the functional dashboard feel intentionally designed, minimal,
+cohesive, and easy to understand, with a stronger Thadam identity.
 
-This is the next build, ahead of async execution, scenario generation, and the later milestones below.
+- [ ] Review the current screens for generic template styling, visual clutter, and unclear hierarchy.
+- [ ] Refine typography, spacing, alignment, navigation, and table density around the actual testing workflows.
+- [ ] Keep Thadam's teal/blue palette and clear amber failure/red error meanings consistent across both themes.
+- [ ] Improve labels, empty states, and progressive disclosure so results and next actions are immediately understandable.
+- [ ] Preserve every existing dashboard feature, SDK rule, and saved-evidence contract.
+- [ ] Validate the revised design with real suite-editing, evaluation, comparison, and baseline-review tasks on desktop and narrow screens.
 
-- [ ] Open existing versioned JSON artifacts without executing agents or verifiers.
-- [ ] List runs with suite/run identity where available, pass/fail/error counts, and recorded duration.
-- [ ] Inspect cases with expandable checks, expected/actual evidence, errors, and available trace events.
-- [ ] View baseline/candidate regressions and repeated-evaluation reliability changes using the existing report contracts.
-- [ ] Keep the interface minimal and neat: clear typography, generous spacing, restrained teal/blue accents, and labeled amber/red statuses.
-- [ ] Provide a documented local launch workflow and validate the viewer against controlled saved-report fixtures.
+This is the next change, ahead of async execution and bounded concurrency. The
+current dashboard ships with its existing design; visual refinement is separate
+follow-up work.
 
-The first version needs no login or hosted infrastructure. Keep report validation and evaluation rules in the existing Python SDK; preserve unavailable evidence explicitly.
+## Local testing dashboard
+
+**Status:** implemented. [Launch and workflow guide](docs/dashboard.md).
+
+**Outcome:** open one local project, edit suites, run configured agents, investigate
+complete evidence, compare evaluations, and explicitly review/approve baselines.
+
+- [x] Discover and strictly validate all saved suite/report/comparison/review/approval kinds without executing application code.
+- [x] Show real invocation counts, suite/revision metadata, recorded runtime, searchable artifacts and complete case/check evidence.
+- [x] Inspect every repeated attempt, grouped findings, observable traces and reported token usage with explicit unavailable states.
+- [x] Edit suites through forms/JSON with validation, revision and stale-write guards.
+- [x] Configure shared agents/factories and run evaluations with progress, bounded logs, one active job and explicit interruption.
+- [x] Create single/repeated comparisons and full-evidence baseline reviews/approvals using SDK rules.
+- [x] Ship a responsive dark/light React/TypeScript interface in Thadam's colors, with no frontend tools required for users.
+- [x] Provide controlled examples, API/browser validation, optional-extra CI and clean-wheel checks.
+
+The user expanded the originally read-only viewer to include these explicit local
+actions. Core execution remains sequential and trusted; the dashboard does not
+introduce hosted infrastructure, a sandbox or automatic baseline updates.
 
 ## Foundation: a repository humans and AI agents can navigate
 

@@ -132,3 +132,25 @@ python -m examples.baseline_review_demo --output artifacts/my-review-demo
 The demo saves evidence and prints explicit approval commands. It never approves
 baselines itself. CI must continue reading its baseline from the target commit;
 intentional suite revisions require an explicit reviewed baseline transition.
+
+### Dashboard development
+
+The optional dashboard is implemented with React/TypeScript source in `dashboard/`
+and a FastAPI/Uvicorn extra in `src/thadam/dashboard/`. Read [the guide](docs/dashboard.md)
+and [surface brief](docs/dashboard-design.md). Install `'.[dev,dashboard]'` and `httpx`
+for API tests. Core imports and core-only tests must not require these packages.
+
+From `dashboard/`, use Node 22 and run `npm ci`, `npm test`, `npm run format:check`,
+and `npm run build`. Commit rebuilt `src/thadam/dashboard/static/` assets and their
+third-party notices alongside the source and lockfile. CI checks that the build
+matches committed assets and tests the optional server on Python 3.10 and 3.14.
+These two Dashboard checks must also be selected in required-check settings by a
+maintainer after they first run; adding jobs does not change branch protection.
+
+Exercise project/path confinement, session/origin checks, invalid files, stale
+suite edits, all assertion types, one active job, progress, failed execution,
+interruption, delayed publication conflicts, both comparisons and explicit
+baseline approval. Browser checks should cover the real controlled demo, desktop
+and narrow layouts, both themes, and result/evidence navigation. Approval and
+execution decisions stay in the SDK. Do not introduce automatic baseline updates
+or application imports during discovery.

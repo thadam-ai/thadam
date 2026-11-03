@@ -13,7 +13,15 @@ from uuid import uuid4
 from thadam._json import validate_json
 from thadam.adapters.python import validate_agent
 from thadam.errors import AgentConfigurationError, SuiteValidationError
-from thadam.models import Agent, AgentResult, JSONValue, RunReport, SuiteIdentity, TestCase
+from thadam.models import (
+    Agent,
+    AgentResult,
+    CaseResult,
+    JSONValue,
+    RunReport,
+    SuiteIdentity,
+    TestCase,
+)
 from thadam.runner import run_suite
 from thadam.suites import suite_identity, validate_suite
 
@@ -143,6 +151,7 @@ def run_repeated(
     agent_factory: AgentFactory | None = None,
     agent_revision: str | None = None,
     suite: SuiteIdentity | None = None,
+    on_case_complete: Callable[[CaseResult], None] | None = None,
 ) -> RepeatedReport:
     """Run complete suites in order, retaining all case errors and attempt evidence.
 
@@ -154,8 +163,12 @@ def run_repeated(
     propagates. There are no retries, enforced timeouts, or implicit cleanup hooks.
     TestSuite identity is retained automatically; suite explicitly identifies a
     plain case sequence. Conflicting metadata fails before user code.
+    on_case_complete receives independent case snapshots in invocation order;
+    callback exceptions propagate and do not produce a completed evaluation.
     """
     identity = suite_identity(cases, suite)
+    if on_case_complete is not None and not callable(on_case_complete):
+        raise SuiteValidationError("on_case_complete must be callable or None")
     if type(attempts) is not int or attempts < 2:
         raise SuiteValidationError("attempts must be an integer of at least 2")
     if (agent is None) == (agent_factory is None):
@@ -191,7 +204,13 @@ def run_repeated(
         selected = agent
     return RepeatedReport(
         runs=tuple(
-            run_suite(selected, prepared, agent_revision=agent_revision, suite=identity)
+            run_suite(
+                selected,
+                prepared,
+                agent_revision=agent_revision,
+                suite=identity,
+                on_case_complete=on_case_complete,
+            )
             for _ in range(attempts)
         ),
         execution_mode="factory" if agent_factory is not None else "shared",

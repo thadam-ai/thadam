@@ -131,3 +131,31 @@ acknowledgement, then return the approved evaluation. Nested evaluation parsers
 accept only raw evaluations, preventing recursive wrapper chains. Approval metadata
 is evidence of an explicit local acknowledgement, not authentication or a signature.
 See the [complete format and review contract](milestones/03-baseline-review.md).
+
+## Local testing dashboard
+
+`thadam dashboard` lazily imports the optional `dashboard` extra and serves bundled
+React/TypeScript assets. `dashboard/src` owns presentation and explicit user actions;
+`src/thadam/dashboard` owns project access, authenticated loopback routing and job
+lifecycle. The Python SDK still owns execution, assertions, comparison and approval.
+
+- `workspace.py`: project-confined discovery, strict artifact loading, saved agent
+  settings, coordinated new-file writes, suite validation/revision/fingerprint guards.
+- `jobs.py`: one active managed process, completed-case progress, bounded log capture,
+  completed artifact publication, history, explicit interruption and shutdown.
+- `worker.py`: validate snapshotted suites, import a deliberately selected agent,
+  call the existing SDK and save internal completed evidence. Workers exit if their
+  parent server disappears; application code remains trusted and sequential.
+- `server.py`: optional FastAPI app, per-port ephemeral browser session, origin/path
+  checks, explicit actions delegating SDK behavior, and packaged static assets.
+- `launch.py`: optional dependency handling, local link/browser launch and clean exit.
+- `comparison_loading.py`: reload single comparison artifacts, validate recorded
+  check/case classifications and summaries; full source contracts/traces remain in
+  original run reports. Existing strict loaders own all other report kinds.
+
+`run_suite` and `run_repeated` optionally notify `on_case_complete` with independent
+case snapshots; observer exceptions propagate. This allows progress reporting
+without changing serialized evidence or assertion outcomes. The dashboard never
+publishes an interrupted job as a completed report. Frontend development needs Node;
+end users receive bundled assets in the Python wheel and need only the optional
+Python server dependencies. See [the operating guide](dashboard.md).

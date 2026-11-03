@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import replace
 from time import perf_counter
-from typing import Literal
+from typing import Callable, Literal
 
 from thadam._json import validate_json
 from thadam.adapters.python import validate_agent
@@ -33,6 +33,7 @@ def run_suite(
     *,
     agent_revision: str | None = None,
     suite: SuiteIdentity | None = None,
+    on_case_complete: Callable[[CaseResult], None] | None = None,
 ) -> RunReport:
     """Validate the whole suite, then execute each case exactly once in input order.
 
@@ -44,8 +45,12 @@ def run_suite(
     agent_revision is optional explicit application metadata, not an inferred Git revision.
     suite supplies explicit identity/revision for plain case sequences; TestSuite
     carries it automatically. Conflicting identities are rejected before execution.
+    on_case_complete receives an independent completed-case snapshot after each
+    invocation. Callback exceptions propagate; they do not become agent errors.
     """
     identity = suite_identity(cases, suite)
+    if on_case_complete is not None and not callable(on_case_complete):
+        raise SuiteValidationError("on_case_complete must be callable or None")
     if agent_revision is not None:
         if not isinstance(agent_revision, str) or not agent_revision.strip():
             raise SuiteValidationError("agent_revision must be a non-empty string or None")
@@ -64,11 +69,14 @@ def run_suite(
     )
     validate_agent(agent)
     definitions = tuple(snapshot_definitions(case) for case in validated)
+    results = []
+    for case, checks in zip(validated, definitions):
+        result = replace(_run_case(agent, case), check_definitions=checks)
+        results.append(result)
+        if on_case_complete is not None:
+            on_case_complete(deepcopy(result))
     return RunReport(
-        cases=tuple(
-            replace(_run_case(agent, case), check_definitions=checks)
-            for case, checks in zip(validated, definitions)
-        ),
+        cases=tuple(results),
         agent_revision=agent_revision,
         suite=identity,
     )

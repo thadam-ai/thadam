@@ -21,6 +21,7 @@ PAGES = [
             "compare-repeated",
             "review-baseline",
             "approve-baseline",
+            "dashboard",
         )
     ],
 ]

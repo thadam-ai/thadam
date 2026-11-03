@@ -1,0 +1,170 @@
+# Local testing dashboard
+
+**Status:** implemented in the checkout. Publishing remains a separate release action.
+
+The dashboard opens one project folder in your browser. It uses the existing Python
+SDK to edit saved suites, run evaluations, inspect evidence, compare results, and
+explicitly review and approve baselines. The CLI remains available for scripting
+and CI. The interface is React/TypeScript, bundled with the Python package.
+End users do not need Node.js, a hosted account, or a model provider to view reports.
+
+## Launch from VS Code
+
+Open **Terminal → New Terminal** in this repository:
+
+```shell
+.venv/bin/python -m pip install -e '.[dev,dashboard]'
+.venv/bin/python -m examples.dashboard_demo
+.venv/bin/python -m thadam dashboard artifacts/dashboard-demo
+```
+
+The controlled demo needs no model API key. It contains saved suites, passing and
+failing single/repeated runs, both comparison kinds, instrumented tool evidence,
+a review, and a clearly labeled illustrative approved baseline. It creates a
+workspace only in an empty folder; use `--output artifacts/dashboard-demo-2` to
+preserve an existing demo.
+
+The command opens the browser and prints a local session link. Keep that terminal
+open. **Ctrl+C** closes the server and interrupts an active evaluation. To use your
+own project, pass its directory instead:
+
+```shell
+thadam dashboard /path/to/your/project
+thadam dashboard . --port 8766 --no-browser
+```
+
+In an installed distribution, the optional dependency name is `thadam-ai[dashboard]`.
+The public package release is still pending; installation from the checkout works
+now. Add `[langgraph]` separately when your agent uses that optional adapter. Agents
+use the same Python environment as the server; install application dependencies
+there. Only the selected project is the worker's working directory.
+
+## Navigation
+
+- **Overview:** saved evaluation files, aggregate invocation counts, recent saved
+  artifacts, search and result filters. Counts describe these files, not unique
+  production sessions or historical trends. Dates are filesystem modification times.
+- **Suites:** discover schema-1/2 suites; create or edit cases, JSON inputs, expected
+  outputs, required output keys, and required/forbidden/tool-argument assertions.
+  Switch between forms and JSON. Change an identified suite's revision when its
+  cases, inputs or checks change. Save validates the complete suite. Stale edits
+  are refused; choose a new file path for Save as. Unsaved changes are guarded
+  when navigating away or closing the browser.
+- **Evaluations:** configure a named `module:callable` agent without importing it;
+  choose a suite, shared or factory mode, attempts, explicit application revision,
+  and a new report path. **Run evaluation** is the only action that imports or
+  executes application code. One attempt with a shared callable is a single run;
+  two or more attempts produce a repeated evaluation. Factory mode requires at
+  least two attempts, matching the repeated-run SDK/CLI workflow.
+- **Comparisons:** choose baseline and candidate evidence and save a single-run
+  regression or repeated reliability comparison. Equal attempts, lifecycle modes,
+  suite labels and actual contracts still apply. A drop tolerance of `0.05` means
+  five percentage points per case/check. Errors always block. Comparison never
+  imports agents or verifiers.
+- **Baselines:** save a full-evidence review, inspect exact contract changes and
+  both evaluations, and explicitly approve the reviewed candidate. Provide a
+  reviewer, reason, destination, and acknowledgement of inspected evidence.
+  Failed expectations require their own checkbox; candidate errors cannot be
+  accepted. The browser submits the exact displayed review digest; the SDK
+  revalidates it and rejects stale reviews or baseline destinations.
+
+For the demo, configure `agent:run` in shared mode, `agent:run_buggy` to see failed
+expectations, or `agent:create` in factory mode. Save an agent name to reuse it.
+Python agent implementations and custom verifier code stay in your editor;
+reports containing SDK verifier outcomes remain fully inspectable.
+
+## Evidence and job lifecycle
+
+Opening an artifact is read-only. Supported files are suites, schema-3/4 runs,
+comparison schemas 1/2, repeated/reliability schema-1 reports, baseline reviews,
+and approved baselines. The existing strict SDK loaders validate recorded evidence.
+Single comparisons validate their stored check decisions and summaries; their
+source runs are required to independently establish original contract compatibility.
+
+Large integer IDs retain their exact JSON digits through viewing, editing and
+download; they are not rounded to browser floating-point values.
+
+Case details include inputs, output availability, check declarations and outcomes,
+expected/actual values, event links, errors, and observable tool/model events.
+Each event retains input/output availability, parent IDs, timing, terminal state,
+errors, and provider-reported usage. Zero usage remains zero; unavailable usage
+is labeled unavailable. No hidden model reasoning is claimed.
+
+Repeated evaluations include case/check counts and rates, all runtime statistics,
+variability, grouped identical findings with occurrence attempt numbers and a
+clearly labeled representative case, plus every individual attempt and run ID.
+Reliability comparisons and reviews retain both full evaluations. Single-run
+comparison artifacts retain assertion event links; full traces are in the source
+run reports, which can be opened when present in the project.
+
+Evaluation jobs use a separate process and remain visible across browser reloads.
+Progress is emitted after each case invocation. Logs retain the most recent
+64 KiB. Completed evaluations are published even when the browser is closed;
+failed expectations or recorded agent errors still save complete reports.
+
+**Stop** terminates the active worker process group on POSIX (the worker on
+Windows) and marks the job interrupted. It does not publish a completed report.
+Stopping cannot undo external side effects already performed by trusted agent
+code. If evaluation configuration/import fails, the job is an error with logs.
+If a destination appears while a job runs, publication fails without replacing
+that file; the internal result remains in the private job directory for recovery.
+
+Settings, job state and bounded logs live in `.thadam/dashboard/`. The repository
+ignores that directory. A server session ending normally stops its worker. On a
+hard server exit, the worker's parent watcher exits; recovered running job records
+are displayed as interrupted on the next launch. This is a local process manager,
+not a sandbox, timeout system, or distributed execution service.
+
+## Files and local access
+
+Discovery recursively examines project JSON files, skipping hidden directories,
+virtual environments, build output and `node_modules`. It does not follow symbolic
+links. Invalid recognizable artifacts are listed separately without hiding valid
+reports. Search/filtering uses the discovered catalog; Refresh rereads the files.
+Large case lists paginate. Individual JSON artifacts are limited to 32 MiB in the
+browser workflow; larger artifacts remain usable through the SDK. No synthetic
+statistics fill empty states.
+
+New report/review destinations must be absent, preserving existing evidence.
+Suite saves use a fingerprint to reject stale browser edits. Baseline approval
+uses the existing exact-evidence and stale-baseline guards. Browser writes within
+one server are coordinated; unrelated external writers still require normal Git
+review and are not covered by a filesystem transaction.
+
+The server binds only to `127.0.0.1`. Its printed link establishes an ephemeral
+browser session, with the token removed from the address after connection. API
+requests require that session; cross-origin write requests are rejected. Browser
+file access is confined to the selected project, with hidden/parent/absolute paths
+and symbolic links refused. Report text is rendered as text, never executable HTML.
+No report or agent output is sent to a hosted service.
+
+Dark mode is the default; the light toggle persists in that browser. Both themes
+use the documented Thadam semantic colors and status labels. The layout supports
+keyboard navigation, visible focus, reduced motion, and narrow screens.
+
+## Frontend development and validation
+
+Node is for maintainers building the interface, not for dashboard users. From the
+repository root:
+
+```shell
+python -m pip install -e '.[dev,dashboard]' httpx
+python -m pytest -q tests examples/regression_test.py
+python -m ruff check .
+python -m ruff format --check .
+```
+
+From `dashboard/` with Node 22:
+
+```shell
+npm ci
+npm test
+npm run format:check
+npm run build
+```
+
+The build writes production assets and third-party notices to
+`src/thadam/dashboard/static/`. Commit the source, lockfile and rebuilt assets
+together. CI rebuilds and checks those assets, exercises dashboard workflows on
+Python 3.10 and 3.14, and keeps the core-only dependency checks separate. Reproduce
+workflow validation with actionlint after editing CI.

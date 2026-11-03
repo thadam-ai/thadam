@@ -104,3 +104,21 @@ Report what changed, what checks ran, and any remaining limitations. A clean lin
 - Record observable execution events; do not claim access to hidden model reasoning.
 - Agent execution may vary even when assertion logic is deterministic.
 - Prefer a useful local workflow and machine-readable artifacts before adding hosted infrastructure.
+
+## Local dashboard
+
+The operational local dashboard is implemented; read `docs/dashboard.md` and
+`docs/dashboard-design.md`. `thadam dashboard PROJECT` lazily imports the optional
+`dashboard` extra (FastAPI/Uvicorn). React/TypeScript source is in `dashboard/` and
+production assets/notices are bundled in `src/thadam/dashboard/static/`; rebuild
+with `npm ci` and `npm run build` from `dashboard/`. End users need no Node tools.
+
+Keep project confinement, ephemeral local sessions, explicit actions, file/revision
+and stale-review guards, one active process, bounded logs and interruption behavior
+intact. SDK progress observers receive independent completed-case snapshots;
+interrupted jobs never publish completed reports. No hidden-reasoning, sandbox or
+new timeout guarantees. Run `pytest` with `'.[dev,dashboard]'` plus `httpx` for API
+checks and npm tests/type/build/format checks. Core-only environments skip optional
+API tests and must retain dependency-free imports. CI has separate Dashboard jobs
+on Python 3.10/3.14; actionlint validates workflow edits. Baseline/report schemas
+retain their existing contracts.

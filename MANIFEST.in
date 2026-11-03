@@ -1,0 +1,4 @@
+include dashboard/package.json dashboard/package-lock.json dashboard/tsconfig.json dashboard/vite.config.ts dashboard/index.html
+recursive-include dashboard/src *.ts *.tsx *.css
+recursive-include dashboard/scripts *.mjs
+recursive-include src/thadam/dashboard/static *

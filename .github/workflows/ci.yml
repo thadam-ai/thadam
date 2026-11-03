@@ -107,3 +107,45 @@ jobs:
           "$RUNNER_TEMP/thadam-wheel/bin/python" "$GITHUB_WORKSPACE/scripts/check_installed_package.py"
           "$RUNNER_TEMP/thadam-wheel/bin/thadam" --version
           "$RUNNER_TEMP/thadam-wheel/bin/python" -m thadam --help
+
+  dashboard:
+    name: Dashboard (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install the optional dashboard and test dependencies
+        run: python -m pip install -e '.[dev,dashboard]' httpx
+      - name: Verify dashboard imports and dependency consistency
+        run: |
+          python -c "import fastapi; import uvicorn; import thadam.dashboard.server"
+          python -m pip check
+      - name: Test dashboard workflows and core contracts
+        run: python -m pytest -q tests examples/regression_test.py
+      - name: Install frontend development tools
+        working-directory: dashboard
+        run: npm ci
+      - name: Check frontend formatting and behavior
+        working-directory: dashboard
+        run: |
+          npm run format:check
+          npm test
+      - name: Build and verify the bundled interface
+        working-directory: dashboard
+        run: |
+          npm run build
+          git -C .. diff --exit-code -- src/thadam/dashboard/static
