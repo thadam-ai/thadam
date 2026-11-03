@@ -8,6 +8,7 @@ from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 
+from thadam._json import read_json
 from thadam.errors import ReportWriteError
 from thadam.models import JSONValue, RunReport
 from thadam.terminal import TerminalStyle, display_text
@@ -18,6 +19,7 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
     """Return the JSON report contract, including computed summary counts."""
     return {
         "schema_version": report.schema_version,
+        **({"suite": asdict(report.suite)} if report.suite is not None else {}),
         "evaluation_version": report.evaluation_version,
         "agent_revision": report.agent_revision,
         "run_id": report.run_id,
@@ -55,6 +57,32 @@ def write_report(report: RunReport, path: str | Path) -> None:
 
 def write_json_artifact(data: dict[str, JSONValue], path: str | Path) -> None:
     """Atomically write JSON data; raise ReportWriteError and preserve old artifacts."""
+    protect_approved_baseline(path)
+    _replace_json_artifact(data, path)
+
+
+def protect_approved_baseline(path: str | Path) -> None:
+    """Refuse ordinary report writes over an approved baseline, including file aliases."""
+    try:
+        existing = read_json(path, max_depth=125)
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        if Path(path).is_file():
+            raise ReportWriteError(
+                f"Cannot check approved baseline protection for {path}: {error}"
+            ) from error
+        return
+    except (ValueError, UnicodeError, RecursionError):
+        return
+    if isinstance(existing, dict) and existing.get("kind") == "approved_baseline":
+        raise ReportWriteError(
+            "Approved baselines can only be replaced through review-baseline and approve-baseline"
+        )
+
+
+def _replace_json_artifact(data: dict[str, JSONValue], path: str | Path) -> None:
+    """Perform the atomic replacement after the caller's destination checks."""
     destination = Path(path)
     temporary: Path | None = None
     try:
@@ -96,6 +124,8 @@ def format_summary(
         "error" if report.summary.errors else "failed" if report.has_failures else "brand",
         run_counts(report),
     )
+    if report.suite is not None:
+        view.field("Test suite", f"{report.suite.id} @ {report.suite.revision}")
     for name, value in (("Suite", suite), ("Agent", agent), ("Revision", report.agent_revision)):
         if value is not None:
             view.field(name, value)

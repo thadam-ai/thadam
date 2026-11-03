@@ -19,7 +19,15 @@ def load_repeated(path: str | Path) -> RepeatedReport:
     No agents, factories, or custom verifiers are executed.
     """
     try:
-        return repeated_from_dict(read_json(path, max_depth=115))
+        data = read_json(path, max_depth=125)
+        if isinstance(data, dict) and data.get("kind") == "approved_baseline":
+            from thadam.baseline_review import approved_from_dict
+
+            report = approved_from_dict(data).review.candidate
+            if not isinstance(report, RepeatedReport):
+                raise ReportValidationError("Expected a repeated-run approved baseline")
+            return report
+        return repeated_from_dict(data)
     except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise ReportValidationError(f"Cannot load repeated report {path}: {error}") from error
 
@@ -84,6 +92,8 @@ def repeated_from_dict(data: object) -> RepeatedReport:
 
 
 def _same_contract(first: RunReport, other: RunReport) -> None:
+    if first.suite != other.suite:
+        raise ValueError("Suite identities/revisions differ between attempts")
     if first.agent_revision != other.agent_revision:
         raise ValueError("Agent revisions differ between attempts")
     old = {case.id: case for case in first.cases}

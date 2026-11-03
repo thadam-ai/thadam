@@ -19,6 +19,9 @@ def comparison_to_dict(report: ComparisonReport) -> dict[str, JSONValue]:
         "summary": asdict(report.summary),
         "exit_code": report.exit_code,
     }
+    if report.schema_version == 1:
+        data.pop("baseline_suite")
+        data.pop("candidate_suite")
     return json.loads(json.dumps(data, ensure_ascii=False, allow_nan=False))
 
 
@@ -63,6 +66,12 @@ def format_comparison(
     )
     view.field("Baseline", report.baseline_agent_revision or report.baseline_run_id)
     view.field("Candidate", report.candidate_agent_revision or report.candidate_run_id)
+    for side, suite in (
+        ("Baseline suite", report.baseline_suite),
+        ("Candidate suite", report.candidate_suite),
+    ):
+        if suite is not None:
+            view.field(side, f"{suite.id} @ {suite.revision}")
     if verbose:
         view.field("Baseline run", report.baseline_run_id)
         view.field("Candidate run", report.candidate_run_id)

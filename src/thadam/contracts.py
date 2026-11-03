@@ -10,12 +10,26 @@ from thadam.models import (
     CheckDefinition,
     OutputEquals,
     OutputHasKeys,
+    SuiteIdentity,
     TestCase,
     ToolArgumentsMatch,
     ToolCalled,
     ToolNotCalled,
 )
 from thadam.suites import parse_assertion, validate_suite
+
+
+def suite_contract_issues(
+    baseline: SuiteIdentity | None, candidate: SuiteIdentity | None
+) -> list[str]:
+    """Require identical explicit identities, or two legacy unidentified suites."""
+    if baseline == candidate:
+        return []
+    if baseline is None or candidate is None:
+        return ["Suite identity added or missing; review and approve a matching baseline"]
+    if baseline.id != candidate.id:
+        return ["Suite ID changed; review and approve a matching baseline"]
+    return ["Suite revision changed; review and approve a matching baseline"]
 
 
 def snapshot_definitions(case: TestCase) -> tuple[CheckDefinition, ...]:

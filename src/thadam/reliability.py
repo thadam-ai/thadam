@@ -5,7 +5,7 @@ from fractions import Fraction
 from math import isfinite
 from typing import Literal
 
-from thadam.contracts import case_contract_issues
+from thadam.contracts import case_contract_issues, suite_contract_issues
 from thadam.errors import ReportValidationError
 from thadam.repetition import CaseReliability, OutcomeCounts, RepeatedReport
 from thadam.repetition_loading import validate_repeated
@@ -107,7 +107,7 @@ def compare_repeated(
     tolerance = validate_tolerance(max_pass_rate_drop)
     baseline = validate_repeated(baseline)
     candidate = validate_repeated(candidate)
-    issues = []
+    issues = suite_contract_issues(baseline.suite, candidate.suite)
     if baseline.attempts != candidate.attempts:
         issues.append("Attempt counts differ; generate reports with equal attempts")
     if baseline.execution_mode != candidate.execution_mode:

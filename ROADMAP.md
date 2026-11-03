@@ -84,13 +84,19 @@ Instrumentation must use explicit hooks or supported framework interfaces. A cus
 - [x] Support repeated runs and report pass counts, variability, and runtime.
 - [x] Compare repeated baseline/candidate case and check pass rates with configurable drop tolerance, strict compatibility, and error-blocking CI gates.
 - [x] Define sequential shared-callable and per-invocation factory execution contracts, preserving evidence for every attempt.
-- [ ] Add explicit suite revisions and a review workflow for intentional contract changes.
+- [x] Add explicit suite revisions and a review workflow for intentional contract changes, with exact-evidence acknowledgement and guarded baseline promotion.
 - [x] Record missing/changed cases and evaluator errors explicitly rather than counting them as passes.
 - [ ] Add async execution and bounded concurrency when the adapter and report contracts can support them.
 
 Deterministic assertion logic does not make an LLM's execution deterministic. Reports must retain that distinction.
 
 The [single-run comparison](docs/milestones/03-regression-comparison.md) uses run schema 3 and comparison schema 1. [Repeated evaluation](docs/milestones/03-reliability.md) adds repeated-run schema 1 and reliability-comparison schema 1 with distinct kinds, equal attempt counts, per-case/per-check rate gates, and complete attempt evidence. These compare observed outcomes, not statistical significance or timing/cost budgets. A dedicated pytest plugin remains a possible future integration; the working examples use normal pytest assertions.
+
+[Suite revisions and baseline review](docs/milestones/03-baseline-review.md) add
+suite schema 2, identified run schema 4 and single-comparison schema 2, while
+preserving legacy formats. Review and approved-baseline artifacts each use schema
+1 with distinct kinds. Both single/repeated workflows retain full evidence and
+require explicit acknowledgement; ordinary execution/comparison never approves.
 
 ## 4. Suggest test scenarios with AI
 

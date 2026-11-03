@@ -11,6 +11,7 @@ from pathlib import Path
 
 from thadam import __version__
 from thadam.adapters.python import validate_agent
+from thadam.baseline_cli import add_baseline_commands, handle_baseline_command
 from thadam.cli_help import HelpParser, help_color_mode
 from thadam.comparison import compare_reports
 from thadam.comparison_reporting import format_comparison, write_comparison
@@ -27,7 +28,12 @@ from thadam.repetition import run_repeated, validate_factory
 from thadam.repetition_loading import load_repeated
 from thadam.repetition_reporting import format_repeated, write_repeated
 from thadam.report_loading import load_report
-from thadam.reporting import format_report_path, format_summary, write_report
+from thadam.reporting import (
+    format_report_path,
+    format_summary,
+    protect_approved_baseline,
+    write_report,
+)
 from thadam.runner import run_suite
 from thadam.suites import load_suite
 from thadam.terminal import display_text, terminal_style
@@ -59,11 +65,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Choose a workflow\n"
             "  run -> compare                 Check results before and after a change.\n"
             "  repeat -> compare-repeated     Check reliability across many attempts.\n\n"
+            "  review-baseline -> approve-baseline  Review intentional baseline updates.\n\n"
             "Learn more\n"
             "  thadam run --help\n"
             "  thadam compare --help\n"
             "  thadam repeat --help\n"
             "  thadam compare-repeated --help\n\n"
+            "  thadam review-baseline --help\n"
+            "  thadam approve-baseline --help\n\n"
             "You can also use: python -m thadam <command>\n"
             "Color is automatic in interactive terminals."
         ),
@@ -102,7 +111,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Exit codes: 0 all passed; 1 failed checks/errors; 2 invalid configuration."
         ),
     )
-    run.add_argument("suite", type=Path, help="Path to a schema-version-1 JSON suite")
+    run.add_argument(
+        "suite", type=Path, help="Path to a schema-1 or identified schema-2 JSON suite"
+    )
     run.add_argument("--agent", required=True, help="Agent reference: module:callable")
     run.add_argument("--report", type=Path, help="Write a JSON report to this path")
     run.add_argument(
@@ -150,7 +161,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Exit codes: 0 all passed; 1 failed checks/errors; 2 invalid configuration."
         ),
     )
-    repeat.add_argument("suite", type=Path, help="Path to a schema-version-1 JSON suite")
+    repeat.add_argument(
+        "suite", type=Path, help="Path to a schema-1 or identified schema-2 JSON suite"
+    )
     selection = repeat.add_mutually_exclusive_group(required=True)
     selection.add_argument("--agent", help="Shared synchronous agent: module:callable")
     selection.add_argument(
@@ -196,7 +209,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     reliability.add_argument(
         "--report", type=Path, help="Write a standalone reliability comparison"
     )
-    for command in (run, compare, repeat, reliability):
+    baseline_commands = add_baseline_commands(commands)
+    for command in (run, compare, repeat, reliability, *baseline_commands):
         command.add_argument(
             "--verbose",
             action="store_true",
@@ -216,6 +230,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     style = terminal_style(arguments.color, sys.stdout)
 
     try:
+        if getattr(arguments, "report", None):
+            protect_approved_baseline(arguments.report)
+        if arguments.command in ("review-baseline", "approve-baseline"):
+            return handle_baseline_command(arguments, style=style, same_file=_same_file)
         if arguments.command in ("compare", "compare-repeated"):
             for source in (arguments.baseline, arguments.candidate):
                 if arguments.report and _same_file(arguments.report, source):

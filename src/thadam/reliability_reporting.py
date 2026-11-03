@@ -97,6 +97,8 @@ def format_reliability_comparison(
         )
         if verbose:
             view.field(side + " ID", evidence.report_id)
+        if evidence.suite is not None:
+            view.field(side + " suite", f"{evidence.suite.id} @ {evidence.suite.revision}")
     view.field(
         "Policy",
         f"Allow a drop of up to {report.max_pass_rate_drop * 100:g} percentage points per case/check",

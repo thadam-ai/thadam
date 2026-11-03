@@ -52,6 +52,8 @@ class HelpParser(argparse.ArgumentParser):
                 "compare",
                 "repeat",
                 "compare-repeated",
+                "review-baseline",
+                "approve-baseline",
                 "suite",
                 "baseline",
                 "candidate",

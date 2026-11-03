@@ -16,6 +16,7 @@ Open-source testing, evaluation, and reliability for AI agents. Thadam helps dev
 - Terminal summaries and versioned JSON reports with output, assertion evidence, errors, and duration
 - Compare reviewed baselines with candidate reports, detecting newly failing checks and incompatible tests
 - Repeat evaluations, inspect case/check pass rates and runtime, and gate changes on observed reliability drops
+- Version suites, review intentional test changes, and explicitly approve baseline evidence
 
 Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
@@ -32,6 +33,8 @@ thadam run --help
 thadam compare --help
 thadam repeat --help
 thadam compare-repeated --help
+thadam review-baseline --help
+thadam approve-baseline --help
 ```
 
 Replace `cases.json` and `my_agent:run` in the help examples with your application's
@@ -146,7 +149,12 @@ All three cases fail their tool checks. Failure reports show observed model/tool
 
 Wrap your own compiled graph with `LangGraphAgent` from `thadam.adapters.langgraph`, optionally supplying input/output mappers and graph config. See the [LangGraph guide](https://github.com/thadam-ai/thadam/blob/main/docs/milestones/02-langgraph.md) for integration code, tool assertion formats, coverage limits, and checkpoint isolation.
 
-Reports now use **schema version 3**. They retain execution events and availability fields from schema 2 and add declared check definitions, an evaluation version, and optional application revision metadata. Uninstrumented Python runs have `events: null`, not an observed empty trace. Existing case files still use schema version 1 and continue to work. Comparing older reports requires fresh runs because those reports lack declared check contracts.
+Legacy suites use schema 1 and produce **schema-3 run reports**. Identified suites
+use schema 2 and produce **schema-4 runs**, adding explicit suite ID/revision.
+Both retain declared checks, evaluation/application revisions, observable events,
+and availability flags. Uninstrumented runs have `events: null`, not an observed
+empty trace. Schema-1/2 run reports require fresh runs for comparison because they
+lack declared check contracts. See the [suite revision guide](docs/milestones/03-baseline-review.md).
 
 ## Catch regressions after a change
 
@@ -247,6 +255,31 @@ application code. See the [full execution/report contract](docs/milestones/03-re
 explicitly generate, inspect, and review a baseline before committing it. Candidate
 jobs never update it; pull requests read the baseline from the target commit.
 
+## Review intentional test and baseline changes
+
+When you change an input, expectation, or check, the old and new reports remain
+incompatible. Give the suite an explicit ID/revision using suite schema 2, bump
+its revision when contracts change, generate candidate evidence, and review it:
+
+```shell
+thadam review-baseline candidate.json --baseline baselines/refund.json --report artifacts/review.json
+thadam review-baseline artifacts/review.json --verbose
+thadam approve-baseline artifacts/review.json --baseline baselines/refund.json \
+  --review-digest COPY_THE_FULL_REVIEW_SHA256 --reviewer YourName --reason 'Reviewed policy change'
+```
+
+For an initial baseline, omit `--baseline` during review. Approval requires the
+exact inspected digest. Candidate errors block approval; failed expectations
+require `--accept-failures`. A changed destination requires a fresh review.
+Approved baseline files retain the complete review and acknowledgement and work
+with existing comparison commands. Ordinary report writes cannot overwrite them.
+Commit them through your normal pull-request process.
+
+Try both workflows without model credentials:
+`python -m examples.baseline_review_demo`. It writes controlled evidence and
+prints complete approval commands; it never approves automatically. See the
+[full guide and VS Code test steps](docs/milestones/03-baseline-review.md).
+
 ## Exit codes
 
 | Code | `run` | `compare` |
@@ -257,6 +290,8 @@ jobs never update it; pull requests read the baseline from the target commit.
 
 `repeat` uses the `run` exit-code meanings for all invocations.
 `compare-repeated` uses the `compare` meanings, with the configured pass-rate policy.
+`review-baseline`: 0 ready for human review, 1 approval blockers, 2 invalid input/write failure.
+`approve-baseline`: 0 approved baseline written, 2 blocked/stale/invalid/write failure.
 
 ## Terminal appearance
 

@@ -16,20 +16,30 @@ from thadam.models import (
     EventError,
     ExecutionEvent,
     RunReport,
+    SuiteIdentity,
     TokenUsage,
 )
 from thadam.reporting import report_to_dict
+from thadam.suites import suite_identity
 
 
 def load_report(path: str | Path) -> RunReport:
-    """Load a schema-3 run report; raise ReportValidationError for invalid evidence.
+    """Load schema-3/4 evidence or an approved baseline; raise ReportValidationError.
 
     Legacy reports need fresh runs because they lack declared check contracts.
     Agent modules and custom verifiers are never imported or executed.
     """
     try:
         # Leave room for report/check wrappers around separately bounded payloads.
-        return report_from_dict(read_json(path, max_depth=110))
+        data = read_json(path, max_depth=125)
+        if isinstance(data, dict) and data.get("kind") == "approved_baseline":
+            from thadam.baseline_review import approved_from_dict
+
+            report = approved_from_dict(data).review.candidate
+            if not isinstance(report, RunReport):
+                raise ReportValidationError("Expected a single-run approved baseline")
+            return report
+        return report_from_dict(data)
     except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise ReportValidationError(f"Cannot load report {path}: {error}") from error
 
@@ -50,9 +60,15 @@ def report_from_dict(data: object) -> RunReport:
         validate_json(data, "report", max_depth=110)
         if isinstance(data, dict) and data.get("schema_version") in (1, 2):
             raise ValueError("Legacy reports cannot be compared; generate fresh schema-3 reports")
-        _fields(data, set(RunReport.__dataclass_fields__) | {"summary"}, "report")
-        if type(data["schema_version"]) is not int or data["schema_version"] != 3:
-            raise ValueError("report.schema_version must be the integer 3")
+        version = data.get("schema_version") if isinstance(data, dict) else None
+        fields = (set(RunReport.__dataclass_fields__) - {"suite"}) | {"summary"}
+        _fields(data, fields | ({"suite"} if version == 4 else set()), "report")
+        if type(version) is not int or version not in (3, 4):
+            raise ValueError("report.schema_version must be the integer 3 or 4")
+        identity = None
+        if version == 4:
+            _fields(data["suite"], {"id", "revision"}, "report.suite")
+            identity = suite_identity((), SuiteIdentity(**data["suite"]))
         if type(data["evaluation_version"]) is not int or data["evaluation_version"] != 1:
             raise ValueError("Unsupported evaluation_version; this build requires integer 1")
         _text(data["run_id"], "report.run_id")
@@ -62,7 +78,7 @@ def report_from_dict(data: object) -> RunReport:
         if not cases:
             raise ValueError("A run report must contain at least one case")
         _unique([case.id for case in cases], "case IDs")
-        report = RunReport(cases, data["run_id"], data["agent_revision"])
+        report = RunReport(cases, data["run_id"], data["agent_revision"], suite=identity)
         expected = asdict(report.summary)
         _fields(data["summary"], set(expected), "report.summary")
         if any(type(value) is not int for value in data["summary"].values()):

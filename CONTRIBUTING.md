@@ -109,3 +109,26 @@ When changing report formats, preserve declared checks and distinguish run schem
 4. Keep commits and file changes focused on the proposed change.
 
 By submitting a contribution, you agree that it is provided under the repository's Apache License 2.0. This project does not currently require a separate contributor license agreement.
+
+### Suite revisions and baseline promotion
+
+Read [the baseline review contract](docs/milestones/03-baseline-review.md) before
+changing suite identity, compatibility, or approval behavior. Legacy suites/runs
+retain their formats; identified suites emit schema-4 runs and identified
+single-run comparisons emit schema 2. Repeated envelopes still use schema 1.
+
+Exercise review and approval for both single/repeated workflows, added/removed
+cases and checks, changed expectations and verifier revisions, same-label changed
+contracts, legacy adoption, stale review digests/destinations, acknowledged failures,
+errors, source aliases, ordinary-write protection, and atomic write failures.
+Review/loading/approval must never execute agents or verifiers. A candidate error
+cannot be acknowledged away. Check the consumer demo with:
+
+```shell
+python -m pytest -q tests/test_suite_revisions.py tests/test_baseline_review.py tests/test_baseline_cli.py tests/test_baseline_review_demo.py
+python -m examples.baseline_review_demo --output artifacts/my-review-demo
+```
+
+The demo saves evidence and prints explicit approval commands. It never approves
+baselines itself. CI must continue reading its baseline from the target commit;
+intentional suite revisions require an explicit reviewed baseline transition.

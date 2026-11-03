@@ -2,6 +2,21 @@
 
 __version__ = "0.3.0"
 
+from thadam.baseline_approval import write_approved_baseline
+from thadam.baseline_reporting import write_baseline_review
+from thadam.baseline_review import (
+    ApprovedBaseline,
+    BaselineReview,
+    ContractChange,
+    approve_review,
+    approved_from_dict,
+    approved_to_dict,
+    load_baseline_review,
+    load_evaluation,
+    review_baseline,
+    review_from_dict,
+    review_to_dict,
+)
 from thadam.comparison import (
     CaseComparison,
     CheckComparison,
@@ -32,6 +47,7 @@ from thadam.models import (
     OutputHasKeys,
     RunReport,
     RunSummary,
+    SuiteIdentity,
     TestCase,
     TokenUsage,
     ToolArgumentsMatch,
@@ -61,9 +77,24 @@ from thadam.repetition_reporting import repeated_to_dict, write_repeated
 from thadam.report_loading import load_report
 from thadam.reporting import report_to_dict, write_report
 from thadam.runner import run_suite
-from thadam.suites import load_suite
+from thadam.suites import TestSuite, load_suite
 
 __all__ = [
+    "ApprovedBaseline",
+    "BaselineReview",
+    "ContractChange",
+    "SuiteIdentity",
+    "TestSuite",
+    "approve_review",
+    "approved_from_dict",
+    "approved_to_dict",
+    "load_baseline_review",
+    "load_evaluation",
+    "review_baseline",
+    "review_from_dict",
+    "review_to_dict",
+    "write_approved_baseline",
+    "write_baseline_review",
     "AgentFactory",
     "CaseReliability",
     "CaseReliabilityComparison",

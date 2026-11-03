@@ -114,3 +114,13 @@ remains a separate release action.
   control escaping/color, atomic writes, and source aliases.
 - Provide runnable pytest and consumer CI examples with a reviewed fixture
   baseline, and verify the installed package outside the checkout.
+
+## Identified suites and reviewed baseline updates
+
+[Suite revision review](03-baseline-review.md) supports this workflow end to end.
+Identified schema-2 suites produce schema-4 nested runs with the same ID/revision
+in every attempt; legacy runs remain schema 3. Repeated/reliability envelope
+schemas remain 1. Comparison also requires equal suite identities/revisions.
+`load_repeated` validates approved-baseline wrappers and returns their candidate
+evaluation. Intentional contract/settings transitions require explicit inspection
+and approval; comparisons never update their baselines.
