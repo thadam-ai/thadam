@@ -129,3 +129,11 @@ The server uses a project-confined authenticated loopback session. Evaluation jo
 run sequential SDK evaluations in managed subprocesses, with completed-case progress
 and explicit interruption. These are local process controls, not sandboxing or
 new timeout guarantees. Report and approval schemas retain their contracts.
+
+## Async execution
+
+Explicit async APIs and CLI/dashboard settings use a bounded cooperative worker
+pool. Synchronous APIs remain sequential; no thread-pool parallelism is implied.
+Reports retain their existing schemas and ordered evidence. Scheduling settings
+are caller-owned and not automatically checked by comparison; see the
+[async contract](docs/milestones/03-async-execution.md).

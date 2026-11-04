@@ -30,7 +30,9 @@ export function RunPanel({
     const [agents, setAgents] = useState<Data[]>([]),
         [name, setName] = useState("My agent"),
         [reference, setReference] = useState(""),
-        [mode, setMode] = useState("shared");
+        [mode, setMode] = useState("shared"),
+        [asyncExecution, setAsyncExecution] = useState(false),
+        [concurrency, setConcurrency] = useState(1);
     const [suite, setSuite] = useState(
             catalog.items.find((item) => item.kind === "suite")?.path || "",
         ),
@@ -59,6 +61,12 @@ export function RunPanel({
                     attempts,
                     agent_revision: revision || null,
                     report,
+                    ...(asyncExecution
+                        ? {
+                              async_execution: true,
+                              max_concurrency: concurrency,
+                          }
+                        : {}),
                 }),
             );
             setReport("artifacts/evaluation-" + uid() + ".json");
@@ -141,7 +149,7 @@ export function RunPanel({
                         </Field>
                         <Field
                             label="Agent reference"
-                            hint="Your synchronous Python module:callable, imported only when you run."
+                            hint="Your Python module:callable, imported only when you run."
                         >
                             <input
                                 value={reference}
@@ -168,6 +176,36 @@ export function RunPanel({
                             Execution & save settings <ChevronRight size={14} />
                         </summary>
                         <div className="form-grid">
+                            <Field label="Execution engine">
+                                <select
+                                    value={asyncExecution ? "async" : "sync"}
+                                    onChange={(event) =>
+                                        setAsyncExecution(
+                                            event.target.value === "async",
+                                        )
+                                    }
+                                >
+                                    <option value="sync">Synchronous</option>
+                                    <option value="async">Async</option>
+                                </select>
+                            </Field>
+                            <Field
+                                label="Maximum concurrent cases"
+                                hint="Async only. Your shared agent and resources must support overlapping calls."
+                            >
+                                <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    disabled={!asyncExecution}
+                                    value={asyncExecution ? concurrency : 1}
+                                    onChange={(event) =>
+                                        setConcurrency(
+                                            Number(event.target.value),
+                                        )
+                                    }
+                                />
+                            </Field>
                             <Field label="Execution mode">
                                 <select
                                     value={mode}
@@ -226,7 +264,9 @@ export function RunPanel({
                     <div className="form-footer">
                         <p>
                             Runs trusted Python code from this project.
-                            Evaluation is sequential.
+                            {asyncExecution
+                                ? "Async case overlap is bounded by your limit; attempts remain sequential."
+                                : "Evaluation is sequential."}
                         </p>
                         <Button
                             primary

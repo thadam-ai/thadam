@@ -125,6 +125,11 @@ Reliability comparisons and reviews retain both full evaluations. Single-run
 comparison artifacts retain assertion event links; full traces are in the source
 run reports, which can be opened when present in the project.
 
+For async agents, select **Async** in **Execution & save settings** and choose
+**Maximum concurrent cases**. Attempts remain sequential, but async cases within
+an attempt may overlap. See the [async contract](milestones/03-async-execution.md)
+for shared state, cancellation and comparison-setting limits.
+
 Evaluation jobs use a separate process and remain visible across browser reloads.
 Progress is emitted after each case invocation. Logs retain the most recent
 64 KiB. Completed evaluations are published even when the browser is closed;

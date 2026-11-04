@@ -217,12 +217,12 @@ def run_repeated(
     )
 
 
-def validate_factory(factory: AgentFactory) -> None:
-    """Require an inspectable synchronous factory accepting no arguments."""
+def validate_factory(factory: AgentFactory, *, allow_async: bool = False) -> None:
+    """Require a zero-argument factory; async factories need allow_async=True."""
     target = factory if inspect.isroutine(factory) else getattr(factory, "__call__", factory)
     if (
         not callable(factory)
-        or inspect.iscoroutinefunction(target)
+        or (inspect.iscoroutinefunction(target) and not allow_async)
         or inspect.isasyncgenfunction(target)
     ):
         raise AgentConfigurationError("agent_factory must be a synchronous zero-argument callable")

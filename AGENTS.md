@@ -31,7 +31,7 @@ Ordinary report writes cannot replace approved baseline artifacts. Approval is a
 local review workflow, not identity authentication, an automatic CI update, or a
 GitHub merge.
 
-The engine is sequential and runs trusted code in the current process. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. There is no enforced timeout, sandbox, scenario generator, or hidden-reasoning capture. Re-read the code before assuming an API exists.
+Synchronous engine APIs are sequential and execute trusted code in the current process; explicit async APIs bound cooperative case overlap. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. There is no enforced timeout, sandbox, scenario generator, or hidden-reasoning capture. Re-read the code before assuming an API exists.
 
 ## Repository map
 
@@ -122,3 +122,14 @@ checks and npm tests/type/build/format checks. Core-only environments skip optio
 API tests and must retain dependency-free imports. CI has separate Dashboard jobs
 on Python 3.10/3.14; actionlint validates workflow edits. Baseline/report schemas
 retain their existing contracts.
+
+## Explicit async execution
+
+`run_suite_async` and `run_repeated_async` provide cooperative bounded case
+overlap; synchronous APIs retain their sequential defaults. Read `docs/milestones/03-async-execution.md`.
+Async runs reuse the runner's validation, evidence and assertion helpers. Attempts
+remain ordered; cancellation/observer failure drains workers without a completed
+report. CLI `--async --max-concurrency N` and dashboard execution settings select
+this path. Existing schemas and shared/factory modes remain unchanged. Scheduling
+settings are not serialized or automatically compared; callers must keep baseline
+and candidate scheduling consistent. LangGraph exposes an explicit async `ainvoke`.

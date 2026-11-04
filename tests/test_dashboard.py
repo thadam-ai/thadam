@@ -404,3 +404,58 @@ def test_suite_revision_guard_distinguishes_json_booleans_from_numbers(client):
     )
     assert changed.status_code == 400
     assert "revision" in changed.json()["error"]
+
+
+@pytest.mark.parametrize("attempts,mode", [(1, "shared"), (2, "shared"), (2, "factory")])
+def test_async_jobs_save_complete_evidence(client, project, attempts, mode):
+    (project / "async_agent.py").write_text(
+        "import asyncio\nasync def run(value):\n    await asyncio.sleep(0)\n    return value\nasync def factory():\n    return run\n"
+    )
+    response = client.post(
+        "/api/jobs",
+        json={
+            "suite": "cases.json",
+            "reference": "async_agent:factory" if mode == "factory" else "async_agent:run",
+            "attempts": attempts,
+            "mode": mode,
+            "agent_revision": "async-test",
+            "report": "async-result.json",
+            "async_execution": True,
+            "max_concurrency": 2,
+        },
+    )
+    assert response.status_code == 200, response.text
+    job = completed(client)
+    assert job["state"] == "completed", job
+    assert job["exit_code"] == 0
+    assert job["completed"] == job["total"] == attempts
+    artifact = client.get("/api/artifact", params={"path": "async-result.json"}).json()
+    assert artifact["data"]["summary"]["passed"] == attempts
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"max_concurrency": 2},
+        {"async_execution": "yes"},
+        {"async_execution": True, "max_concurrency": True},
+        {"async_execution": True, "max_concurrency": 0},
+    ],
+)
+def test_async_job_settings_rejected_before_import(client, project, extra):
+    (project / "no_import.py").write_text("raise RuntimeError('must not import')")
+    response = client.post(
+        "/api/jobs",
+        json={
+            "suite": "cases.json",
+            "reference": "no_import:run",
+            "attempts": 1,
+            "mode": "shared",
+            "agent_revision": None,
+            "report": "never-written.json",
+            **extra,
+        },
+    )
+    assert response.status_code == 400
+    assert client.get("/api/jobs").json() == []
+    assert not (project / "never-written.json").exists()

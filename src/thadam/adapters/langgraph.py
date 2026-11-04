@@ -104,6 +104,38 @@ class LangGraphAgent:
             output=deepcopy(output), events=events, trace_complete=complete, trace_warnings=warnings
         )
 
+    async def ainvoke(self, value: JSONValue) -> AgentResult:
+        """Await graph execution with independent callback evidence and checkpoint ID."""
+        collector = _EventCollector()
+        configuration = merge_configs(
+            self.config,
+            {"callbacks": [collector], "configurable": {"thread_id": str(uuid4())}},
+        )
+        try:
+            graph_input = self.input_mapper(value) if self.input_mapper else value
+            _require_sync_value(graph_input)
+            state = await self.graph.ainvoke(graph_input, config=configuration)
+            if isinstance(state, dict) and state.get("__interrupt__"):
+                raise RuntimeError(
+                    "Graph interrupted before completion; no test verdict can be produced"
+                )
+            output = self.output_mapper(state) if self.output_mapper else _json_value(state)
+            _require_sync_value(output)
+            # Output mapper errors retain the graph's events in the exception envelope.
+            validate_json(output, "mapped graph output")
+        except (Exception, SystemExit) as error:
+            events, complete, warnings = collector.finish()
+            raise AgentExecutionError(
+                error,
+                events=events,
+                trace_complete=complete,
+                trace_warnings=warnings,
+            ) from error
+        events, complete, warnings = collector.finish()
+        return AgentResult(
+            output=deepcopy(output), events=events, trace_complete=complete, trace_warnings=warnings
+        )
+
 
 class _EventCollector(BaseCallbackHandler):
     """Collect model/tool spans by run ID, including callbacks from parallel nodes."""
