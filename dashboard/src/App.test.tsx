@@ -94,7 +94,13 @@ afterEach(() => {
 describe("evidence workspace navigation", () => {
     it("keeps the mixed file list visible while inspecting a suite and never executes code during discovery", async () => {
         render(<App />);
-        await screen.findByRole("heading", { name: "report.json" });
+        // The first render includes session setup, catalog loading, automatic
+        // selection, and artifact loading; allow cold CI workers to finish.
+        await screen.findByRole(
+            "heading",
+            { name: "report.json" },
+            { timeout: 5000 },
+        );
         fireEvent.click(
             screen.getByRole("button", { name: "Open cases.json" }),
         );
