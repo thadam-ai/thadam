@@ -1,4 +1,4 @@
-import { Plus, Save, X } from "lucide-react";
+import { ChevronRight, CircleAlert, Plus, Save, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, json, parseJSON, type Artifact, type Data } from "./api";
 import { Badge, Button, ErrorBox, Field, titlePath, uid } from "./components";
@@ -82,7 +82,8 @@ export function SuiteEditor({
 }) {
     const [text, setText] = useState(json(artifact?.data || emptySuite)),
         [path, setPath] = useState(artifact?.path || "cases.json"),
-        [tab, setTab] = useState("form");
+        [tab, setTab] = useState("form"),
+        [selectedCase, setSelectedCase] = useState(0);
     const [error, setError] = useState(""),
         [busy, setBusy] = useState(false),
         [invalid, setInvalid] = useState<Record<string, boolean>>({}),
@@ -124,9 +125,16 @@ export function SuiteEditor({
     try {
         data = parseJSON(text);
     } catch {}
+    useEffect(() => {
+        if (Array.isArray(data?.cases))
+            setSelectedCase((current) =>
+                Math.min(current, Math.max(0, data!.cases.length - 1)),
+            );
+    }, [data?.cases?.length]);
     const original = artifact?.data;
     const changed =
         text !== json(original || emptySuite) ||
+        path !== (artifact?.path || "cases.json") ||
         Object.values(invalid).some(Boolean);
     useEffect(() => {
         onDirty(changed);
@@ -199,8 +207,8 @@ export function SuiteEditor({
                         {changed && <Badge status="unsaved" />}
                     </div>
                     <p>
-                        Define expected behavior. Validate and save before
-                        running.
+                        {data?.cases?.length ?? 0} cases ·{" "}
+                        {artifact?.path || "New suite"}
                     </p>
                 </div>
                 <div className="segmented" aria-label="Editor view">
@@ -218,79 +226,97 @@ export function SuiteEditor({
                     </button>
                     <button
                         className={tab === "json" ? "selected" : ""}
-                        onClick={() => setTab("json")}
+                        onClick={() => {
+                            if (Object.values(invalid).some(Boolean))
+                                setError(
+                                    "Fix invalid JSON fields before switching to JSON view. Your drafts are still in the form.",
+                                );
+                            else setTab("json");
+                        }}
                     >
                         JSON
                     </button>
                 </div>
             </div>
             {error && <ErrorBox error={error} />}
-            <div className="editor-metadata">
-                <Field
-                    label="Suite file"
-                    hint={
-                        artifact
-                            ? "Use a different path for Save as. Existing reports cannot be overwritten."
-                            : "Relative to your selected project folder."
-                    }
-                >
-                    <input
-                        value={path}
-                        onChange={(e) => setPath(e.target.value)}
-                    />
-                </Field>
-                {data?.schema_version === 2 ? (
-                    <>
-                        <Field label="Suite ID">
-                            <input
-                                value={data.suite?.id || ""}
-                                onChange={(e) =>
-                                    change({
-                                        ...data,
-                                        suite: {
-                                            ...data.suite,
-                                            id: e.target.value,
-                                        },
-                                    })
-                                }
-                            />
-                        </Field>
-                        <Field
-                            label="Suite revision"
-                            hint="Change this when inputs, cases, or checks change."
-                        >
-                            <input
-                                value={data.suite?.revision || ""}
-                                onChange={(e) =>
-                                    change({
-                                        ...data,
-                                        suite: {
-                                            ...data.suite,
-                                            revision: e.target.value,
-                                        },
-                                    })
-                                }
-                            />
-                        </Field>
-                    </>
-                ) : (
-                    <Button
-                        onClick={() =>
-                            data &&
-                            change({
-                                ...data,
-                                schema_version: 2,
-                                suite: {
-                                    id: titlePath(path).replace(".json", ""),
-                                    revision: "v1",
-                                },
-                            })
+            <details className="suite-settings" open={!artifact}>
+                <summary>
+                    Suite settings{" "}
+                    <span className="mono">
+                        {data?.suite?.revision || "Legacy suite"}
+                    </span>
+                    <ChevronRight size={15} />
+                </summary>
+                <div className="editor-metadata">
+                    <Field
+                        label="Suite file"
+                        hint={
+                            artifact
+                                ? "Use a different path for Save as. Existing reports cannot be overwritten."
+                                : "Relative to your selected project folder."
                         }
                     >
-                        Add suite identity & revision
-                    </Button>
-                )}
-            </div>
+                        <input
+                            value={path}
+                            onChange={(e) => setPath(e.target.value)}
+                        />
+                    </Field>
+                    {data?.schema_version === 2 ? (
+                        <>
+                            <Field label="Suite ID">
+                                <input
+                                    value={data.suite?.id || ""}
+                                    onChange={(e) =>
+                                        change({
+                                            ...data,
+                                            suite: {
+                                                ...data.suite,
+                                                id: e.target.value,
+                                            },
+                                        })
+                                    }
+                                />
+                            </Field>
+                            <Field
+                                label="Suite revision"
+                                hint="Change this when inputs, cases, or checks change."
+                            >
+                                <input
+                                    value={data.suite?.revision || ""}
+                                    onChange={(e) =>
+                                        change({
+                                            ...data,
+                                            suite: {
+                                                ...data.suite,
+                                                revision: e.target.value,
+                                            },
+                                        })
+                                    }
+                                />
+                            </Field>
+                        </>
+                    ) : (
+                        <Button
+                            onClick={() =>
+                                data &&
+                                change({
+                                    ...data,
+                                    schema_version: 2,
+                                    suite: {
+                                        id: titlePath(path).replace(
+                                            ".json",
+                                            "",
+                                        ),
+                                        revision: "v1",
+                                    },
+                                })
+                            }
+                        >
+                            Add suite identity & revision
+                        </Button>
+                    )}
+                </div>
+            </details>
             {tab === "json" ? (
                 <Field label="Suite JSON">
                     <textarea
@@ -305,318 +331,416 @@ export function SuiteEditor({
                     />
                 </Field>
             ) : data && Array.isArray(data.cases) ? (
-                <div className="suite-cases">
-                    {data.cases.map((test: Data, index: number) => (
-                        <section className="case-editor" key={caseKey(index)}>
-                            <div className="case-editor-heading">
-                                <h2>Case {index + 1}</h2>
-                                <Button
-                                    quiet
-                                    onClick={() => {
-                                        change({
-                                            ...data,
-                                            cases: data!.cases.filter(
-                                                (_: Data, i: number) =>
-                                                    i !== index,
-                                            ),
-                                        });
-                                        clearCase(index);
-                                    }}
-                                >
-                                    <X size={14} />
-                                    Remove case
-                                </Button>
-                            </div>
-                            <Field label="Case ID">
-                                <input
-                                    value={test.id || ""}
-                                    onChange={(e) =>
-                                        caseChange(index, {
-                                            ...test,
-                                            id: e.target.value,
-                                        })
-                                    }
-                                />
-                            </Field>
-                            <JsonInput
-                                label="Input"
-                                value={test.input}
-                                onChange={(input) =>
-                                    caseChange(index, { ...test, input })
-                                }
-                                onValid={(valid) =>
-                                    validity(caseKey(index) + ":input", valid)
-                                }
-                            />
-                            <div className="section-heading">
-                                <h3>Assertions</h3>
-                                <Button
-                                    quiet
-                                    onClick={() =>
-                                        caseChange(index, {
-                                            ...test,
+                <div className="suite-workspace">
+                    <aside className="case-navigator" aria-label="Suite cases">
+                        <div className="case-nav-heading">
+                            <h2>Cases</h2>
+                            <span>{data.cases.length}</span>
+                        </div>
+                        <div className="case-nav-list">
+                            {data.cases.map((test: Data, index: number) => {
+                                const hasInvalid = Object.entries(invalid).some(
+                                    ([key, value]) =>
+                                        value &&
+                                        key.startsWith(caseKey(index) + ":"),
+                                );
+                                return (
+                                    <button
+                                        key={caseKey(index)}
+                                        className={
+                                            "case-nav-item " +
+                                            (selectedCase === index
+                                                ? "selected"
+                                                : "")
+                                        }
+                                        aria-current={
+                                            selectedCase === index
+                                                ? "true"
+                                                : undefined
+                                        }
+                                        aria-label={
+                                            "Edit " +
+                                            (test.id || "untitled case") +
+                                            (hasInvalid ? ", invalid JSON" : "")
+                                        }
+                                        onClick={() => setSelectedCase(index)}
+                                    >
+                                        <span>
+                                            <strong>
+                                                {test.id || "Untitled case"}
+                                            </strong>
+                                            <small>
+                                                {(test.assertions || []).length}{" "}
+                                                {(test.assertions || [])
+                                                    .length === 1
+                                                    ? "check"
+                                                    : "checks"}
+                                            </small>
+                                        </span>
+                                        {hasInvalid ? (
+                                            <CircleAlert
+                                                size={15}
+                                                className="red"
+                                            />
+                                        ) : (
+                                            <ChevronRight size={14} />
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <Button
+                            quiet
+                            onClick={() => {
+                                setSelectedCase(data!.cases.length);
+                                change({
+                                    ...data,
+                                    cases: [
+                                        ...data!.cases,
+                                        {
+                                            id: "case-" + uid(),
+                                            input: {},
                                             assertions: [
-                                                ...(test.assertions || []),
                                                 {
-                                                    id: "check-" + uid(),
+                                                    id: "answer",
                                                     type: "output_equals",
-                                                    expected: null,
+                                                    expected: {},
                                                 },
                                             ],
-                                        })
-                                    }
-                                >
-                                    <Plus size={14} />
-                                    Add check
-                                </Button>
-                            </div>
-                            {(test.assertions || []).map(
-                                (check: Data, ci: number) => (
-                                    <div
-                                        className="check-editor"
-                                        key={checkKey(index, ci)}
+                                        },
+                                    ],
+                                });
+                            }}
+                        >
+                            <Plus size={15} />
+                            Add case
+                        </Button>
+                    </aside>
+                    <div className="suite-cases">
+                        {data.cases.length === 0 && (
+                            <p className="muted">
+                                Add a case to define its input and expected
+                                behavior.
+                            </p>
+                        )}
+                        {data.cases.map((test: Data, index: number) => (
+                            <section
+                                className="case-editor"
+                                key={caseKey(index)}
+                                hidden={selectedCase !== index}
+                                aria-label={"Case " + (test.id || index + 1)}
+                            >
+                                <div className="case-editor-heading">
+                                    <h2>{test.id || "Untitled case"}</h2>
+                                    <Button
+                                        quiet
+                                        onClick={() => {
+                                            change({
+                                                ...data,
+                                                cases: data!.cases.filter(
+                                                    (_: Data, i: number) =>
+                                                        i !== index,
+                                                ),
+                                            });
+                                            clearCase(index);
+                                            setSelectedCase((current) =>
+                                                Math.max(
+                                                    0,
+                                                    current > index
+                                                        ? current - 1
+                                                        : Math.min(
+                                                              current,
+                                                              data!.cases
+                                                                  .length - 2,
+                                                          ),
+                                                ),
+                                            );
+                                        }}
                                     >
-                                        <div className="check-fields">
-                                            <Field label="Check ID">
-                                                <input
-                                                    value={check.id || ""}
-                                                    onChange={(e) =>
-                                                        caseChange(index, {
-                                                            ...test,
-                                                            assertions:
-                                                                test.assertions.map(
-                                                                    (
-                                                                        a: Data,
-                                                                        i: number,
-                                                                    ) =>
-                                                                        i === ci
-                                                                            ? {
-                                                                                  ...a,
-                                                                                  id: e
-                                                                                      .target
-                                                                                      .value,
-                                                                              }
-                                                                            : a,
+                                        <X size={14} />
+                                        Remove case
+                                    </Button>
+                                </div>
+                                <Field label="Case ID">
+                                    <input
+                                        value={test.id || ""}
+                                        onChange={(e) =>
+                                            caseChange(index, {
+                                                ...test,
+                                                id: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </Field>
+                                <JsonInput
+                                    label="Input"
+                                    value={test.input}
+                                    onChange={(input) =>
+                                        caseChange(index, { ...test, input })
+                                    }
+                                    onValid={(valid) =>
+                                        validity(
+                                            caseKey(index) + ":input",
+                                            valid,
+                                        )
+                                    }
+                                />
+                                <div className="section-heading">
+                                    <h3>Assertions</h3>
+                                    <Button
+                                        quiet
+                                        onClick={() =>
+                                            caseChange(index, {
+                                                ...test,
+                                                assertions: [
+                                                    ...(test.assertions || []),
+                                                    {
+                                                        id: "check-" + uid(),
+                                                        type: "output_equals",
+                                                        expected: null,
+                                                    },
+                                                ],
+                                            })
+                                        }
+                                    >
+                                        <Plus size={14} />
+                                        Add check
+                                    </Button>
+                                </div>
+                                {(test.assertions || []).map(
+                                    (check: Data, ci: number) => (
+                                        <div
+                                            className="check-editor"
+                                            key={checkKey(index, ci)}
+                                        >
+                                            <div className="check-fields">
+                                                <Field label="Check ID">
+                                                    <input
+                                                        value={check.id || ""}
+                                                        onChange={(e) =>
+                                                            caseChange(index, {
+                                                                ...test,
+                                                                assertions:
+                                                                    test.assertions.map(
+                                                                        (
+                                                                            a: Data,
+                                                                            i: number,
+                                                                        ) =>
+                                                                            i ===
+                                                                            ci
+                                                                                ? {
+                                                                                      ...a,
+                                                                                      id: e
+                                                                                          .target
+                                                                                          .value,
+                                                                                  }
+                                                                                : a,
+                                                                    ),
+                                                            })
+                                                        }
+                                                    />
+                                                </Field>
+                                                <Field label="Check type">
+                                                    <select
+                                                        value={check.type}
+                                                        onChange={(e) => {
+                                                            const type =
+                                                                e.target.value;
+                                                            const next = {
+                                                                id: check.id,
+                                                                type,
+                                                                ...(type ===
+                                                                "output_equals"
+                                                                    ? {
+                                                                          expected:
+                                                                              null,
+                                                                      }
+                                                                    : type ===
+                                                                        "output_has_keys"
+                                                                      ? {
+                                                                            keys: [
+                                                                                "field",
+                                                                            ],
+                                                                        }
+                                                                      : {
+                                                                            tool: "tool_name",
+                                                                            ...(type ===
+                                                                            "tool_arguments_match"
+                                                                                ? {
+                                                                                      expected:
+                                                                                          {
+                                                                                              argument:
+                                                                                                  "value",
+                                                                                          },
+                                                                                  }
+                                                                                : {}),
+                                                                        }),
+                                                            };
+                                                            validity(
+                                                                checkKey(
+                                                                    index,
+                                                                    ci,
                                                                 ),
-                                                        })
+                                                                true,
+                                                            );
+                                                            caseChange(index, {
+                                                                ...test,
+                                                                assertions:
+                                                                    test.assertions.map(
+                                                                        (
+                                                                            a: Data,
+                                                                            i: number,
+                                                                        ) =>
+                                                                            i ===
+                                                                            ci
+                                                                                ? next
+                                                                                : a,
+                                                                    ),
+                                                            });
+                                                        }}
+                                                    >
+                                                        {types.map((t) => (
+                                                            <option key={t}>
+                                                                {t}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </Field>
+                                                <button
+                                                    className="icon-button"
+                                                    aria-label={
+                                                        "Remove " + check.id
                                                     }
-                                                />
-                                            </Field>
-                                            <Field label="Check type">
-                                                <select
-                                                    value={check.type}
-                                                    onChange={(e) => {
-                                                        const type =
-                                                            e.target.value;
-                                                        const next = {
-                                                            id: check.id,
-                                                            type,
-                                                            ...(type ===
-                                                            "output_equals"
-                                                                ? {
-                                                                      expected:
-                                                                          null,
-                                                                  }
-                                                                : type ===
-                                                                    "output_has_keys"
-                                                                  ? {
-                                                                        keys: [
-                                                                            "field",
-                                                                        ],
-                                                                    }
-                                                                  : {
-                                                                        tool: "tool_name",
-                                                                        ...(type ===
-                                                                        "tool_arguments_match"
-                                                                            ? {
-                                                                                  expected:
-                                                                                      {
-                                                                                          argument:
-                                                                                              "value",
-                                                                                      },
-                                                                              }
-                                                                            : {}),
-                                                                    }),
-                                                        };
-                                                        validity(
-                                                            checkKey(index, ci),
-                                                            true,
-                                                        );
+                                                    onClick={() => {
                                                         caseChange(index, {
                                                             ...test,
                                                             assertions:
-                                                                test.assertions.map(
+                                                                test.assertions.filter(
                                                                     (
-                                                                        a: Data,
+                                                                        _: Data,
                                                                         i: number,
                                                                     ) =>
-                                                                        i === ci
-                                                                            ? next
-                                                                            : a,
+                                                                        i !==
+                                                                        ci,
                                                                 ),
                                                         });
+                                                        clearCheck(index, ci);
                                                     }}
                                                 >
-                                                    {types.map((t) => (
-                                                        <option key={t}>
-                                                            {t}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </Field>
-                                            <button
-                                                className="icon-button"
-                                                aria-label={
-                                                    "Remove " + check.id
-                                                }
-                                                onClick={() => {
-                                                    caseChange(index, {
-                                                        ...test,
-                                                        assertions:
-                                                            test.assertions.filter(
-                                                                (
-                                                                    _: Data,
-                                                                    i: number,
-                                                                ) => i !== ci,
-                                                            ),
-                                                    });
-                                                    clearCheck(index, ci);
-                                                }}
-                                            >
-                                                <X size={16} />
-                                            </button>
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                            {check.type.startsWith("tool_") && (
+                                                <Field label="Tool name">
+                                                    <input
+                                                        value={check.tool || ""}
+                                                        onChange={(e) =>
+                                                            caseChange(index, {
+                                                                ...test,
+                                                                assertions:
+                                                                    test.assertions.map(
+                                                                        (
+                                                                            a: Data,
+                                                                            i: number,
+                                                                        ) =>
+                                                                            i ===
+                                                                            ci
+                                                                                ? {
+                                                                                      ...a,
+                                                                                      tool: e
+                                                                                          .target
+                                                                                          .value,
+                                                                                  }
+                                                                                : a,
+                                                                    ),
+                                                            })
+                                                        }
+                                                    />
+                                                </Field>
+                                            )}
+                                            {check.type ===
+                                            "output_has_keys" ? (
+                                                <Field
+                                                    label="Required output keys"
+                                                    hint="Separate top-level field names with commas."
+                                                >
+                                                    <input
+                                                        value={(
+                                                            check.keys || []
+                                                        ).join(", ")}
+                                                        onChange={(e) =>
+                                                            caseChange(index, {
+                                                                ...test,
+                                                                assertions:
+                                                                    test.assertions.map(
+                                                                        (
+                                                                            a: Data,
+                                                                            i: number,
+                                                                        ) =>
+                                                                            i ===
+                                                                            ci
+                                                                                ? {
+                                                                                      ...a,
+                                                                                      keys: e.target.value
+                                                                                          .split(
+                                                                                              ",",
+                                                                                          )
+                                                                                          .map(
+                                                                                              (
+                                                                                                  v,
+                                                                                              ) =>
+                                                                                                  v.trim(),
+                                                                                          ),
+                                                                                  }
+                                                                                : a,
+                                                                    ),
+                                                            })
+                                                        }
+                                                    />
+                                                </Field>
+                                            ) : check.type.includes("equals") ||
+                                              check.type ===
+                                                  "tool_arguments_match" ? (
+                                                <JsonInput
+                                                    label={
+                                                        check.type ===
+                                                        "tool_arguments_match"
+                                                            ? "Expected tool arguments"
+                                                            : "Expected output"
+                                                    }
+                                                    value={check.expected}
+                                                    onValid={(valid) =>
+                                                        validity(
+                                                            checkKey(index, ci),
+                                                            valid,
+                                                        )
+                                                    }
+                                                    onChange={(expected) =>
+                                                        caseChange(index, {
+                                                            ...test,
+                                                            assertions:
+                                                                test.assertions.map(
+                                                                    (
+                                                                        a: Data,
+                                                                        i: number,
+                                                                    ) =>
+                                                                        i === ci
+                                                                            ? {
+                                                                                  ...a,
+                                                                                  expected,
+                                                                              }
+                                                                            : a,
+                                                                ),
+                                                        })
+                                                    }
+                                                />
+                                            ) : null}
                                         </div>
-                                        {check.type.startsWith("tool_") && (
-                                            <Field label="Tool name">
-                                                <input
-                                                    value={check.tool || ""}
-                                                    onChange={(e) =>
-                                                        caseChange(index, {
-                                                            ...test,
-                                                            assertions:
-                                                                test.assertions.map(
-                                                                    (
-                                                                        a: Data,
-                                                                        i: number,
-                                                                    ) =>
-                                                                        i === ci
-                                                                            ? {
-                                                                                  ...a,
-                                                                                  tool: e
-                                                                                      .target
-                                                                                      .value,
-                                                                              }
-                                                                            : a,
-                                                                ),
-                                                        })
-                                                    }
-                                                />
-                                            </Field>
-                                        )}
-                                        {check.type === "output_has_keys" ? (
-                                            <Field
-                                                label="Required output keys"
-                                                hint="Separate top-level field names with commas."
-                                            >
-                                                <input
-                                                    value={(
-                                                        check.keys || []
-                                                    ).join(", ")}
-                                                    onChange={(e) =>
-                                                        caseChange(index, {
-                                                            ...test,
-                                                            assertions:
-                                                                test.assertions.map(
-                                                                    (
-                                                                        a: Data,
-                                                                        i: number,
-                                                                    ) =>
-                                                                        i === ci
-                                                                            ? {
-                                                                                  ...a,
-                                                                                  keys: e.target.value
-                                                                                      .split(
-                                                                                          ",",
-                                                                                      )
-                                                                                      .map(
-                                                                                          (
-                                                                                              v,
-                                                                                          ) =>
-                                                                                              v.trim(),
-                                                                                      ),
-                                                                              }
-                                                                            : a,
-                                                                ),
-                                                        })
-                                                    }
-                                                />
-                                            </Field>
-                                        ) : check.type.includes("equals") ||
-                                          check.type ===
-                                              "tool_arguments_match" ? (
-                                            <JsonInput
-                                                label={
-                                                    check.type ===
-                                                    "tool_arguments_match"
-                                                        ? "Expected tool arguments"
-                                                        : "Expected output"
-                                                }
-                                                value={check.expected}
-                                                onValid={(valid) =>
-                                                    validity(
-                                                        checkKey(index, ci),
-                                                        valid,
-                                                    )
-                                                }
-                                                onChange={(expected) =>
-                                                    caseChange(index, {
-                                                        ...test,
-                                                        assertions:
-                                                            test.assertions.map(
-                                                                (
-                                                                    a: Data,
-                                                                    i: number,
-                                                                ) =>
-                                                                    i === ci
-                                                                        ? {
-                                                                              ...a,
-                                                                              expected,
-                                                                          }
-                                                                        : a,
-                                                            ),
-                                                    })
-                                                }
-                                            />
-                                        ) : null}
-                                    </div>
-                                ),
-                            )}
-                        </section>
-                    ))}
-                    <Button
-                        onClick={() =>
-                            change({
-                                ...data,
-                                cases: [
-                                    ...data!.cases,
-                                    {
-                                        id: "case-" + uid(),
-                                        input: {},
-                                        assertions: [
-                                            {
-                                                id: "answer",
-                                                type: "output_equals",
-                                                expected: {},
-                                            },
-                                        ],
-                                    },
-                                ],
-                            })
-                        }
-                    >
-                        <Plus size={16} />
-                        Add case
-                    </Button>
+                                    ),
+                                )}
+                            </section>
+                        ))}
+                    </div>
                 </div>
             ) : (
                 <ErrorBox error="Suite JSON must contain a cases array." />

@@ -2,7 +2,7 @@
 
 This document records the agreed stack and visual identity. Update it as decisions evolve, including why we changed direction and what the change affects.
 
-The Python runner, SDK, CLI, optional LangGraph integration, saved-report regression comparison, repeated-evaluation reliability gates, suite revisions, and explicit baseline review are implemented. The interface, API service, and TypeScript agent support below remain planned.
+The Python runner, SDK, CLI, optional LangGraph integration, saved-report regression comparison, repeated-evaluation reliability gates, suite revisions, and explicit baseline review are implemented. The local React dashboard and optional FastAPI service are also implemented. TypeScript agent support remains planned.
 
 ## Stack
 
@@ -28,7 +28,7 @@ The first upload is pending. The [release workflow](.github/workflows/publish.ym
 
 ## Brand and color theme
 
-Thadam's identity is **teal and blue**, inspired by the supplied Thadam logo. Use this palette across the CLI, future report viewer, dashboard, and other interfaces. These are reusable color roles; the CLI is the first implemented surface.
+Thadam's identity is **teal and blue**, inspired by the supplied Thadam logo. Use this palette across the CLI, dashboard, and other interfaces. The table below defines the CLI palette; the dashboard uses the quieter surface-specific tokens described below while retaining the same semantic roles.
 
 | Role | Dark surfaces | Light surfaces | Use |
 | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ Thadam's identity is **teal and blue**, inspired by the supplied Thadam logo. Us
 - Always pair status colors with meaningful labels or another non-color cue.
 - Use the appropriate dark or light palette and verify contrast against the actual background. The current reference canvases are dark `#070D13` and light `#FFFFFF`.
 - Define shared semantic tokens when building the frontend: `--color-brand`, `--color-info`, `--color-muted`, `--color-warning`, and `--color-error`, mapped to this table. Reuse them across components.
-- Keep this table, the CLI's `src/thadam/terminal.py` palette, and future interface tokens aligned when colors change. Record the reason in the decision history.
+- Preserve semantic meanings across the CLI and dashboard. Record surface-specific palette changes and their reasons in the decision history.
 
 ## Terminal presentation
 
@@ -92,6 +92,8 @@ When a decision changes, update the stack and rationale above, then add a dated 
 | 2026-10-31 | Support shared callables and per-invocation agent factories sequentially | Make state ownership explicit without assuming an agent can be copied or reset | Factories construct one agent per case attempt; application resources and verifier state remain caller-owned; no concurrency, retry, or implicit cleanup protocol |
 | 2026-11-01 | Unify terminal reports and group repeated evidence | Make verdicts easy to scan while retaining an explicit way to inspect every attempt | Adaptive tables, grouped failures with occurrence numbers and representative traces, and `--verbose` for all commands; serialized reports and gate behavior retain their contracts |
 | 2026-11-03 | Add explicit suite revisions and reviewed baseline promotion | Make intentional test changes reviewable without allowing revision labels to bypass contract checks | Preserve legacy formats; add suite schema 2, run schema 4, single-comparison schema 2, full-evidence review/approval artifacts, exact digest acknowledgement, and stale-destination protection |
+| 2026-11-03 | Refine the operational dashboard around evidence and focused editing | Make saved results easier to scan and failures faster to investigate | Compact counts, neutral surfaces, readable result summaries, failure-first investigation and a case navigator that preserves unfinished drafts; SDK and artifact rules remain unchanged |
+| 2026-11-03 | Adopt the user's supplied quiet workspace references | Replace the generic broad-sidebar dashboard with the requested neat, elegant composition | Warm charcoal frame, slim icon rail, persistent independently scrolling file/detail panes, container-responsive evidence, regular-weight type and desaturated semantic colors; SDK contracts unchanged |
 
 ## Local dashboard
 
@@ -100,11 +102,28 @@ read-only viewer. React + TypeScript with self-hosted Inter ships as bundled ass
 in the Python package; FastAPI/Uvicorn are behind the `dashboard` extra. The core
 retains no runtime dependencies. See [the confirmed surface brief](docs/dashboard-design.md).
 
-Navigation is Overview, Suites, Evaluations, Comparisons and Baselines. Dark is the
-default, with a persistent light toggle. Actual outcomes lead; cases, checks,
-expected/actual values and traces expand on demand. Forms and JSON edit suites;
-explicit Run/Save/Approve actions use SDK rules. Desktop tables become compact
-stacked result rows on narrow screens. No invented charts or hosted controls.
+Navigation is Overview, Suites, Evaluations, Comparisons and Baselines in a slim
+icon rail. A compact header names the scope and project. Saved files remain beside
+the inspector, each with its own scroll area, and the library can be hidden for
+more editing room. Narrow screens switch between list and detail with an explicit
+Back to files action. Container queries adapt forms/evidence to inspector width.
+
+The user's reference screenshots pin the visual world: warm neutral charcoal,
+thin dividers, regular-weight headings and restrained color. The outer canvas is
+`#171816`, content `#1F201E`, rail/library `#1B1C1A`, text `#D6D8D2`, and secondary
+text `#A5A89F`. Dashboard semantic accents are teal `#70C5B5`, blue `#82B4D6`, amber
+`#E4BB86`, and red `#E29B97`. The primary action uses a muted teal fill `#24545B`
+with light text `#D7EDEB`. Light mode uses warm off-white surfaces with dark semantic
+accents. Teal identifies active navigation and primary actions; blue identifies selected
+evidence, links and keyboard focus. Accents were strengthened slightly at the
+user's request while retaining the neutral surfaces. The CLI palette above remains
+unchanged. Status dots always carry words.
+
+Compact counts support the file list; readable outcomes lead details. The first
+problem and unsuccessful checks open into expected/actual evidence; metadata and
+raw input/output expand separately. Suite editing preserves drafts and refreshes
+fingerprints after saves. Explicit Run/Save/Compare/Review/Approve actions continue
+to use SDK rules. See the surface brief for layout, type scale and state coverage.
 
 The server uses a project-confined authenticated loopback session. Evaluation jobs
 run sequential SDK evaluations in managed subprocesses, with completed-case progress

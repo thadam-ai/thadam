@@ -149,24 +149,6 @@ export function RunPanel({
                                 placeholder="my_agent:run"
                             />
                         </Field>
-                        <Field label="Execution mode">
-                            <select
-                                value={mode}
-                                onChange={(e) => {
-                                    setMode(e.target.value);
-                                    if (
-                                        e.target.value === "factory" &&
-                                        attempts < 2
-                                    )
-                                        setAttempts(5);
-                                }}
-                            >
-                                <option value="shared">Shared callable</option>
-                                <option value="factory">
-                                    Fresh factory per invocation
-                                </option>
-                            </select>
-                        </Field>
                         <Field
                             label="Attempts"
                             hint="1 = single run; 2 or more = repeated evaluation."
@@ -180,36 +162,67 @@ export function RunPanel({
                                 }
                             />
                         </Field>
-                        <Field label="Application revision (optional)">
-                            <input
-                                value={revision}
-                                onChange={(e) => setRevision(e.target.value)}
-                                placeholder="Commit or application version"
-                            />
-                        </Field>
-                        <Field label="New report path">
-                            <input
-                                value={report}
-                                onChange={(e) => setReport(e.target.value)}
-                            />
-                        </Field>
-                        <Field label="Agent name">
-                            <div className="inline-field">
-                                <input
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                />
-                                <Button onClick={saveAgent}>
-                                    {saved ? (
-                                        <Check size={15} />
-                                    ) : (
-                                        <Save size={15} />
-                                    )}
-                                    Save agent
-                                </Button>
-                            </div>
-                        </Field>
                     </div>
+                    <details className="advanced-settings">
+                        <summary>
+                            Execution & save settings <ChevronRight size={14} />
+                        </summary>
+                        <div className="form-grid">
+                            <Field label="Execution mode">
+                                <select
+                                    value={mode}
+                                    onChange={(e) => {
+                                        setMode(e.target.value);
+                                        if (
+                                            e.target.value === "factory" &&
+                                            attempts < 2
+                                        )
+                                            setAttempts(5);
+                                    }}
+                                >
+                                    <option value="shared">
+                                        Shared callable
+                                    </option>
+                                    <option value="factory">
+                                        Fresh factory per invocation
+                                    </option>
+                                </select>
+                            </Field>
+                            <Field label="Application revision (optional)">
+                                <input
+                                    value={revision}
+                                    onChange={(e) =>
+                                        setRevision(e.target.value)
+                                    }
+                                    placeholder="Commit or application version"
+                                />
+                            </Field>
+                            <Field label="New report path">
+                                <input
+                                    value={report}
+                                    onChange={(e) => setReport(e.target.value)}
+                                />
+                            </Field>
+                            <Field label="Agent name">
+                                <div className="inline-field">
+                                    <input
+                                        value={name}
+                                        onChange={(e) =>
+                                            setName(e.target.value)
+                                        }
+                                    />
+                                    <Button onClick={saveAgent}>
+                                        {saved ? (
+                                            <Check size={15} />
+                                        ) : (
+                                            <Save size={15} />
+                                        )}
+                                        Save agent
+                                    </Button>
+                                </div>
+                            </Field>
+                        </div>
+                    </details>
                     <div className="form-footer">
                         <p>
                             Runs trusted Python code from this project.
@@ -351,60 +364,62 @@ export function EvaluationView({ data }: { data: Data }) {
         repeated = data.kind === "repeated_run";
     return (
         <>
-            <div className="result-summary">
-                <span className="result-verdict">
-                    <Badge
-                        status={
-                            c.errors ? "error" : c.failed ? "failed" : "passed"
-                        }
-                    />
-                </span>
-                <span>
-                    <strong className="teal">{c.passed}</strong> passed
-                </span>
-                <span>
-                    <strong className={c.failed ? "amber" : ""}>
-                        {c.failed}
-                    </strong>{" "}
-                    failed
-                </span>
-                <span>
-                    <strong className={c.errors ? "red" : ""}>
-                        {c.errors}
-                    </strong>{" "}
-                    errors
-                </span>
-                <span className="muted">{c.total} invocations</span>
-            </div>
-            <dl className="metadata">
-                <div>
-                    <dt>Suite</dt>
-                    <dd>
-                        {(data.suite || data.runs?.[0]?.suite)?.id ||
-                            "Not recorded"}
-                        {(data.suite || data.runs?.[0]?.suite)?.revision
-                            ? " · " +
-                              (data.suite || data.runs?.[0]?.suite).revision
-                            : ""}
-                    </dd>
+            <section className="run-outcome" aria-label="Evaluation result">
+                <h2 className={c.errors ? "red" : c.failed ? "amber" : "teal"}>
+                    {c.errors
+                        ? `${c.errors} ${repeated ? (c.errors === 1 ? "invocation" : "invocations") : c.errors === 1 ? "case" : "cases"} with errors`
+                        : c.failed
+                          ? `${c.failed} of ${c.total} ${repeated ? "invocations" : "cases"} failed`
+                          : `All ${c.total} ${repeated ? "invocations" : "cases"} passed`}
+                </h2>
+                <div className="outcome-counts">
+                    <span>
+                        <b>{c.passed}</b> passed
+                    </span>
+                    <span className={c.failed ? "amber" : ""}>
+                        <b>{c.failed}</b> failed
+                    </span>
+                    <span className={c.errors ? "red" : ""}>
+                        <b>{c.errors}</b> errors
+                    </span>
                 </div>
-                <div>
-                    <dt>Application revision</dt>
-                    <dd>{data.agent_revision || "Not recorded"}</dd>
-                </div>
-                <div>
-                    <dt>{repeated ? "Evaluation ID" : "Run ID"}</dt>
-                    <dd className="mono">{data.report_id || data.run_id}</dd>
-                </div>
-                {repeated && (
+            </section>
+            <details className="run-metadata">
+                <summary>
+                    Run details <ChevronRight size={14} />
+                </summary>
+                <dl className="metadata">
                     <div>
-                        <dt>Execution</dt>
+                        <dt>Suite</dt>
                         <dd>
-                            {data.attempts} attempts · {data.execution_mode}
+                            {(data.suite || data.runs?.[0]?.suite)?.id ||
+                                "Not recorded"}
+                            {(data.suite || data.runs?.[0]?.suite)?.revision
+                                ? " · " +
+                                  (data.suite || data.runs?.[0]?.suite).revision
+                                : ""}
                         </dd>
                     </div>
-                )}
-            </dl>
+                    <div>
+                        <dt>Application revision</dt>
+                        <dd>{data.agent_revision || "Not recorded"}</dd>
+                    </div>
+                    <div>
+                        <dt>{repeated ? "Evaluation ID" : "Run ID"}</dt>
+                        <dd className="mono">
+                            {data.report_id || data.run_id}
+                        </dd>
+                    </div>
+                    {repeated && (
+                        <div>
+                            <dt>Execution</dt>
+                            <dd>
+                                {data.attempts} attempts · {data.execution_mode}
+                            </dd>
+                        </div>
+                    )}
+                </dl>
+            </details>
             {repeated ? (
                 <RepeatedView data={data} />
             ) : (
@@ -418,16 +433,26 @@ export function CaseList({ cases }: { cases: Data[] }) {
     const [search, setSearch] = useState(""),
         [status, setStatus] = useState("all"),
         [page, setPage] = useState(0);
-    const filtered = cases.filter(
-        (test) =>
-            test.id.toLowerCase().includes(search.toLowerCase()) &&
-            (status === "all" || test.status === status),
-    );
+    const filtered = cases
+        .filter(
+            (test) =>
+                test.id.toLowerCase().includes(search.toLowerCase()) &&
+                (status === "all" || test.status === status),
+        )
+        .sort((a, b) => {
+            const priority = (status: string) =>
+                status === "error" ? 0 : status === "failed" ? 1 : 2;
+            return priority(a.status) - priority(b.status);
+        });
+    const firstProblem = filtered.find((test) => test.status !== "passed");
     return (
         <>
             <div className="section-heading">
-                <h2>Case evidence</h2>
-                <span>{cases.length} cases</span>
+                <h2>Cases</h2>
+                <span>
+                    {cases.length} cases
+                    {firstProblem ? " · failures first" : ""}
+                </span>
             </div>
             <div className="library-controls">
                 <div className="search">
@@ -458,7 +483,11 @@ export function CaseList({ cases }: { cases: Data[] }) {
                 </select>
             </div>
             {filtered.slice(page * 50, (page + 1) * 50).map((test) => (
-                <details className="case-evidence" key={test.id}>
+                <details
+                    className="case-evidence"
+                    key={test.id}
+                    open={test.id === firstProblem?.id}
+                >
                     <summary>
                         <ChevronRight size={16} />
                         <strong>{test.id}</strong>
@@ -496,16 +525,6 @@ export function CaseList({ cases }: { cases: Data[] }) {
 export function CaseEvidence({ test }: { test: Data }) {
     return (
         <div className="case-body">
-            <div className="evidence-pair">
-                <Json label="Input" value={test.input} />
-                {test.output_available ? (
-                    <Json label="Observed output" value={test.output} />
-                ) : (
-                    <div className="unavailable">
-                        Output unavailable. See recorded errors.
-                    </div>
-                )}
-            </div>
             {(test.errors || []).map((error: Data, i: number) => (
                 <ErrorBox
                     key={i}
@@ -518,7 +537,14 @@ export function CaseEvidence({ test }: { test: Data }) {
                     (check: Data) => check.id === definition.id,
                 );
                 return (
-                    <details className="check-evidence" key={definition.id}>
+                    <details
+                        className={
+                            "check-evidence " +
+                            (result && !result.passed ? "unmet" : "")
+                        }
+                        key={definition.id}
+                        open={!result?.passed}
+                    >
                         <summary>
                             <ChevronRight size={14} />
                             <strong>{definition.id}</strong>
@@ -570,6 +596,19 @@ export function CaseEvidence({ test }: { test: Data }) {
                     </details>
                 );
             })}
+            <details className="raw-detail invocation-io">
+                <summary>Invocation input and output</summary>
+                <div className="evidence-pair">
+                    <Json label="Input" value={test.input} />
+                    {test.output_available ? (
+                        <Json label="Observed output" value={test.output} />
+                    ) : (
+                        <div className="unavailable">
+                            Output unavailable. See recorded errors.
+                        </div>
+                    )}
+                </div>
+            </details>
             <TraceView test={test} />
         </div>
     );

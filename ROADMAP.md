@@ -3,25 +3,29 @@
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
 **Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, and the operational local dashboard are implemented.
-**Next build:** refine the dashboard's visual design and usability.
+**Next build:** async execution and bounded concurrency with explicit lifecycle and evidence contracts.
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
-## Next priority: dashboard design refinement
+## Dashboard design refinement
+
+**Status:** implemented. [Design and workflow guide](docs/dashboard-design.md).
 
 **Outcome:** make the functional dashboard feel intentionally designed, minimal,
 cohesive, and easy to understand, with a stronger Thadam identity.
 
-- [ ] Review the current screens for generic template styling, visual clutter, and unclear hierarchy.
-- [ ] Refine typography, spacing, alignment, navigation, and table density around the actual testing workflows.
-- [ ] Keep Thadam's teal/blue palette and clear amber failure/red error meanings consistent across both themes.
-- [ ] Improve labels, empty states, and progressive disclosure so results and next actions are immediately understandable.
-- [ ] Preserve every existing dashboard feature, SDK rule, and saved-evidence contract.
-- [ ] Validate the revised design with real suite-editing, evaluation, comparison, and baseline-review tasks on desktop and narrow screens.
+- [x] Review the current screens for generic template styling, visual clutter, and unclear hierarchy.
+- [x] Refine typography, spacing, alignment, navigation, and table density around the actual testing workflows.
+- [x] Keep Thadam's teal/blue palette and clear amber failure/red error meanings consistent across both themes.
+- [x] Improve labels, empty states, and progressive disclosure so results and next actions are immediately understandable.
+- [x] Preserve every existing dashboard feature, SDK rule, and saved-evidence contract.
+- [x] Validate the revised design with real suite-editing, evaluation, comparison, and baseline-review tasks on desktop and narrow screens.
 
-This is the next change, ahead of async execution and bounded concurrency. The
-current dashboard ships with its existing design; visual refinement is separate
-follow-up work.
+The dashboard follows the user-supplied warm charcoal workspace references: a
+slim icon rail, persistent file/detail panes, quiet typography and status dots.
+Compact counts, failure-first evidence, focused case editing and progressive
+execution settings remain available. Desktop and narrow layouts support
+both themes; SDK behavior and saved-artifact contracts remain unchanged.
 
 ## Local testing dashboard
 
