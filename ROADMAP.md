@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, and the operational local dashboard are implemented.
-**Next build:** reviewable AI-assisted test scenario suggestions (milestone 4).
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, and reviewable scenario suggestions are implemented.
+**Next build:** controlled tool failures and simulated environments (milestone 5).
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
@@ -125,14 +125,16 @@ require explicit acknowledgement; ordinary execution/comparison never approves.
 
 ## 4. Suggest test scenarios with AI
 
+**Status:** implemented with controlled-provider validation. Live ChatGPT sign-in and model requests still need an explicit manual check with an eligible account. [Guide and contracts](docs/milestones/04-scenario-suggestions.md).
+
 **Outcome:** a developer reviews generated scenarios and saves useful ones into a reusable suite.
 
-- [ ] Accept an agent description, tool schemas, behavior contracts, and existing cases.
-- [ ] Generate candidate normal, boundary, and failure cases through an explicit provider adapter.
-- [ ] Validate generated structure and retain generation metadata.
-- [ ] Make generated cases reviewable and editable before inclusion in an approved suite.
-- [ ] Reuse developer verifiers; require review of generated expected outcomes.
-- [ ] Keep saved suites runnable without the generation provider.
+- [x] Accept an agent description, tool schemas, behavior contracts, and existing cases.
+- [x] Generate candidate normal, boundary, and failure cases through an explicit provider adapter.
+- [x] Validate generated structure and retain generation metadata.
+- [x] Make generated cases reviewable and editable before inclusion in an approved suite.
+- [x] Reuse developer verifiers; require review of generated expected outcomes.
+- [x] Keep saved suites runnable without the generation provider.
 
 Generated expectations are proposals. Coverage and correctness still need a developer-defined contract or environment verifier.
 

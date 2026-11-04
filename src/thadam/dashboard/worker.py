@@ -30,6 +30,24 @@ def main() -> int:
 
     threading.Thread(target=watch_parent, daemon=True).start()
     try:
+        if specification.get("kind") == "generation":
+            from thadam.generation import suggest_cases, write_draft
+            from thadam.providers.openai import OpenAIProvider
+
+            provider = OpenAIProvider(
+                connection=specification["connection"], model=specification["model"]
+            )
+            try:
+                draft = suggest_cases(
+                    provider, specification["request"], source=specification["source"]
+                )
+                write_draft(draft, directory / "result.json")
+                return 0
+            except ValueError as error:
+                from thadam.reporting import write_json_artifact
+
+                write_json_artifact({"error": str(error)}, directory / "error.json")
+                return 2
         cases = load_suite(directory / "suite.json")
         completed = 0
 

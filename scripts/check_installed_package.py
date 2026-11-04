@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from thadam import (
+    GenerationResult,
     OutputEquals,
     SuiteIdentity,
     TestCase,
@@ -14,14 +15,20 @@ from thadam import (
     compare_repeated,
     compare_reports,
     load_baseline_review,
+    load_draft,
     load_reliability_comparison,
     load_repeated,
     load_report,
+    load_suite,
+    publish_draft,
     review_baseline,
+    review_candidate,
     run_repeated,
     run_suite,
+    suggest_cases,
     write_approved_baseline,
     write_baseline_review,
+    write_draft,
     write_reliability_comparison,
     write_repeated,
     write_report,
@@ -70,6 +77,44 @@ def main() -> None:
         write_reliability_comparison(reliability, comparison_path)
         if load_reliability_comparison(comparison_path).exit_code != 0:
             raise SystemExit("Installed reliability round trip failed comparison")
+
+        class ControlledProvider:
+            def generate(self, request):
+                return GenerationResult(
+                    [
+                        {
+                            "category": "normal",
+                            "rationale": "Controlled echo contract",
+                            "uncertainty": "",
+                            "case": {
+                                "id": "generated-echo",
+                                "input": 1,
+                                "assertions": [
+                                    {"id": "echo", "type": "output_equals", "expected": 1}
+                                ],
+                            },
+                        }
+                    ],
+                    "installed_fixture",
+                    "controlled",
+                )
+
+        draft = suggest_cases(
+            ControlledProvider(),
+            {
+                "description": "Echo agent",
+                "behavior": "Return input unchanged",
+                "examples": [{"input": 1, "output": 1}],
+                "count": 1,
+            },
+        )
+        draft_path = Path(directory) / "draft.json"
+        write_draft(draft, draft_path)
+        accepted = review_candidate(load_draft(draft_path), 0, decision="accepted")
+        suite_path = Path(directory) / "generated-suite.json"
+        publish_draft(accepted, suite_path, suite_id="generated", revision="v1")
+        if run_suite(lambda value: value, load_suite(suite_path)).summary.passed != 1:
+            raise SystemExit("Installed generation/review/suite round trip failed")
         for is_repeated in (False, True):
             execute = run_repeated if is_repeated else run_suite
             candidate = execute(lambda value: value, [case], suite=SuiteIdentity("installed", "v1"))

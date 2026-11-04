@@ -44,6 +44,7 @@ def create_app(root: str | Path, *, token: str | None = None) -> FastAPI:
     async def lifespan(_app):
         yield
         jobs.close()
+        app.state.signin.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.token, app.state.jobs, app.state.workspace = secret, jobs, workspace
@@ -185,6 +186,10 @@ def create_app(root: str | Path, *, token: str | None = None) -> FastAPI:
         with workspace.lock:
             write_approved_baseline(approval, destination)
         return workspace.read(body["baseline"])
+
+    from thadam.dashboard.generation_api import register_generation
+
+    register_generation(app, workspace, jobs)
 
     static = Path(__file__).parent / "static"
 

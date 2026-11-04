@@ -201,3 +201,14 @@ The build writes production assets and third-party notices to
 together. CI rebuilds and checks those assets, exercises dashboard workflows on
 Python 3.10 and 3.14, and keeps the core-only dependency checks separate. Reproduce
 workflow validation with actionlint after editing CI.
+
+## Suggest and review test cases
+
+Install the optional `ai` extra and open **Suites → Suggest** to use ChatGPT plan
+sign-in or your OpenAI API key. Models and billing paths are chosen explicitly.
+Preview selected outgoing context before generating. Drafts appear beside suites;
+review/edit and accept individual cases, then preview and explicitly save a suite.
+No agent is executed and no baseline is approved by generation or saving.
+See [scenario suggestions](milestones/04-scenario-suggestions.md) for connection,
+privacy, interruption, artifact and revision contracts, CLI/SDK examples, and a
+controlled demo requiring no subscription or network.

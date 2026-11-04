@@ -31,7 +31,7 @@ Ordinary report writes cannot replace approved baseline artifacts. Approval is a
 local review workflow, not identity authentication, an automatic CI update, or a
 GitHub merge.
 
-Synchronous engine APIs are sequential and execute trusted code in the current process; explicit async APIs bound cooperative case overlap. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. There is no enforced timeout, sandbox, scenario generator, or hidden-reasoning capture. Re-read the code before assuming an API exists.
+Synchronous engine APIs are sequential and execute trusted code in the current process; explicit async APIs bound cooperative case overlap. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. There is no enforced agent timeout, sandbox, or hidden-reasoning capture. Reviewable scenario suggestions are optional and do not execute agents. Re-read the code before assuming an API exists.
 
 ## Repository map
 
@@ -133,3 +133,22 @@ report. CLI `--async --max-concurrency N` and dashboard execution settings selec
 this path. Existing schemas and shared/factory modes remain unchanged. Scheduling
 settings are not serialized or automatically compared; callers must keep baseline
 and candidate scheduling consistent. LangGraph exposes an explicit async `ainvoke`.
+
+## Scenario generation
+
+Read `docs/milestones/04-scenario-suggestions.md`. `generation.py` owns reviewable
+schema-1 scenario drafts and explicit acceptance/save; `suite_writing.py` shares
+suite revision/fingerprint guards. OpenAI API-key and ChatGPT-plan connections are
+optional via `.[ai]`. Never import HTTPX/JWT from the core at module load time.
+Keep OAuth signature/issuer/audience/nonce, PKCE/state/replay, granted plan scopes,
+account binding, private user-level storage and serialized refresh guards intact.
+No credential belongs in project artifacts, browser storage, logs or diagnostics.
+Do not read Codex private tokens or use undocumented backend endpoints.
+
+Generation sends only explicit previewed context and has no tools or tested-agent
+execution. Preserve originals, review history, incomplete drafts, explicit per-case
+acceptance and separate suite saving. Never run tests or approve baselines as a
+side effect. Dashboard generation shares one active process and interruption rules.
+Tests use controlled HTTP/JWT fixtures without real keys or plan usage. Dashboard
+CI installs `.[dev,dashboard,ai]` to exercise optional authentication/provider checks.
+Live authentication and paid model generation remain explicit manual checks.

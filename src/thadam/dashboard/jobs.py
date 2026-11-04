@@ -109,54 +109,89 @@ class Jobs:
             if revision is not None and (not isinstance(revision, str) or not revision.strip()):
                 raise ValueError("Application revision must be non-empty or omitted")
             self.workspace.output(specification["report"])
-            identifier = uuid4().hex
-            self.directory = self.workspace.path(
-                f".thadam/dashboard/jobs/{identifier}", internal=True
+            return self._spawn(
+                specification, len(artifact["data"]["cases"]) * attempts, artifact["data"]
             )
-            self.directory.mkdir(parents=True)
-            write_json_artifact(specification, self.directory / "spec.json")
-            write_json_artifact(artifact["data"], self.directory / "suite.json")
-            self.active = {
-                "id": identifier,
-                "state": "running",
-                "started_at": time(),
-                "settings": specification,
-                "completed": 0,
-                "total": len(artifact["data"]["cases"]) * attempts,
-                "error": None,
-            }
+
+    def start_generation(self, specification: dict) -> dict:
+        from thadam.generation import validate_request
+        from thadam.providers.openai import OpenAIProvider
+
+        with self.lock:
+            self._refresh()
+            if self.process is not None:
+                raise ValueError("A job is already running. Wait for it or stop it first.")
+            if specification.keys() != {
+                "kind",
+                "connection",
+                "model",
+                "request",
+                "source",
+                "report",
+            }:
+                raise ValueError("Generation settings have missing or unknown fields")
+            specification = dict(specification)
+            specification["request"] = validate_request(specification["request"])
+            OpenAIProvider(connection=specification["connection"], model=specification["model"])
+            if specification["source"] is not None:
+                source = specification["source"]
+                if not isinstance(source, dict) or source.keys() != {"path", "fingerprint"}:
+                    raise ValueError("Choose a source suite and its fingerprint")
+                artifact = self.workspace.read(source["path"])
+                if artifact["kind"] != "suite" or source["fingerprint"] != artifact["fingerprint"]:
+                    raise ValueError("Source suite changed; reload before generating")
+                specification["source"] = {**source, "data": artifact["data"]}
+            self.workspace.output(specification["report"])
+            return self._spawn(specification, 1)
+
+    def _spawn(self, specification: dict, total: int, suite: dict | None = None) -> dict:
+        identifier = uuid4().hex
+        self.directory = self.workspace.path(f".thadam/dashboard/jobs/{identifier}", internal=True)
+        self.directory.mkdir(parents=True)
+        write_json_artifact(specification, self.directory / "spec.json")
+        if suite is not None:
+            write_json_artifact(suite, self.directory / "suite.json")
+        self.active = {
+            "id": identifier,
+            "state": "running",
+            "started_at": time(),
+            "settings": specification,
+            "completed": 0,
+            "total": total,
+            "error": None,
+        }
+        self._save()
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = (
+            str(Path(__file__).resolve().parents[2])
+            + os.pathsep
+            + environment.get("PYTHONPATH", "")
+        )
+        try:
+            self.process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    "thadam.dashboard.worker",
+                    str(self.directory),
+                ],
+                cwd=self.workspace.root,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=os.name != "nt",
+            )
+            threading.Thread(
+                target=self._capture,
+                args=(self.process, self.directory / "logs.txt"),
+                daemon=True,
+            ).start()
+        except OSError as error:
+            self.active.update(state="error", error=str(error))
             self._save()
-            environment = dict(os.environ)
-            environment["PYTHONPATH"] = (
-                str(Path(__file__).resolve().parents[2])
-                + os.pathsep
-                + environment.get("PYTHONPATH", "")
-            )
-            try:
-                self.process = subprocess.Popen(
-                    [
-                        sys.executable,
-                        "-u",
-                        "-m",
-                        "thadam.dashboard.worker",
-                        str(self.directory),
-                    ],
-                    cwd=self.workspace.root,
-                    env=environment,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    start_new_session=os.name != "nt",
-                )
-                threading.Thread(
-                    target=self._capture,
-                    args=(self.process, self.directory / "logs.txt"),
-                    daemon=True,
-                ).start()
-            except OSError as error:
-                self.active.update(state="error", error=str(error))
-                self._save()
-                raise
-            return dict(self.active)
+            raise
+        return dict(self.active)
 
     def _refresh(self):
         if not self.process or not self.active or not self.directory:
@@ -176,19 +211,27 @@ class Jobs:
             return
         if code in (0, 1):
             try:
-                evaluation = load_evaluation(self.directory / "result.json")
-                self.workspace.write_new(
-                    self.active["settings"]["report"], evaluation_to_dict(evaluation)
-                )
+                if self.active["settings"].get("kind") == "generation":
+                    from thadam.generation import load_draft
+
+                    result = load_draft(self.directory / "result.json")
+                else:
+                    evaluation = load_evaluation(self.directory / "result.json")
+                    result = evaluation_to_dict(evaluation)
+                self.workspace.write_new(self.active["settings"]["report"], result)
                 self.active.update(
                     state="completed", exit_code=code, completed=self.active["total"]
                 )
             except (ValueError, OSError) as error:
                 self.active.update(state="error", error=str(error))
         else:
-            self.active.update(
-                state="error", error="Evaluation could not complete. Inspect its logs and settings."
-            )
+            message = "Job could not complete. Inspect its logs and settings."
+            if self.active["settings"].get("kind") == "generation":
+                try:
+                    message = json.loads((self.directory / "error.json").read_text())["error"]
+                except (ValueError, OSError, KeyError):
+                    pass
+            self.active.update(state="error", error=message)
         self.active["finished_at"] = time()
         self._save()
         self.history.insert(0, dict(self.active))

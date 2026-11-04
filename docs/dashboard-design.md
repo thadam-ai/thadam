@@ -68,3 +68,18 @@ unsaved and stale edits, one active job with progress/logs, interruption, saved
 comparison, explicit approval, stale digest/destination and unavailable source run.
 Use controlled fixtures for browser and API verification. Existing SDK rules own
 all evaluation decisions. End users launch through `thadam dashboard` without Node.
+
+## Scenario suggestion extension
+
+THESIS: proposed tests stay beside saved suites, with a focused draft reviewer;
+no chat transcript or decorative AI dashboard is introduced.
+OWN-WORLD: retain Inter, warm charcoal/paper surfaces, thin dividers and existing
+teal actions, blue selection, amber review warnings and red errors.
+STORY: connect a chosen billing path, describe behavior, select context, inspect
+what will be sent, generate, review each proposal, preview and explicitly save.
+FIRST VIEWPORT: the inspector contains a compact heading, connection status and
+behavior fields; advanced JSON context expands below. Draft review uses the
+existing case-list/detail composition with a visible review decision per case.
+FORM: ordinary extension of the pinned Operate workspace; preserve its navigation,
+file library and responsive pane behavior. No new visual-world selection applies.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

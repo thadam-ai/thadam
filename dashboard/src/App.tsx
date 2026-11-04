@@ -10,6 +10,7 @@ import {
     FlaskConical,
     Folder,
     GitCompareArrows,
+    WandSparkles,
     LayoutDashboard,
     Moon,
     Play,
@@ -44,6 +45,7 @@ import {
 } from "./components";
 import { JobList, RunPanel } from "./evaluations";
 import { SuiteEditor } from "./suites";
+import { SuggestPanel, DraftReview } from "./generation";
 const pages = [
     "Overview",
     "Suites",
@@ -57,10 +59,11 @@ const icons = [
     FileJson,
     FlaskConical,
     GitCompareArrows,
+    WandSparkles,
     ShieldCheck,
 ];
 function pageFor(item: Item): Page {
-    return item.kind === "suite"
+    return ["suite", "scenario_draft"].includes(item.kind)
         ? "Suites"
         : item.kind.includes("comparison")
           ? "Comparisons"
@@ -87,9 +90,9 @@ export function App() {
     const [search, setSearch] = useState(""),
         [status, setStatus] = useState("all"),
         [jobs, setJobs] = useState<Data[]>([]);
-    const [action, setAction] = useState<"run" | "compare" | "review" | null>(
-        null,
-    );
+    const [action, setAction] = useState<
+        "run" | "compare" | "review" | "suggest" | null
+    >(null);
     const [newSuite, setNewSuite] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(true);
     const inspector = useRef<HTMLElement>(null);
@@ -233,7 +236,8 @@ export function App() {
     const items = (catalog?.items || []).filter(
         (item) =>
             page === "Overview" ||
-            (page === "Suites" && item.kind === "suite") ||
+            (page === "Suites" &&
+                ["suite", "scenario_draft"].includes(item.kind)) ||
             (page === "Evaluations" &&
                 ["run", "repeated_run"].includes(item.kind)) ||
             (page === "Comparisons" && item.kind.includes("comparison")) ||
@@ -274,14 +278,16 @@ export function App() {
         )
             setSelected(filtered[0].path);
     }, [page, catalog, selected, action, newSuite]);
-    function startAction(next: "run" | "compare" | "review") {
+    function startAction(next: "run" | "compare" | "review" | "suggest") {
         if (!canLeave()) return;
         setPage(
-            next === "run"
-                ? "Evaluations"
-                : next === "compare"
-                  ? "Comparisons"
-                  : "Baselines",
+            next === "suggest"
+                ? "Suites"
+                : next === "run"
+                  ? "Evaluations"
+                  : next === "compare"
+                    ? "Comparisons"
+                    : "Baselines",
         );
         setSelected(null);
         setArtifact(null);
@@ -474,6 +480,16 @@ export function App() {
                                 <span className="library-count">
                                     {items.length}
                                 </span>
+                                {page === "Suites" && (
+                                    <Button
+                                        quiet
+                                        disabled={!!active}
+                                        onClick={() => startAction("suggest")}
+                                    >
+                                        <WandSparkles size={13} />
+                                        Suggest
+                                    </Button>
+                                )}
                                 {page === "Suites" && (
                                     <Button
                                         quiet
@@ -701,15 +717,17 @@ export function App() {
                                     <span title={selected || undefined}>
                                         {selected
                                             ? titlePath(selected)
-                                            : action === "run"
-                                              ? "Run evaluation"
-                                              : action === "compare"
-                                                ? "Compare evaluations"
-                                                : action === "review"
-                                                  ? "Review baseline"
-                                                  : newSuite
-                                                    ? "New suite"
-                                                    : "Details"}
+                                            : action === "suggest"
+                                              ? "Suggest test cases"
+                                              : action === "run"
+                                                ? "Run evaluation"
+                                                : action === "compare"
+                                                  ? "Compare evaluations"
+                                                  : action === "review"
+                                                    ? "Review baseline"
+                                                    : newSuite
+                                                      ? "New suite"
+                                                      : "Details"}
                                     </span>
                                 </div>
                                 {artifact && !action && !newSuite && (
@@ -734,7 +752,35 @@ export function App() {
                                 className="inspector-content"
                                 ref={inspector}
                             >
-                                {action === "run" ? (
+                                {action === "suggest" ? (
+                                    <>
+                                        <SuggestPanel
+                                            catalog={catalog!}
+                                            active={!!active}
+                                            onDirty={(value) => {
+                                                dirty.current = value;
+                                            }}
+                                            onStarted={(job) =>
+                                                setJobs([job, ...jobs])
+                                            }
+                                        />
+                                        <JobList
+                                            jobs={jobs.filter(
+                                                (job) =>
+                                                    job.settings.kind ===
+                                                    "generation",
+                                            )}
+                                            onRefresh={refresh}
+                                            onOpen={(path) => {
+                                                if (canLeave()) {
+                                                    setAction(null);
+                                                    setSelected(path);
+                                                    refresh();
+                                                }
+                                            }}
+                                        />
+                                    </>
+                                ) : action === "run" ? (
                                     <>
                                         <RunPanel
                                             open
@@ -801,7 +847,20 @@ export function App() {
                                         )}
                                     </div>
                                 ) : artifact ? (
-                                    artifact.kind === "suite" ? (
+                                    artifact.kind === "scenario_draft" ? (
+                                        <DraftReview
+                                            key={artifact.path}
+                                            artifact={artifact}
+                                            onUpdated={(next) => {
+                                                setArtifact(next);
+                                                refresh();
+                                            }}
+                                            onSaved={saved}
+                                            onDirty={(value) => {
+                                                dirty.current = value;
+                                            }}
+                                        />
+                                    ) : artifact.kind === "suite" ? (
                                         <SuiteEditor
                                             key={
                                                 artifact.path +

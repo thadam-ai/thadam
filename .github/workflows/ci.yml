@@ -129,10 +129,10 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
       - name: Install the optional dashboard and test dependencies
-        run: python -m pip install -e '.[dev,dashboard]' httpx
+        run: python -m pip install -e '.[dev,dashboard,ai]'
       - name: Verify dashboard imports and dependency consistency
         run: |
-          python -c "import fastapi; import uvicorn; import thadam.dashboard.server"
+          python -c "import fastapi; import uvicorn; import httpx; import jwt; import thadam.dashboard.server"
           python -m pip check
       - name: Test dashboard workflows and core contracts
         run: python -m pytest -q tests examples/regression_test.py

@@ -137,7 +137,7 @@ intentional suite revisions require an explicit reviewed baseline transition.
 
 The optional dashboard is implemented with React/TypeScript source in `dashboard/`
 and a FastAPI/Uvicorn extra in `src/thadam/dashboard/`. Read [the guide](docs/dashboard.md)
-and [surface brief](docs/dashboard-design.md). Install `'.[dev,dashboard]'` and `httpx`
+and [surface brief](docs/dashboard-design.md). Install `'.[dev,dashboard,ai]'`
 for API tests. Core imports and core-only tests must not require these packages.
 
 From `dashboard/`, use Node 22 and run `npm ci`, `npm test`, `npm run format:check`,
@@ -154,3 +154,19 @@ baseline approval. Browser checks should cover the real controlled demo, desktop
 and narrow layouts, both themes, and result/evidence navigation. Approval and
 execution decisions stay in the SDK. Do not introduce automatic baseline updates
 or application imports during discovery.
+
+### Scenario generation checks
+
+Install `python -m pip install -e '.[dev,dashboard,ai]'` and run
+`python -m pytest -q tests/test_generation.py tests/test_openai_generation.py tests/test_generation_dashboard.py`.
+Provider tests use controlled HTTP streams and genuinely signed local JWT fixtures,
+never a live account. Dashboard jobs on Python 3.10/3.14 include the AI extra and
+verify optional imports; core-only jobs retain dependency-free imports and skip
+provider tests without their extras. Validate edited workflows with actionlint.
+
+Exercise reviewed exact content, missing/unsupported checks, duplicate IDs,
+source/draft/destination conflicts, suite revisions, interrupted generation and
+publication failure. OAuth checks must reject invalid signatures, issuer, audience,
+nonce/state, expired/replayed callbacks, lost plan scopes and account replacement.
+Credentials and raw remote error messages must not appear in public status or logs.
+Live ChatGPT sign-in or model generation is a separate explicit manual check.

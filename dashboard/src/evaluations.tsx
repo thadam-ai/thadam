@@ -317,7 +317,7 @@ export function JobList({
         <div className="job-list">
             {error && <ErrorBox error={error} />}
             <div className="section-heading">
-                <h2>Evaluation jobs</h2>
+                <h2>Local jobs</h2>
                 <small>
                     Progress and logs stay available across browser reloads
                 </small>
@@ -335,13 +335,15 @@ export function JobList({
                             )}
                         </span>
                         <div className="job-title">
-                            <strong>{job.settings.suite}</strong>
+                            <strong>
+                                {job.settings.kind === "generation"
+                                    ? "Scenario suggestions"
+                                    : job.settings.suite}
+                            </strong>
                             <small>
-                                {job.settings.reference} ·{" "}
-                                {job.settings.attempts}{" "}
-                                {job.settings.attempts === 1
-                                    ? "attempt"
-                                    : "attempts"}
+                                {job.settings.kind === "generation"
+                                    ? `${job.settings.model} · ${job.settings.request.count} suggestions requested`
+                                    : `${job.settings.reference} · ${job.settings.attempts} ${job.settings.attempts === 1 ? "attempt" : "attempts"}`}
                             </small>
                         </div>
                         <span className="job-count">
@@ -382,7 +384,11 @@ export function JobList({
                     </div>
                     {job.state === "running" && (
                         <progress
-                            aria-label="Evaluation progress"
+                            aria-label={
+                                job.settings.kind === "generation"
+                                    ? "Generation request progress"
+                                    : "Evaluation progress"
+                            }
                             max={job.total}
                             value={job.completed}
                         />
