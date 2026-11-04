@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Literal, TypeAlias, Union
+from typing import Awaitable, Callable, Literal, TypeAlias, Union
 from uuid import uuid4
 
 JSONValue: TypeAlias = Union[None, bool, int, float, str, list["JSONValue"], dict[str, "JSONValue"]]
@@ -103,6 +103,7 @@ class AgentResult:
 
 
 Agent: TypeAlias = Callable[[JSONValue], JSONValue | AgentResult]
+AsyncAgent: TypeAlias = Callable[[JSONValue], Awaitable[JSONValue | AgentResult]]
 
 
 @dataclass(frozen=True)

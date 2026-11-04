@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** milestones 1 and 2, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. Scenario generation, async execution, and hosted services remain planned.
+**Status:** milestones 1 and 2, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. Explicit async execution and bounded case concurrency are also implemented; scenario generation and hosted services remain planned.
 
 See [DESIGN.md](../DESIGN.md) for the agreed technology stack, rationale, and decision history.
 
@@ -145,7 +145,7 @@ lifecycle. The Python SDK still owns execution, assertions, comparison and appro
   completed artifact publication, history, explicit interruption and shutdown.
 - `worker.py`: validate snapshotted suites, import a deliberately selected agent,
   call the existing SDK and save internal completed evidence. Workers exit if their
-  parent server disappears; application code remains trusted and sequential.
+  parent server disappears; application code remains trusted; synchronous execution is sequential and async overlap is explicit.
 - `server.py`: optional FastAPI app, per-port ephemeral browser session, origin/path
   checks, explicit actions delegating SDK behavior, and packaged static assets.
 - `launch.py`: optional dependency handling, local link/browser launch and clean exit.
@@ -159,3 +159,14 @@ without changing serialized evidence or assertion outcomes. The dashboard never
 publishes an interrupted job as a completed report. Frontend development needs Node;
 end users receive bundled assets in the Python wheel and need only the optional
 Python server dependencies. See [the operating guide](dashboard.md).
+
+## Explicit async execution
+
+`run_suite_async` and `run_repeated_async` provide cooperative bounded case
+overlap; synchronous APIs retain their sequential defaults. Read [the async contract](milestones/03-async-execution.md).
+Async runs reuse the runner's validation, evidence and assertion helpers. Attempts
+remain ordered; cancellation/observer failure drains workers without a completed
+report. CLI `--async --max-concurrency N` and dashboard execution settings select
+this path. Existing schemas and shared/factory modes remain unchanged. Scheduling
+settings are not serialized or automatically compared; callers must keep baseline
+and candidate scheduling consistent. LangGraph exposes an explicit async `ainvoke`.

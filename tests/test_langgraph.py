@@ -427,3 +427,44 @@ def test_real_graph_reports_compare_tool_regressions_despite_identical_answers(t
     assert first.change == "regression"
     assert first.baseline.event_ids
     assert first.candidate.event_ids == ()
+
+
+def test_async_graph_invocations_keep_fresh_checkpoint_threads():
+    import asyncio
+
+    from thadam import run_suite_async
+
+    threads = []
+
+    async def node(state, config):
+        threads.append(config["configurable"]["thread_id"])
+        await asyncio.sleep(0)
+        return state
+
+    wrapped = LangGraphAgent(graph_with(node, checkpointer=InMemorySaver()))
+    report = asyncio.run(
+        run_suite_async(
+            wrapped.ainvoke,
+            [
+                AgentTestCase(str(i), {"value": i}, (OutputEquals("out", {"value": i}),))
+                for i in range(3)
+            ],
+            max_concurrency=2,
+        )
+    )
+    assert not report.has_failures
+    assert len(set(threads)) == 3
+    assert all(case.events == () and case.trace_complete for case in report.cases)
+
+
+def test_async_graph_tool_evidence_matches_sync_contract():
+    import asyncio
+
+    from thadam import run_suite_async
+
+    report = asyncio.run(
+        run_suite_async(agent.ainvoke, load_suite(ROOT / "examples/langgraph_cases.json"))
+    )
+    assert not report.has_failures
+    assert all(case.trace_complete for case in report.cases)
+    assert report.cases[0].assertions[-1].event_ids

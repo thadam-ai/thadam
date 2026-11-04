@@ -72,9 +72,20 @@ class Jobs:
             if self.process is not None:
                 raise ValueError("An evaluation is already running. Wait for it or stop it first.")
             allowed = {"suite", "reference", "mode", "attempts", "agent_revision", "report"}
-            if specification.keys() != allowed:
+            if not allowed <= specification.keys() or specification.keys() - allowed - {
+                "async_execution",
+                "max_concurrency",
+            }:
                 raise ValueError("Evaluation settings have missing or unknown fields")
             validate_json(specification, "evaluation settings")
+            async_execution = specification.get("async_execution", False)
+            limit = specification.get("max_concurrency", 1)
+            if type(async_execution) is not bool:
+                raise ValueError("async_execution must be a boolean")
+            if type(limit) is not int or limit < 1:
+                raise ValueError("max_concurrency must be a positive integer")
+            if not async_execution and limit != 1:
+                raise ValueError("Concurrency requires async execution")
             artifact = self.workspace.read(specification["suite"])
             if artifact["kind"] != "suite":
                 raise ValueError("Choose a test suite")

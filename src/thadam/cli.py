@@ -1,6 +1,7 @@
 """Command-line entry point; delegates execution and evaluation to the SDK."""
 
 import argparse
+import asyncio
 import importlib
 import shutil
 import sys
@@ -11,6 +12,7 @@ from pathlib import Path
 
 from thadam import __version__
 from thadam.adapters.python import validate_agent
+from thadam.async_runner import run_repeated_async, run_suite_async, validate_concurrency
 from thadam.baseline_cli import add_baseline_commands, handle_baseline_command
 from thadam.cli_help import HelpParser, help_color_mode
 from thadam.comparison import compare_reports
@@ -148,7 +150,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=(
             "Run your suite repeatedly to see how consistently each case/check passes.\n"
             "Inspect pass rates, varying outcomes, errors, and runtime.\n"
-            "Every attempt is retained in the saved report. Execution is sequential."
+            "Every attempt is retained. Execution is sequential unless --async is supplied."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
@@ -210,6 +212,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     reliability.add_argument(
         "--report", type=Path, help="Write a standalone reliability comparison"
     )
+    for execution in (run, repeat):
+        execution.add_argument(
+            "--async",
+            dest="async_execution",
+            action="store_true",
+            help="Await async agents (cooperative execution)",
+        )
+        execution.add_argument(
+            "--max-concurrency",
+            type=int,
+            default=1,
+            help="Async in-flight case limit (default: 1; requires --async)",
+        )
     baseline_commands = add_baseline_commands(commands)
     dashboard = commands.add_parser(
         "dashboard",
@@ -305,6 +320,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return comparison.exit_code
         if arguments.report and _same_file(arguments.report, arguments.suite):
             raise SuiteValidationError("Report destination must differ from the suite file")
+        validate_concurrency(arguments.max_concurrency)
+        if arguments.max_concurrency != 1 and not arguments.async_execution:
+            raise SuiteValidationError("--max-concurrency requires --async")
         cases = load_suite(arguments.suite)
         # Agent imports and execution may print; keep those logs out of the summary.
         with redirect_stdout(sys.stderr):
@@ -313,19 +331,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                 agent = None
                 if arguments.agent_factory:
                     factory = _load_reference(arguments.agent_factory)
-                    validate_factory(factory)
+                    validate_factory(factory, allow_async=arguments.async_execution)
                 else:
-                    agent = _load_agent(arguments.agent)
-                report = run_repeated(
+                    agent = _load_agent(arguments.agent, allow_async=arguments.async_execution)
+                report = (run_repeated_async if arguments.async_execution else run_repeated)(
                     agent,
                     cases,
                     attempts=arguments.attempts,
                     agent_factory=factory,
                     agent_revision=arguments.agent_revision,
+                    **(
+                        {"max_concurrency": arguments.max_concurrency}
+                        if arguments.async_execution
+                        else {}
+                    ),
                 )
             else:
-                agent = _load_agent(arguments.agent)
-                report = run_suite(agent, cases, agent_revision=arguments.agent_revision)
+                agent = _load_agent(arguments.agent, allow_async=arguments.async_execution)
+                report = (run_suite_async if arguments.async_execution else run_suite)(
+                    agent,
+                    cases,
+                    agent_revision=arguments.agent_revision,
+                    **(
+                        {"max_concurrency": arguments.max_concurrency}
+                        if arguments.async_execution
+                        else {}
+                    ),
+                )
+            if arguments.async_execution:
+                report = asyncio.run(report)
         if arguments.command == "repeat":
             print(
                 format_repeated(
@@ -378,9 +412,9 @@ def _same_file(destination: Path, source: Path) -> bool:
     )
 
 
-def _load_agent(reference: str) -> Agent:
+def _load_agent(reference: str, *, allow_async: bool = False) -> Agent:
     agent = _load_reference(reference)
-    validate_agent(agent)
+    validate_agent(agent, allow_async=allow_async)
     return agent
 
 

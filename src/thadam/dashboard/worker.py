@@ -1,5 +1,6 @@
 """A single explicitly requested evaluation in a separate trusted-code process."""
 
+import asyncio
 import json
 import os
 import sys
@@ -7,6 +8,7 @@ import threading
 import time
 from pathlib import Path
 
+from thadam.async_runner import run_repeated_async, run_suite_async
 from thadam.cli import _load_agent, _load_reference
 from thadam.repetition import run_repeated
 from thadam.repetition_reporting import write_repeated
@@ -47,30 +49,46 @@ def main() -> int:
                     + "\n"
                 )
 
+        async_execution = specification.get("async_execution", False)
+        options = (
+            {"max_concurrency": specification.get("max_concurrency", 1)} if async_execution else {}
+        )
+        repeat_runner = run_repeated_async if async_execution else run_repeated
+        suite_runner = run_suite_async if async_execution else run_suite
         reference = specification["reference"]
         revision = specification.get("agent_revision") or None
         if specification["attempts"] > 1 or specification["mode"] == "factory":
             if specification["mode"] == "factory":
-                result = run_repeated(
+                result = repeat_runner(
                     cases=cases,
                     agent_factory=_load_reference(reference),
                     attempts=specification["attempts"],
                     agent_revision=revision,
                     on_case_complete=progress,
+                    **options,
                 )
             else:
-                result = run_repeated(
-                    _load_agent(reference),
+                result = repeat_runner(
+                    _load_agent(reference, allow_async=async_execution),
                     cases,
                     attempts=specification["attempts"],
                     agent_revision=revision,
                     on_case_complete=progress,
+                    **options,
                 )
+            if async_execution:
+                result = asyncio.run(result)
             write_repeated(result, directory / "result.json")
         else:
-            result = run_suite(
-                _load_agent(reference), cases, agent_revision=revision, on_case_complete=progress
+            result = suite_runner(
+                _load_agent(reference, allow_async=async_execution),
+                cases,
+                agent_revision=revision,
+                on_case_complete=progress,
+                **options,
             )
+            if async_execution:
+                result = asyncio.run(result)
             write_report(result, directory / "result.json")
         return int(result.has_failures)
     except (Exception, SystemExit) as error:

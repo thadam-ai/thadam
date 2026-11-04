@@ -2,6 +2,7 @@
 
 __version__ = "0.3.0"
 
+from thadam.async_runner import AsyncAgentFactory, run_repeated_async, run_suite_async
 from thadam.baseline_approval import write_approved_baseline
 from thadam.baseline_reporting import write_baseline_review
 from thadam.baseline_review import (
@@ -36,6 +37,7 @@ from thadam.models import (
     Agent,
     AgentResult,
     AssertionResult,
+    AsyncAgent,
     CaseError,
     CaseResult,
     CheckDefinition,
@@ -80,6 +82,10 @@ from thadam.runner import run_suite
 from thadam.suites import TestSuite, load_suite
 
 __all__ = [
+    "AsyncAgent",
+    "AsyncAgentFactory",
+    "run_suite_async",
+    "run_repeated_async",
     "ApprovedBaseline",
     "BaselineReview",
     "ContractChange",

@@ -1,4 +1,4 @@
-"""Sequential case execution shared by Python callers and the CLI."""
+"""Sequential execution and case-evidence helpers shared with the async runner."""
 
 import inspect
 from collections.abc import Sequence
@@ -16,9 +16,11 @@ from thadam.events import snapshot_trace
 from thadam.models import (
     Agent,
     AgentResult,
+    AsyncAgent,
     CaseError,
     CaseResult,
     CaseStatus,
+    CheckDefinition,
     ExecutionEvent,
     RunReport,
     SuiteIdentity,
@@ -48,6 +50,31 @@ def run_suite(
     on_case_complete receives an independent completed-case snapshot after each
     invocation. Callback exceptions propagate; they do not become agent errors.
     """
+    identity, validated, definitions = _prepare_run(
+        agent, cases, agent_revision, suite, on_case_complete
+    )
+    results = []
+    for case, checks in zip(validated, definitions):
+        result = replace(_run_case(agent, case), check_definitions=checks)
+        results.append(result)
+        if on_case_complete is not None:
+            on_case_complete(deepcopy(result))
+    return RunReport(
+        cases=tuple(results),
+        agent_revision=agent_revision,
+        suite=identity,
+    )
+
+
+def _prepare_run(
+    agent: Agent | AsyncAgent,
+    cases: Sequence[TestCase],
+    agent_revision: str | None,
+    suite: SuiteIdentity | None,
+    on_case_complete: Callable[[CaseResult], None] | None,
+    *,
+    allow_async: bool = False,
+) -> tuple[SuiteIdentity | None, tuple[TestCase, ...], tuple[tuple[CheckDefinition, ...], ...]]:
     identity = suite_identity(cases, suite)
     if on_case_complete is not None and not callable(on_case_complete):
         raise SuiteValidationError("on_case_complete must be callable or None")
@@ -67,19 +94,9 @@ def run_suite(
         )
         for case in validate_suite(cases)
     )
-    validate_agent(agent)
+    validate_agent(agent, allow_async=allow_async)
     definitions = tuple(snapshot_definitions(case) for case in validated)
-    results = []
-    for case, checks in zip(validated, definitions):
-        result = replace(_run_case(agent, case), check_definitions=checks)
-        results.append(result)
-        if on_case_complete is not None:
-            on_case_complete(deepcopy(result))
-    return RunReport(
-        cases=tuple(results),
-        agent_revision=agent_revision,
-        suite=identity,
-    )
+    return identity, validated, definitions
 
 
 def _run_case(agent: Agent, case: TestCase) -> CaseResult:
@@ -87,22 +104,29 @@ def _run_case(agent: Agent, case: TestCase) -> CaseResult:
     try:
         output = agent(deepcopy(case.input))
     except (Exception, SystemExit) as error:
-        if isinstance(error, AgentExecutionError):
-            try:
-                events = snapshot_trace(error.events, error.trace_complete, error.trace_warnings)
-            except ValueError as trace_error:
-                return _execution_error(case, started, "trace", trace_error)
-            return _execution_error(
-                case,
-                started,
-                "agent",
-                error.original,
-                events=events,
-                trace_complete=error.trace_complete,
-                trace_warnings=tuple(error.trace_warnings),
-            )
-        return _execution_error(case, started, "agent", error)
+        return _agent_error(case, started, error)
+    return _finish_case(output, case, started)
 
+
+def _agent_error(case: TestCase, started: float, error: Exception | SystemExit) -> CaseResult:
+    if isinstance(error, AgentExecutionError):
+        try:
+            events = snapshot_trace(error.events, error.trace_complete, error.trace_warnings)
+        except ValueError as trace_error:
+            return _execution_error(case, started, "trace", trace_error)
+        return _execution_error(
+            case,
+            started,
+            "agent",
+            error.original,
+            events=events,
+            trace_complete=error.trace_complete,
+            trace_warnings=tuple(error.trace_warnings),
+        )
+    return _execution_error(case, started, "agent", error)
+
+
+def _finish_case(output: object, case: TestCase, started: float) -> CaseResult:
     events = None
     trace_complete = None
     trace_warnings = ()

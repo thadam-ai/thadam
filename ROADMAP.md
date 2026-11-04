@@ -3,7 +3,7 @@
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
 **Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, and the operational local dashboard are implemented.
-**Next build:** async execution and bounded concurrency with explicit lifecycle and evidence contracts.
+**Next build:** reviewable AI-assisted test scenario suggestions (milestone 4).
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
@@ -44,7 +44,7 @@ complete evidence, compare evaluations, and explicitly review/approve baselines.
 - [x] Provide controlled examples, API/browser validation, optional-extra CI and clean-wheel checks.
 
 The user expanded the originally read-only viewer to include these explicit local
-actions. Core execution remains sequential and trusted; the dashboard does not
+actions. Default execution remains sequential and trusted; async execution is explicit; the dashboard does not
 introduce hosted infrastructure, a sandbox or automatic baseline updates.
 
 ## Foundation: a repository humans and AI agents can navigate
@@ -111,7 +111,7 @@ Instrumentation must use explicit hooks or supported framework interfaces. A cus
 - [x] Define sequential shared-callable and per-invocation factory execution contracts, preserving evidence for every attempt.
 - [x] Add explicit suite revisions and a review workflow for intentional contract changes, with exact-evidence acknowledgement and guarded baseline promotion.
 - [x] Record missing/changed cases and evaluator errors explicitly rather than counting them as passes.
-- [ ] Add async execution and bounded concurrency when the adapter and report contracts can support them.
+- [x] Add explicit async SDK/CLI/dashboard execution and bounded per-attempt concurrency, preserving ordered evidence and cancellation cleanup. See [the async contract](docs/milestones/03-async-execution.md); scheduling settings remain caller-owned rather than serialized.
 
 Deterministic assertion logic does not make an LLM's execution deterministic. Reports must retain that distinction.
 
