@@ -11,12 +11,13 @@ awaits awaitable results; it does not put synchronous callables in threads.
 import asyncio
 from thadam import OutputEquals, TestCase, run_suite_async
 
+
 async def echo(value):
     await asyncio.sleep(0)
     return value
 
-cases = [TestCase("echo", {"message": "hello"},
-                  (OutputEquals("answer", {"message": "hello"}),))]
+
+cases = [TestCase("echo", {"message": "hello"}, (OutputEquals("answer", {"message": "hello"}),))]
 report = asyncio.run(run_suite_async(echo, cases, max_concurrency=4))
 assert not report.has_failures
 ```
