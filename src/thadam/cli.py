@@ -244,7 +244,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     dashboard.add_argument(
         "--no-browser", action="store_true", help="Print the link without opening the browser"
     )
-    for command in (run, compare, repeat, reliability, *baseline_commands, dashboard):
+    from thadam.generation_cli import add_generation_commands
+
+    generation_commands = add_generation_commands(commands)
+    for command in (
+        run,
+        compare,
+        repeat,
+        reliability,
+        *baseline_commands,
+        dashboard,
+        *generation_commands,
+    ):
         command.add_argument(
             "--verbose",
             action="store_true",
@@ -264,6 +275,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     style = terminal_style(arguments.color, sys.stdout)
 
     try:
+        if arguments.command in ("auth", "suggest", "review-draft", "save-draft"):
+            from thadam.generation_cli import handle_generation_command
+
+            return handle_generation_command(arguments)
         if arguments.command == "dashboard":
             if not 1 <= arguments.port <= 65535:
                 raise SuiteValidationError("Dashboard port must be between 1 and 65535")

@@ -70,6 +70,7 @@ export function outcome(
     item: Pick<Item, "kind" | "summary" | "exit_code">,
 ): string {
     if (item.kind === "suite") return "ready";
+    if (item.kind === "scenario_draft") return "review required";
     if (item.kind === "approved_baseline") return "approved";
     if (item.kind === "baseline_review")
         return item.exit_code ? "blocked" : "review required";
@@ -91,6 +92,7 @@ export const kindName: Record<string, string> = {
     comparison: "Regression comparison",
     reliability_comparison: "Reliability comparison",
     suite: "Test suite",
+    scenario_draft: "Scenario draft",
     baseline_review: "Baseline review",
     approved_baseline: "Approved baseline",
 };

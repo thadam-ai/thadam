@@ -137,3 +137,18 @@ pool. Synchronous APIs remain sequential; no thread-pool parallelism is implied.
 Reports retain their existing schemas and ordered evidence. Scheduling settings
 are caller-owned and not automatically checked by comparison; see the
 [async contract](docs/milestones/03-async-execution.md).
+
+## Scenario suggestion extension
+
+The existing Operate workspace extends Suites with a compact Suggest action,
+connection controls, explicit outgoing-context preview, and a list/detail draft
+reviewer. It retains Inter, warm neutral surfaces, shared spacing, semantic colors
+and narrow-screen pane behavior. No new visual world or decorative AI surface is
+introduced. Subscription use, API billing, unreviewed expectations and explicit
+suite saving have separate labels and actions.
+
+The provider-independent core owns drafts/review; optional HTTPX and PyJWT support
+OpenAI API-key and direct ChatGPT-plan access. Authentication is user-level local
+state, distinct from project evidence. Existing case/report schemas remain unchanged.
+Generated cases never become trusted checks without explicit review, and saved
+suites run without the generation provider. See the scenario guide for limitations.

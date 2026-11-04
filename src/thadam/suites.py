@@ -71,6 +71,12 @@ def load_suite(path: str | Path) -> tuple[TestCase, ...] | TestSuite:
     except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise SuiteValidationError(f"Cannot load suite {path}: {error}") from error
 
+    return suite_from_dict(data)
+
+
+def suite_from_dict(data: object) -> tuple[TestCase, ...] | TestSuite:
+    """Validate a saved suite object without file access or application imports."""
+
     version = data.get("schema_version") if isinstance(data, dict) else None
     if type(version) is not int or version not in (1, 2):
         raise SuiteValidationError("suite.schema_version must be the integer 1 or 2")

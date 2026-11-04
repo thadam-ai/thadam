@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** milestones 1 and 2, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. Explicit async execution and bounded case concurrency are also implemented; scenario generation and hosted services remain planned.
+**Status:** milestones 1 and 2, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. Explicit async execution and bounded case concurrency are also implemented; reviewable scenario generation is implemented; hosted services remain planned.
 
 See [DESIGN.md](../DESIGN.md) for the agreed technology stack, rationale, and decision history.
 
@@ -170,3 +170,28 @@ report. CLI `--async --max-concurrency N` and dashboard execution settings selec
 this path. Existing schemas and shared/factory modes remain unchanged. Scheduling
 settings are not serialized or automatically compared; callers must keep baseline
 and candidate scheduling consistent. LangGraph exposes an explicit async `ainvoke`.
+
+## Reviewable scenario generation
+
+`generation.py` owns explicit context validation, the `GenerationProvider` protocol,
+completed proposals, strict scenario-draft schema 1, exact-case review and suite
+composition. `suite_writing.py` shares revision/fingerprint guards across the SDK,
+CLI and dashboard. `suites.suite_from_dict` is the pure suite-loading boundary.
+`providers/openai.py` optionally handles Responses streaming, explicit API-key or
+ChatGPT access, model catalogs and sanitized failures; `chatgpt_auth.py` owns the
+loopback OAuth/PKCE listener and verified identity, and `credentials.py` owns private
+user-level storage and cross-process refresh serialization. Importing these modules
+does not connect or select a provider. The core retains no runtime dependencies.
+
+`generation_cli.py` translates connection, preview, generation, review and save
+commands. `dashboard/generation_api.py` exposes the same operations under local
+session/origin and project confinement controls. Generation shares the existing
+one-active-process job controller and never imports or executes tested application
+code. Stopped jobs cannot publish completed drafts. React's `generation.tsx` adds
+context preview, connection controls and a focused draft reviewer to Suites.
+
+See [scenario contracts](milestones/04-scenario-suggestions.md). Drafts preserve
+selected plaintext context, generation metadata and append-only exact-content
+review evidence; credentials remain outside projects. Suite/report/baseline
+schemas and evaluation rules are unchanged. A saved suite requires no generation
+provider; model-generated correctness remains a human-reviewed proposal.

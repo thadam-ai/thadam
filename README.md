@@ -47,6 +47,7 @@ for your own project and repeat launches.
 | I want to… | Guide |
 | --- | --- |
 | Connect an agent, write cases, or use the SDK | [Local runner and assertions](docs/milestones/01-local-runner.md) |
+| Suggest cases with ChatGPT or your OpenAI API key | [Reviewable scenario suggestions](docs/milestones/04-scenario-suggestions.md) |
 | Run async agents or overlap cases | [Async execution and concurrency](docs/milestones/03-async-execution.md) |
 | Trace a LangGraph agent and check tool calls | [LangGraph integration](docs/milestones/02-langgraph.md) |
 | Compare a baseline with a candidate | [Regression comparison](docs/milestones/03-regression-comparison.md) |

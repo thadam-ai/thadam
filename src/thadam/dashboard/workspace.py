@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from thadam._json import json_equal, read_json, validate_json
+from thadam._json import read_json, validate_json
 from thadam.baseline_review import approved_from_dict, review_from_dict, review_to_dict
 from thadam.comparison_loading import comparison_from_dict
 from thadam.comparison_reporting import comparison_to_dict
@@ -19,7 +19,7 @@ from thadam.repetition_loading import repeated_from_dict
 from thadam.repetition_reporting import repeated_to_dict
 from thadam.report_loading import report_from_dict
 from thadam.reporting import report_to_dict, write_json_artifact
-from thadam.suites import TestSuite, load_suite
+from thadam.suites import load_suite
 
 SKIP = {".git", ".venv", "venv", "node_modules", "build", "dist", "__pycache__"}
 MAX_FILE = 32 * 1024 * 1024
@@ -67,7 +67,11 @@ class Workspace:
             raise ValueError("Expected a Thadam JSON object")
         kind = raw.get("kind")
         digest = None
-        if kind == "repeated_run":
+        if kind == "scenario_draft":
+            from thadam.generation import validate_draft
+
+            data = validate_draft(raw)
+        elif kind == "repeated_run":
             data = repeated_to_dict(repeated_from_dict(raw))
         elif kind == "reliability_comparison":
             data = reliability_to_dict(load_reliability_comparison(path))
@@ -143,7 +147,7 @@ class Workspace:
                         if "run_id" in evaluation
                         else None
                     ),
-                    cases=len(evaluation.get("cases", [])),
+                    cases=len(evaluation.get("candidates", evaluation.get("cases", []))),
                 )
                 if artifact["kind"] == "suite":
                     artifact["suite"] = data.get("suite")
@@ -167,33 +171,10 @@ class Workspace:
             return self._save_suite(reference, data, expected)
 
     def _save_suite(self, reference: str, data: dict, expected: str | None) -> dict:
+        from thadam.suite_writing import save_suite
+
         path = self.path(reference)
-        if path.suffix != ".json":
-            raise ValueError("Save suites with a .json extension")
-        content = json.dumps(data, ensure_ascii=False, allow_nan=False)
-        # Reuse the suite boundary without importing any application code.
-        with NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json") as stream:
-            stream.write(content)
-            stream.flush()
-            loaded = load_suite(stream.name)
-        if fingerprint(path) != expected:
-            raise ValueError("This file changed since you opened it. Reload it or use Save as.")
-        if path.exists():
-            old = self.read(reference)
-            if old["kind"] != "suite":
-                raise ValueError("A suite cannot overwrite a report or baseline")
-            before = old["data"]
-            if before.get("suite"):
-                if not isinstance(loaded, TestSuite) or before["suite"]["id"] != loaded.identity.id:
-                    raise ValueError(
-                        "Keep the suite ID when editing; use Save as for a different suite"
-                    )
-                if (
-                    not json_equal(before["cases"], data["cases"])
-                    and before["suite"]["revision"] == loaded.identity.revision
-                ):
-                    raise ValueError("Change the suite revision before saving changed tests")
-        write_json_artifact(data, path)
+        save_suite(data, path, expected_fingerprint=expected)
         return self.read(reference)
 
     def output(self, reference: str) -> Path:
