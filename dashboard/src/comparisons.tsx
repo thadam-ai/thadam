@@ -49,11 +49,13 @@ export function EvaluationSelect({
 export function ComparePanel({
     catalog,
     onSaved,
+    initiallyOpen = false,
 }: {
     catalog: Catalog;
+    initiallyOpen?: boolean;
     onSaved: (path: string) => void;
 }) {
-    const [open, setOpen] = useState(false),
+    const [open, setOpen] = useState(initiallyOpen),
         [baseline, setBaseline] = useState(""),
         [candidate, setCandidate] = useState(""),
         [tolerance, setTolerance] = useState(0),
@@ -151,6 +153,48 @@ export function ComparePanel({
     );
 }
 
+export function comparisonResult(data: Data): {
+    regressed: number;
+    errors: number;
+    improved: number;
+    title: string;
+} {
+    const cases: Data[] = data.cases;
+    const regressed = cases.filter(
+        (test) =>
+            test.change === "regression" ||
+            test.checks.some((check: Data) => check.change === "regression"),
+    ).length;
+    const errors = cases.filter(
+        (test) =>
+            test.change === "error" ||
+            test.baseline_errors?.length ||
+            test.candidate_errors?.length ||
+            test.case_rate?.baseline.errors ||
+            test.case_rate?.candidate.errors ||
+            test.checks.some(
+                (check: Data) =>
+                    check.change === "error" ||
+                    check.baseline?.errors ||
+                    check.candidate?.errors,
+            ),
+    ).length;
+    const improved = cases.filter(
+        (test) => test.change === "fixed" || test.change === "improved",
+    ).length;
+    const title =
+        data.exit_code === 2
+            ? "Reports are incompatible"
+            : regressed
+              ? `${regressed} ${regressed === 1 ? "case" : "cases"} regressed`
+              : errors
+                ? `${errors} ${errors === 1 ? "case" : "cases"} with errors`
+                : data.exit_code
+                  ? "Comparison blocked"
+                  : "No new regressions";
+    return { regressed, errors, improved, title };
+}
+
 export function ComparisonView({
     data,
     catalog,
@@ -161,20 +205,43 @@ export function ComparisonView({
     onOpen: (item: Item) => void;
 }) {
     const repeated = data.kind === "reliability_comparison";
+    const result = comparisonResult(data);
     return (
         <>
-            <div className="comparison-policy">
-                <Badge
-                    status={
-                        data.exit_code === 2
-                            ? "incompatible"
-                            : data.exit_code
-                              ? "blocked"
-                              : "passed"
+            <section className="run-outcome" aria-label="Comparison result">
+                <h2
+                    className={
+                        data.exit_code === 2 || result.errors
+                            ? "red"
+                            : result.regressed
+                              ? "amber"
+                              : data.exit_code
+                                ? "red"
+                                : "teal"
                     }
-                />
+                >
+                    {result.title}
+                </h2>
+                <div className="outcome-counts">
+                    <span className={result.regressed ? "amber" : ""}>
+                        <b>{result.regressed}</b> regressed
+                    </span>
+                    <span>
+                        <b>{result.improved}</b> improved
+                    </span>
+                    <span className={result.errors ? "red" : ""}>
+                        <b>{result.errors}</b> with errors
+                    </span>
+                </div>
+            </section>
+            <div className="comparison-policy">
                 <span>
-                    Comparison exit code <strong>{data.exit_code}</strong>
+                    {data.exit_code === 2
+                        ? "Incompatible contracts"
+                        : data.exit_code
+                          ? "Gate blocked"
+                          : "Gate passed"}{" "}
+                    · exit code <strong>{data.exit_code}</strong>
                 </span>
                 {repeated && (
                     <span>
@@ -232,10 +299,40 @@ export function ComparisonView({
                 <span>{data.cases.length} cases</span>
             </div>
             {data.cases.map((test: Data) => (
-                <details className="case-evidence" key={test.id}>
+                <details
+                    className="case-evidence"
+                    key={test.id}
+                    open={
+                        test ===
+                        data.cases.find(
+                            (item: Data) =>
+                                [
+                                    "regression",
+                                    "error",
+                                    "incompatible",
+                                ].includes(item.change) ||
+                                item.checks.some((check: Data) =>
+                                    ["regression", "error"].includes(
+                                        check.change,
+                                    ),
+                                ),
+                        )
+                    }
+                >
                     <summary>
                         <ChevronRight size={15} />
                         <strong>{test.id}</strong>
+                        {!repeated && (
+                            <span className="case-transition">
+                                <span>
+                                    {test.baseline_status || "unavailable"}
+                                </span>
+                                <ArrowRight size={13} />
+                                <span>
+                                    {test.candidate_status || "unavailable"}
+                                </span>
+                            </span>
+                        )}
                         <Badge status={test.change.replaceAll("_", " ")} />
                     </summary>
                     <div className="case-body">

@@ -7,7 +7,7 @@ import {
     waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Artifact } from "./api";
+import { api, type Artifact } from "./api";
 import { SuiteEditor } from "./suites";
 
 vi.mock("./api", async (importOriginal) => ({
@@ -73,9 +73,8 @@ describe("suite editor state", () => {
                 }) as HTMLButtonElement
             ).disabled,
         ).toBe(true);
-        fireEvent.click(
-            screen.getAllByRole("button", { name: "Remove case" })[1],
-        );
+        fireEvent.click(screen.getByRole("button", { name: "Edit second" }));
+        fireEvent.click(screen.getByRole("button", { name: "Remove case" }));
         expect(
             (
                 screen.getByRole("button", {
@@ -88,6 +87,120 @@ describe("suite editor state", () => {
                 .getByRole("textbox", { name: "Input" })
                 .getAttribute("aria-invalid"),
         ).toBe("true");
+    });
+    it("retains unfinished JSON when switching cases and refuses to discard it through JSON view", () => {
+        editor();
+        fireEvent.change(screen.getByRole("textbox", { name: "Input" }), {
+            target: { value: '{"unfinished":' },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Edit second" }));
+        expect(
+            (
+                screen.getByRole("textbox", {
+                    name: "Input",
+                }) as HTMLTextAreaElement
+            ).value,
+        ).toContain('"a": 1');
+        expect(
+            (
+                screen.getByRole("button", {
+                    name: "Save changes",
+                }) as HTMLButtonElement
+            ).disabled,
+        ).toBe(true);
+        fireEvent.click(screen.getByRole("button", { name: /^JSON$/ }));
+        expect(screen.getByRole("alert").textContent).toContain(
+            "Fix invalid JSON fields",
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "Edit first, invalid JSON" }),
+        );
+        expect(
+            (
+                screen.getByRole("textbox", {
+                    name: "Input",
+                }) as HTMLTextAreaElement
+            ).value,
+        ).toBe('{"unfinished":');
+    });
+    it("saves edits from multiple cases with the original stale-write fingerprint", async () => {
+        vi.mocked(api).mockResolvedValueOnce(artifact);
+        editor();
+        fireEvent.change(screen.getByRole("textbox", { name: "Input" }), {
+            target: { value: '{"a": 2}' },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Edit second" }));
+        fireEvent.change(
+            screen.getByRole("textbox", { name: "Expected output" }),
+            { target: { value: '{"ok": false}' } },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+        await waitFor(() =>
+            expect(api).toHaveBeenCalledWith(
+                "suite",
+                {
+                    path: "cases.json",
+                    fingerprint: "old",
+                    data: {
+                        ...artifact.data,
+                        cases: [
+                            { ...artifact.data.cases[0], input: { a: 2 } },
+                            {
+                                ...artifact.data.cases[1],
+                                assertions: [
+                                    {
+                                        id: "out",
+                                        type: "output_equals",
+                                        expected: { ok: false },
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+                "PUT",
+            ),
+        );
+    });
+    it("selects a newly added case and returns to a neighbour when it is removed", () => {
+        editor();
+        fireEvent.click(screen.getByRole("button", { name: "Add case" }));
+        expect(
+            (
+                screen.getByRole("textbox", {
+                    name: "Case ID",
+                }) as HTMLInputElement
+            ).value,
+        ).toMatch(/^case-/);
+        fireEvent.click(screen.getByRole("button", { name: "Remove case" }));
+        expect(
+            (
+                screen.getByRole("textbox", {
+                    name: "Case ID",
+                }) as HTMLInputElement
+            ).value,
+        ).toBe("second");
+    });
+    it("keeps a case selected when full JSON removes the previously selected case", () => {
+        editor();
+        fireEvent.click(screen.getByRole("button", { name: "Edit second" }));
+        fireEvent.click(screen.getByRole("button", { name: /^JSON$/ }));
+        fireEvent.change(screen.getByRole("textbox", { name: "Suite JSON" }), {
+            target: {
+                value: JSON.stringify({
+                    ...artifact.data,
+                    cases: [artifact.data.cases[0]],
+                }),
+            },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Form" }));
+        expect(
+            (
+                screen.getByRole("textbox", {
+                    name: "Case ID",
+                }) as HTMLInputElement
+            ).value,
+        ).toBe("first");
     });
     it("does not transfer invalid JSON from a removed case to its neighbour", async () => {
         editor();

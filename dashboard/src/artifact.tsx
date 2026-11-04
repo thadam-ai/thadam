@@ -8,7 +8,7 @@ import {
 } from "./api";
 import { BaselineView } from "./baselines";
 import { ComparisonView } from "./comparisons";
-import { Badge } from "./components";
+import { Badge, titlePath } from "./components";
 import { EvaluationView } from "./evaluations";
 export function ArtifactView({
     artifact,
@@ -28,16 +28,27 @@ export function ArtifactView({
             <div className="page-heading">
                 <div>
                     <div className="title-with-badge">
-                        <h1>{kindName[artifact.kind] || "Saved evidence"}</h1>
-                        <Badge
-                            status={outcome({
-                                ...artifact,
-                                summary: value.summary,
-                                exit_code: data.exit_code,
-                            })}
-                        />
+                        <h1>
+                            {value.suite?.id ||
+                                value.runs?.[0]?.suite?.id ||
+                                titlePath(artifact.path)}
+                        </h1>
+                        {artifact.kind.includes("baseline") && (
+                            <Badge
+                                status={outcome({
+                                    ...artifact,
+                                    summary: value.summary,
+                                    exit_code: data.exit_code,
+                                })}
+                            />
+                        )}
                     </div>
-                    <p className="artifact-path">{artifact.path}</p>
+                    <p className="artifact-path">
+                        <span>
+                            {kindName[artifact.kind] || "Saved evidence"}
+                        </span>
+                        <span className="mono">{artifact.path}</span>
+                    </p>
                 </div>
             </div>
             {["baseline_review", "approved_baseline"].includes(

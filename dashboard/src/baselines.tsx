@@ -7,11 +7,13 @@ import { EvaluationView } from "./evaluations";
 export function ReviewPanel({
     catalog,
     onSaved,
+    initiallyOpen = false,
 }: {
     catalog: Catalog;
+    initiallyOpen?: boolean;
     onSaved: (artifact: Artifact) => void;
 }) {
-    const [open, setOpen] = useState(false),
+    const [open, setOpen] = useState(initiallyOpen),
         [baseline, setBaseline] = useState(""),
         [candidate, setCandidate] = useState(""),
         [path, setPath] = useState("artifacts/review-" + uid() + ".json"),

@@ -39,20 +39,41 @@ now. Add `[langgraph]` separately when your agent uses that optional adapter. Ag
 use the same Python environment as the server; install application dependencies
 there. Only the selected project is the worker's working directory.
 
+## Workspace layout
+
+The icon rail switches between Overview, Suites, Evaluations, Comparisons and
+Baselines; hover or focus an icon to see its label. The file list and selected
+report/editor stay side by side on desktop and scroll independently. Search and
+result filters stay with the list. Use **Hide file list** for a wider inspector.
+On narrow screens, select a file to open its detail, then **Back to files** to
+return. The rail stays available. File modification dates appear in the inspector
+footer; these are filesystem dates, not execution timestamps.
+
+**Run evaluation** opens configuration in the inspector. **Compare** in the
+Comparisons library and **Review** in Baselines open the corresponding forms.
+Opening any of these forms never runs an agent or writes evidence. Saving a suite
+refreshes its displayed evidence and stale-write fingerprint; navigation protects
+unsaved changes.
+
 ## Navigation
 
 - **Overview:** saved evaluation files, aggregate invocation counts, recent saved
   artifacts, search and result filters. Counts describe these files, not unique
-  production sessions or historical trends. Dates are filesystem modification times.
+  production sessions or historical trends. Filenames lead the evidence list, with suite/revision or artifact kind as
+  secondary context. The selected detail retains its full project-relative path. Dates are filesystem modification times.
 - **Suites:** discover schema-1/2 suites; create or edit cases, JSON inputs, expected
   outputs, required output keys, and required/forbidden/tool-argument assertions.
-  Switch between forms and JSON. Change an identified suite's revision when its
+  Select a case from the case list to edit it; unfinished JSON remains intact when
+  selecting another case, and invalid fields keep Save blocked. Fix invalid fields
+  before switching to full JSON view. Expand **Suite settings** for file location,
+  identity and revision. Change an identified suite's revision when its
   cases, inputs or checks change. Save validates the complete suite. Stale edits
   are refused; choose a new file path for Save as. Unsaved changes are guarded
   when navigating away or closing the browser.
 - **Evaluations:** configure a named `module:callable` agent without importing it;
   choose a suite, shared or factory mode, attempts, explicit application revision,
-  and a new report path. **Run evaluation** is the only action that imports or
+  and a new report path. Execution mode, application revision, report destination
+  and saved-agent naming are under **Execution & save settings**. **Run evaluation** is the only action that imports or
   executes application code. One attempt with a shared callable is a single run;
   two or more attempts produce a repeated evaluation. Factory mode requires at
   least two attempts, matching the repeated-run SDK/CLI workflow.
@@ -83,6 +104,13 @@ source runs are required to independently establish original contract compatibil
 
 Large integer IDs retain their exact JSON digits through viewing, editing and
 download; they are not rounded to browser floating-point values.
+
+Evaluation details lead with a readable outcome and counts. Run metadata expands
+under **Run details**. Cases are presented with errors/failures first; the first
+problem and its unsuccessful checks open immediately. **Invocation input and output**
+expands separately. Comparisons summarize regressed cases and cases with errors,
+including a newly failing check inside an already-errored case; the saved SDK gate
+result, every case classification and all evidence remain available.
 
 Case details include inputs, output availability, check declarations and outcomes,
 expected/actual values, event links, errors, and observable tool/model events.

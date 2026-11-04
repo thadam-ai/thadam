@@ -2,9 +2,10 @@ import {
     Activity,
     ArrowDownToLine,
     ArrowLeft,
-    ArrowRight,
     ChevronRight,
     CircleAlert,
+    PanelLeftClose,
+    PanelLeftOpen,
     FileJson,
     FlaskConical,
     Folder,
@@ -86,8 +87,12 @@ export function App() {
     const [search, setSearch] = useState(""),
         [status, setStatus] = useState("all"),
         [jobs, setJobs] = useState<Data[]>([]);
-    const [runOpen, setRunOpen] = useState(false),
-        [newSuite, setNewSuite] = useState(false);
+    const [action, setAction] = useState<"run" | "compare" | "review" | null>(
+        null,
+    );
+    const [newSuite, setNewSuite] = useState(false);
+    const [libraryOpen, setLibraryOpen] = useState(true);
+    const inspector = useRef<HTMLElement>(null);
     const [theme, setTheme] = useState(
         localStorage.getItem("thadam-theme") || "dark",
     );
@@ -95,6 +100,10 @@ export function App() {
     const lastCompleted = useRef("");
     const dirty = useRef(false);
     const [detailLoading, setDetailLoading] = useState(false);
+    useEffect(() => {
+        window.scrollTo(0, 0);
+        if (inspector.current) inspector.current.scrollTop = 0;
+    }, [page, selected, newSuite, action]);
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
         localStorage.setItem("thadam-theme", theme);
@@ -196,6 +205,7 @@ export function App() {
     }
     function navigate(next: Page) {
         if (!canLeave()) return;
+        setAction(null);
         setPage(next);
         setSelected(null);
         setArtifact(null);
@@ -204,8 +214,10 @@ export function App() {
         setNewSuite(false);
     }
     function open(item: Item) {
+        if (item.path === selected && !action && !newSuite) return;
         if (!canLeave()) return;
-        setPage(pageFor(item));
+        setAction(null);
+        if (page !== "Overview") setPage(pageFor(item));
         setSelected(item.path);
         setNewSuite(false);
         setError("");
@@ -251,6 +263,44 @@ export function App() {
         }),
         { passed: 0, failed: 0, errors: 0 },
     );
+    useEffect(() => {
+        if (
+            !selected &&
+            !action &&
+            !newSuite &&
+            filtered.length &&
+            window.innerWidth >= 960 &&
+            !dirty.current
+        )
+            setSelected(filtered[0].path);
+    }, [page, catalog, selected, action, newSuite]);
+    function startAction(next: "run" | "compare" | "review") {
+        if (!canLeave()) return;
+        setPage(
+            next === "run"
+                ? "Evaluations"
+                : next === "compare"
+                  ? "Comparisons"
+                  : "Baselines",
+        );
+        setSelected(null);
+        setArtifact(null);
+        setNewSuite(false);
+        setAction(next);
+        setSearch("");
+        setStatus("all");
+    }
+    async function saved(next: Artifact) {
+        dirty.current = false;
+        setAction(null);
+        setNewSuite(false);
+        if (page !== "Overview") setPage(pageFor(next));
+        setSelected(next.path);
+        setArtifact(next);
+        await refresh();
+    }
+    const PageIcon = icons[pages.indexOf(page)];
+    const showingDetail = !!selected || !!action || newSuite;
     return (
         <div className="app-shell">
             <a className="skip-link" href="#main">
@@ -260,29 +310,20 @@ export function App() {
                 <a
                     className="brand"
                     href="#"
-                    onClick={(e) => {
-                        e.preventDefault();
+                    aria-label="Thadam overview"
+                    title="Thadam · தடம்"
+                    onClick={(event) => {
+                        event.preventDefault();
                         navigate("Overview");
                     }}
                 >
-                    <span className="brand-mark">
-                        <Activity size={23} />
-                    </span>
-                    <span>
-                        THADAM
-                        <span className="brand-caption">
-                            Agent testing, with evidence.
-                        </span>
+                    <span className="brand-letter" lang="ta">
+                        த
                     </span>
                 </a>
-                <div className="workspace">
-                    <Folder size={16} />
-                    <span>{catalog?.name || "Local workspace"}</span>
-                    <span className="local-label">LOCAL</span>
-                </div>
                 <nav aria-label="Main navigation">
-                    {pages.map((name, i) => {
-                        const Icon = icons[i];
+                    {pages.map((name, index) => {
+                        const Icon = icons[index];
                         return (
                             <button
                                 key={name}
@@ -290,13 +331,15 @@ export function App() {
                                     "nav-item " +
                                     (page === name ? "active" : "")
                                 }
-                                onClick={() => navigate(name)}
+                                aria-label={name}
+                                title={name}
                                 aria-current={
                                     page === name ? "page" : undefined
                                 }
+                                onClick={() => navigate(name)}
                             >
-                                <Icon size={18} />
-                                {name}
+                                <Icon size={17} strokeWidth={1.5} />
+                                <span className="nav-label">{name}</span>
                                 {name === "Evaluations" && active && (
                                     <span className="live-dot" />
                                 )}
@@ -305,591 +348,584 @@ export function App() {
                     })}
                 </nav>
                 <div className="sidebar-bottom">
-                    <p>Every agent leaves a trace.</p>
-                    <div className="connection">
-                        <span className={connected ? "dot" : "dot off"} />
-                        {connected
-                            ? "Connected to your project"
-                            : "Waiting for connection"}
-                    </div>
-                    <div className="sidebar-controls">
-                        <Button
-                            quiet
-                            onClick={() =>
-                                setTheme(theme === "dark" ? "light" : "dark")
-                            }
-                        >
-                            {theme === "dark" ? (
-                                <Sun size={16} />
-                            ) : (
-                                <Moon size={16} />
-                            )}{" "}
-                            {theme === "dark" ? "Light mode" : "Dark mode"}
-                        </Button>
-                    </div>
+                    <span
+                        className={
+                            "session-dot " + (connected ? "connected" : "")
+                        }
+                        role="status"
+                        aria-label={
+                            connected
+                                ? "Local session connected"
+                                : "Not connected"
+                        }
+                        title={
+                            connected
+                                ? "Local session connected"
+                                : "Not connected"
+                        }
+                    />
+                    <button
+                        className="icon-button"
+                        aria-label={
+                            theme === "dark" ? "Light mode" : "Dark mode"
+                        }
+                        title={theme === "dark" ? "Light mode" : "Dark mode"}
+                        onClick={() =>
+                            setTheme(theme === "dark" ? "light" : "dark")
+                        }
+                    >
+                        {theme === "dark" ? (
+                            <Sun size={16} strokeWidth={1.5} />
+                        ) : (
+                            <Moon size={16} strokeWidth={1.5} />
+                        )}
+                    </button>
                 </div>
             </aside>
             <div className="workspace-shell">
                 <header className="topbar">
-                    <span>
-                        <Folder size={15} />
+                    <div className="workspace-breadcrumb">
+                        <PageIcon size={15} strokeWidth={1.5} />
+                        <strong>
+                            {page === "Overview" ? "Project evidence" : page}
+                        </strong>
+                        <ChevronRight size={12} />
                         <span className="project-path" title={catalog?.root}>
-                            {catalog?.name || "Your project"}
+                            {catalog?.name || "Local project"}
                         </span>
-                        <ChevronRight size={14} />
-                        <strong>{page}</strong>
-                    </span>
+                    </div>
                     <div className="topbar-actions">
+                        {active && (
+                            <button
+                                className="active-job-link"
+                                onClick={() => startAction("run")}
+                            >
+                                <Activity size={13} />
+                                {active.completed}/{active.total} running
+                            </button>
+                        )}
                         <button
-                            className="icon-button mobile-theme"
-                            aria-label={
-                                theme === "dark" ? "Light mode" : "Dark mode"
-                            }
-                            onClick={() =>
-                                setTheme(theme === "dark" ? "light" : "dark")
-                            }
-                        >
-                            {theme === "dark" ? (
-                                <Sun size={16} />
-                            ) : (
-                                <Moon size={16} />
-                            )}
-                        </button>
-                        <span className="local-indicator">Local workspace</span>
-                        <Button
-                            quiet
-                            onClick={refresh}
-                            disabled={busy || !connected}
+                            className="icon-button"
+                            aria-label="Refresh saved files"
                             title="Refresh saved files"
+                            disabled={busy || !connected}
+                            onClick={refresh}
                         >
                             <RefreshCw
-                                size={16}
+                                size={14}
                                 className={busy ? "spin" : ""}
                             />
-                            <span>Refresh</span>
-                        </Button>
+                        </button>
                         <Button
                             primary
-                            onClick={() => {
-                                navigate("Evaluations");
-                                setRunOpen(true);
-                            }}
+                            onClick={() => startAction("run")}
                             disabled={!connected || !!active}
                         >
-                            <Play size={14} />
+                            <Play size={12} />
                             Run evaluation
                         </Button>
                     </div>
                 </header>
-                <main id="main">
-                    {error && (
-                        <div className="dismiss-error">
-                            <ErrorBox error={error} />
-                            <button
-                                aria-label="Dismiss error"
-                                onClick={() => setError("")}
-                            >
-                                <X size={16} />
-                            </button>
-                        </div>
-                    )}
-                    {loading ? (
-                        <div className="loading" role="status">
-                            <RefreshCw className="spin" size={22} />
-                            Opening your workspace…
-                        </div>
-                    ) : !connected ? (
-                        <Empty title="Connect to your local project">
-                            Keep the dashboard terminal open and use the link it
-                            prints. Reports and agent code stay on your
-                            computer.
-                        </Empty>
-                    ) : (
-                        <>
-                            {active && (
-                                <div className="running-banner">
-                                    <Activity size={17} />
-                                    <div>
-                                        <strong>Evaluation running</strong>
-                                        <span>
-                                            {active.completed}/{active.total}{" "}
-                                            invocations completed
-                                            {active.case
-                                                ? " · " + active.case
-                                                : ""}
-                                        </span>
-                                    </div>
+                {error && (
+                    <div className="dismiss-error">
+                        <ErrorBox error={error} />
+                        <button
+                            className="icon-button"
+                            aria-label="Dismiss error"
+                            onClick={() => setError("")}
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                )}
+                {!connected ? (
+                    <main id="main" className="connection-state">
+                        {loading ? (
+                            <div className="loading" role="status">
+                                <RefreshCw size={17} className="spin" />
+                                Opening project…
+                            </div>
+                        ) : (
+                            <Empty title="Connect to your local project">
+                                Keep the dashboard terminal open and use the
+                                link it prints.
+                            </Empty>
+                        )}
+                    </main>
+                ) : (
+                    <main
+                        id="main"
+                        className={
+                            "workbench " +
+                            (showingDetail ? "detail-open " : "") +
+                            (!libraryOpen ? "library-collapsed" : "")
+                        }
+                    >
+                        <section
+                            className="artifact-library"
+                            aria-label="Saved evidence"
+                        >
+                            <div className="library-heading">
+                                <h1>
+                                    {page === "Overview"
+                                        ? "Saved evidence"
+                                        : page}
+                                </h1>
+                                <span className="library-count">
+                                    {items.length}
+                                </span>
+                                {page === "Suites" && (
                                     <Button
                                         quiet
                                         onClick={() => {
-                                            navigate("Evaluations");
+                                            if (canLeave()) {
+                                                setNewSuite(true);
+                                                setSelected(null);
+                                                setArtifact(null);
+                                                setAction(null);
+                                            }
                                         }}
                                     >
-                                        View progress
-                                        <ArrowRight size={14} />
+                                        <Plus size={13} />
+                                        New
                                     </Button>
+                                )}
+                                {page === "Comparisons" && (
+                                    <Button
+                                        quiet
+                                        onClick={() => startAction("compare")}
+                                    >
+                                        <Plus size={13} />
+                                        Compare
+                                    </Button>
+                                )}
+                                {page === "Baselines" && (
+                                    <Button
+                                        quiet
+                                        onClick={() => startAction("review")}
+                                    >
+                                        <Plus size={13} />
+                                        Review
+                                    </Button>
+                                )}
+                            </div>
+                            <div className="library-controls">
+                                <div className="search">
+                                    <Search size={13} />
+                                    <input
+                                        aria-label="Search saved files"
+                                        placeholder="Search files, suites, revisions…"
+                                        value={search}
+                                        onChange={(event) =>
+                                            setSearch(event.target.value)
+                                        }
+                                    />
+                                    {search && (
+                                        <button
+                                            aria-label="Clear search"
+                                            onClick={() => setSearch("")}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    )}
+                                </div>
+                                <select
+                                    aria-label="Filter by result"
+                                    value={status}
+                                    onChange={(event) =>
+                                        setStatus(event.target.value)
+                                    }
+                                >
+                                    {[
+                                        "all",
+                                        "passed",
+                                        "failed",
+                                        "error",
+                                        "blocked",
+                                        "incompatible",
+                                        "ready",
+                                        "approved",
+                                        "review required",
+                                    ].map((value) => (
+                                        <option key={value} value={value}>
+                                            {value === "all"
+                                                ? "All results"
+                                                : value}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            {page === "Overview" && (
+                                <div
+                                    className="library-summary"
+                                    title="Invocation counts across saved evaluation files; every repeated attempt counts."
+                                >
+                                    <span>
+                                        {evaluations.length} evaluations
+                                    </span>
+                                    <span>
+                                        <b className="teal">{totals.passed}</b>{" "}
+                                        passed
+                                    </span>
+                                    <span>
+                                        <b
+                                            className={
+                                                totals.failed ? "amber" : ""
+                                            }
+                                        >
+                                            {totals.failed}
+                                        </b>{" "}
+                                        failed
+                                    </span>
+                                    <span>
+                                        <b
+                                            className={
+                                                totals.errors ? "red" : ""
+                                            }
+                                        >
+                                            {totals.errors}
+                                        </b>{" "}
+                                        errors
+                                    </span>
                                 </div>
                             )}
-                            {selected && !artifact ? (
-                                detailLoading ? (
-                                    <div className="loading">
-                                        Loading saved evidence…
-                                    </div>
-                                ) : (
-                                    <Empty
-                                        title="This artifact could not be opened"
-                                        action={
-                                            <Button
-                                                onClick={() => navigate(page)}
-                                            >
-                                                Back to files
-                                            </Button>
-                                        }
-                                    >
-                                        Check the error above, then refresh or
-                                        choose another file.
-                                    </Empty>
-                                )
-                            ) : artifact ? (
-                                <>
-                                    <div className="detail-toolbar">
-                                        <Button
-                                            quiet
-                                            onClick={() => {
-                                                if (canLeave()) {
-                                                    setSelected(null);
-                                                    setArtifact(null);
-                                                }
-                                            }}
-                                        >
-                                            <ArrowLeft size={15} />
-                                            Back to {page.toLowerCase()}
-                                        </Button>
-                                        <div>
-                                            <Copy
-                                                value={artifact.path}
-                                                label="Copy path"
-                                            />
-                                            <Button
-                                                quiet
-                                                onClick={() =>
-                                                    exportArtifact(artifact)
-                                                }
-                                            >
-                                                <ArrowDownToLine size={15} />
-                                                Download JSON
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    {artifact.kind === "suite" ? (
-                                        <SuiteEditor
-                                            onDirty={(value) => {
-                                                dirty.current = value;
-                                            }}
-                                            key={artifact.path}
-                                            artifact={artifact}
-                                            onSaved={async (data) => {
-                                                dirty.current = false;
-                                                await refresh();
-                                                setArtifact(data);
-                                                setSelected(data.path);
-                                            }}
-                                        />
-                                    ) : (
-                                        <ArtifactView
-                                            artifact={artifact}
-                                            catalog={catalog!}
-                                            onOpen={open}
-                                            onSaved={async (data) => {
-                                                await refresh();
-                                                open(data);
-                                            }}
-                                        />
-                                    )}
-                                </>
-                            ) : newSuite ? (
-                                <SuiteEditor
-                                    onDirty={(value) => {
-                                        dirty.current = value;
-                                    }}
-                                    onSaved={async (data) => {
-                                        dirty.current = false;
-                                        await refresh();
-                                        open(data);
-                                    }}
+                            <div className="library-column-labels">
+                                <span>File / suite</span>
+                                <span>Result · runtime</span>
+                            </div>
+                            <div className="library-scroll">
+                                <ArtifactList
+                                    items={filtered}
+                                    selected={selected}
+                                    onOpen={open}
                                 />
-                            ) : (
-                                <>
-                                    <div className="page-heading">
-                                        <div>
-                                            <h1>
-                                                {page === "Overview"
-                                                    ? "A clear view of your agents."
-                                                    : page}
-                                            </h1>
-                                            <p>
-                                                {page === "Overview"
-                                                    ? "Run with confidence. Find what changed. Follow the evidence."
-                                                    : page === "Suites"
-                                                      ? "Define the behavior your agent should meet."
-                                                      : page === "Evaluations"
-                                                        ? "Every case, every attempt, and the evidence behind it."
-                                                        : page === "Comparisons"
-                                                          ? "Understand what improved, what regressed, and what changed."
-                                                          : "Review the evidence before accepting a new baseline."}
-                                            </p>
-                                        </div>
+                                {!filtered.length && (
+                                    <div className="library-empty">
+                                        <p>
+                                            {search || status !== "all"
+                                                ? "No matching files"
+                                                : "No saved evidence yet"}
+                                        </p>
+                                        <small>
+                                            {search || status !== "all"
+                                                ? "Try another search or All results."
+                                                : "Save a suite or report in this project, then refresh."}
+                                        </small>
                                         {page === "Suites" && (
                                             <Button
-                                                primary
-                                                onClick={() =>
-                                                    setNewSuite(true)
-                                                }
+                                                onClick={() => {
+                                                    if (canLeave()) {
+                                                        setNewSuite(true);
+                                                        setSelected(null);
+                                                        setArtifact(null);
+                                                        setAction(null);
+                                                    }
+                                                }}
                                             >
-                                                <Plus size={15} />
-                                                New suite
+                                                <Plus size={13} />
+                                                Create a suite
                                             </Button>
                                         )}
                                     </div>
-                                    {page === "Overview" && (
-                                        <>
-                                            <div className="metric-strip">
-                                                <div>
-                                                    <span>
-                                                        Saved evaluations
-                                                    </span>
-                                                    <strong>
-                                                        {evaluations.length}
-                                                    </strong>
-                                                    <small>
-                                                        Single and repeated
-                                                        report files
-                                                    </small>
-                                                </div>
-                                                <div>
-                                                    <span>
-                                                        Passed invocations
-                                                    </span>
-                                                    <strong className="teal">
-                                                        {totals.passed}
-                                                    </strong>
-                                                    <small>
-                                                        All checks passed
-                                                    </small>
-                                                </div>
-                                                <div>
-                                                    <span>
-                                                        Failed invocations
-                                                    </span>
-                                                    <strong
-                                                        className={
-                                                            totals.failed
-                                                                ? "amber"
-                                                                : ""
-                                                        }
-                                                    >
-                                                        {totals.failed}
-                                                    </strong>
-                                                    <small>
-                                                        Expectations unmet
-                                                    </small>
-                                                </div>
-                                                <div>
-                                                    <span>
-                                                        Execution errors
-                                                    </span>
-                                                    <strong
-                                                        className={
-                                                            totals.errors
-                                                                ? "red"
-                                                                : ""
-                                                        }
-                                                    >
-                                                        {totals.errors}
-                                                    </strong>
-                                                    <small>
-                                                        Execution or evaluation
-                                                        errors
-                                                    </small>
-                                                </div>
+                                )}
+                                {!!catalog?.invalid.length && (
+                                    <details className="invalid-files">
+                                        <summary>
+                                            <CircleAlert size={13} />
+                                            {catalog.invalid.length} files need
+                                            attention
+                                        </summary>
+                                        {catalog.invalid.map((item) => (
+                                            <div key={item.path}>
+                                                <strong>{item.path}</strong>
+                                                <p>{item.error}</p>
                                             </div>
-                                            <div className="section-heading">
-                                                <h2>Recent activity</h2>
-                                                <span>
-                                                    {catalog?.items.length || 0}{" "}
-                                                    saved artifacts
-                                                </span>
-                                            </div>
-                                        </>
-                                    )}
-                                    {page === "Evaluations" && (
-                                        <>
-                                            <RunPanel
-                                                open={runOpen}
-                                                onToggle={() =>
-                                                    setRunOpen(!runOpen)
-                                                }
-                                                catalog={catalog!}
-                                                active={!!active}
-                                                onStarted={(job) => {
-                                                    setJobs([job, ...jobs]);
-                                                    setRunOpen(false);
-                                                }}
-                                            />
-                                            {jobs.length > 0 && (
-                                                <JobList
-                                                    jobs={jobs}
-                                                    onRefresh={refresh}
-                                                    onOpen={(path) => {
-                                                        refresh();
-                                                        setSelected(path);
-                                                    }}
-                                                />
-                                            )}
-                                        </>
-                                    )}
-                                    {page === "Comparisons" && (
-                                        <ComparePanel
-                                            catalog={catalog!}
-                                            onSaved={async (path) => {
-                                                await refresh();
-                                                setSelected(path);
-                                            }}
+                                        ))}
+                                    </details>
+                                )}
+                            </div>
+                            <div className="library-footer">
+                                <span>
+                                    {filtered.length}{" "}
+                                    {filtered.length === 1 ? "file" : "files"}
+                                </span>
+                                <span title={catalog?.root}>
+                                    <Folder size={11} />
+                                    Local project
+                                </span>
+                            </div>
+                        </section>
+                        <section
+                            className="detail-pane"
+                            aria-label="Selected evidence"
+                        >
+                            <div className="inspector-toolbar">
+                                <div className="inspector-location">
+                                    <button
+                                        className="icon-button desktop-pane-toggle"
+                                        aria-label={
+                                            libraryOpen
+                                                ? "Hide file list"
+                                                : "Show file list"
+                                        }
+                                        title={
+                                            libraryOpen
+                                                ? "Hide file list"
+                                                : "Show file list"
+                                        }
+                                        onClick={() =>
+                                            setLibraryOpen(!libraryOpen)
+                                        }
+                                    >
+                                        {libraryOpen ? (
+                                            <PanelLeftClose size={14} />
+                                        ) : (
+                                            <PanelLeftOpen size={14} />
+                                        )}
+                                    </button>
+                                    <button
+                                        className="icon-button mobile-back"
+                                        aria-label="Back to files"
+                                        onClick={() => {
+                                            if (canLeave()) {
+                                                setSelected(null);
+                                                setArtifact(null);
+                                                setAction(null);
+                                                setNewSuite(false);
+                                                setLibraryOpen(true);
+                                            }
+                                        }}
+                                    >
+                                        <ArrowLeft size={15} />
+                                    </button>
+                                    <span title={selected || undefined}>
+                                        {selected
+                                            ? titlePath(selected)
+                                            : action === "run"
+                                              ? "Run evaluation"
+                                              : action === "compare"
+                                                ? "Compare evaluations"
+                                                : action === "review"
+                                                  ? "Review baseline"
+                                                  : newSuite
+                                                    ? "New suite"
+                                                    : "Details"}
+                                    </span>
+                                </div>
+                                {artifact && !action && !newSuite && (
+                                    <div className="inspector-actions">
+                                        <Copy
+                                            value={artifact.path}
+                                            label="Copy path"
                                         />
-                                    )}
-                                    {page === "Baselines" && (
-                                        <ReviewPanel
-                                            catalog={catalog!}
-                                            onSaved={async (data) => {
-                                                await refresh();
-                                                open(data);
-                                            }}
-                                        />
-                                    )}
-                                    <div className="library-controls">
-                                        <div className="search">
-                                            <Search size={16} />
-                                            <input
-                                                aria-label="Search saved files"
-                                                value={search}
-                                                onChange={(e) =>
-                                                    setSearch(e.target.value)
-                                                }
-                                                placeholder="Search by file, suite, or revision…"
-                                            />
-                                            {search && (
-                                                <button
-                                                    aria-label="Clear search"
-                                                    onClick={() =>
-                                                        setSearch("")
-                                                    }
-                                                >
-                                                    <X size={14} />
-                                                </button>
-                                            )}
-                                        </div>
-                                        <select
-                                            aria-label="Filter by result"
-                                            value={status}
-                                            onChange={(e) =>
-                                                setStatus(e.target.value)
+                                        <Button
+                                            quiet
+                                            onClick={() =>
+                                                exportArtifact(artifact)
                                             }
                                         >
-                                            {[
-                                                "all",
-                                                "passed",
-                                                "failed",
-                                                "error",
-                                                "blocked",
-                                                "incompatible",
-                                                "ready",
-                                                "approved",
-                                                "review required",
-                                            ].map((s) => (
-                                                <option value={s} key={s}>
-                                                    {s === "all"
-                                                        ? "All results"
-                                                        : s}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <ArrowDownToLine size={13} />
+                                            JSON
+                                        </Button>
                                     </div>
-                                    {filtered.length ? (
-                                        <ArtifactTable
-                                            items={
-                                                page === "Overview"
-                                                    ? filtered.slice(0, 15)
-                                                    : filtered
+                                )}
+                            </div>
+                            <section
+                                className="inspector-content"
+                                ref={inspector}
+                            >
+                                {action === "run" ? (
+                                    <>
+                                        <RunPanel
+                                            open
+                                            onToggle={() => setAction(null)}
+                                            catalog={catalog!}
+                                            active={!!active}
+                                            onStarted={(job) =>
+                                                setJobs([job, ...jobs])
                                             }
-                                            onOpen={open}
+                                        />
+                                        <JobList
+                                            jobs={jobs}
+                                            onRefresh={refresh}
+                                            onOpen={(path) => {
+                                                if (canLeave()) {
+                                                    setAction(null);
+                                                    setSelected(path);
+                                                    refresh();
+                                                }
+                                            }}
+                                        />
+                                    </>
+                                ) : action === "compare" ? (
+                                    <ComparePanel
+                                        initiallyOpen
+                                        catalog={catalog!}
+                                        onSaved={async (path) => {
+                                            await refresh();
+                                            setAction(null);
+                                            setSelected(path);
+                                        }}
+                                    />
+                                ) : action === "review" ? (
+                                    <ReviewPanel
+                                        initiallyOpen
+                                        catalog={catalog!}
+                                        onSaved={saved}
+                                    />
+                                ) : newSuite ? (
+                                    <SuiteEditor
+                                        onDirty={(value) => {
+                                            dirty.current = value;
+                                        }}
+                                        onSaved={saved}
+                                    />
+                                ) : selected && (detailLoading || !artifact) ? (
+                                    <div className="inspector-empty">
+                                        {detailLoading ? (
+                                            <p role="status">
+                                                Loading saved evidence…
+                                            </p>
+                                        ) : (
+                                            <>
+                                                <h2>
+                                                    This file could not be
+                                                    opened
+                                                </h2>
+                                                <p>
+                                                    Check the error above,
+                                                    refresh, or select another
+                                                    file.
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                ) : artifact ? (
+                                    artifact.kind === "suite" ? (
+                                        <SuiteEditor
+                                            key={
+                                                artifact.path +
+                                                artifact.fingerprint
+                                            }
+                                            artifact={artifact}
+                                            onDirty={(value) => {
+                                                dirty.current = value;
+                                            }}
+                                            onSaved={saved}
                                         />
                                     ) : (
-                                        <Empty
-                                            title={
-                                                search || status !== "all"
-                                                    ? "No matching results"
-                                                    : page === "Suites"
-                                                      ? "Your test cases start here"
-                                                      : "Your evidence will appear here"
-                                            }
-                                            action={
-                                                page === "Suites" ? (
-                                                    <Button
-                                                        primary
-                                                        onClick={() =>
-                                                            setNewSuite(true)
-                                                        }
-                                                    >
-                                                        <Plus size={15} />
-                                                        Create a suite
-                                                    </Button>
-                                                ) : undefined
-                                            }
-                                        >
-                                            {search || status !== "all"
-                                                ? "Try another search or choose All results."
-                                                : "Save a Thadam suite or report inside this project, then refresh. Start an evaluation to create evidence."}
-                                        </Empty>
-                                    )}
-                                    {catalog!.invalid.length > 0 && (
-                                        <details className="invalid-files">
-                                            <summary>
-                                                <CircleAlert size={15} />
-                                                {catalog!.invalid.length} files
-                                                need attention
-                                            </summary>
-                                            {catalog!.invalid.map((item) => (
-                                                <div key={item.path}>
-                                                    <strong>{item.path}</strong>
-                                                    <p>{item.error}</p>
-                                                </div>
-                                            ))}
-                                        </details>
-                                    )}
-                                </>
+                                        <ArtifactView
+                                            key={artifact.path}
+                                            artifact={artifact}
+                                            catalog={catalog!}
+                                            onOpen={open}
+                                            onSaved={saved}
+                                        />
+                                    )
+                                ) : (
+                                    <div className="inspector-empty">
+                                        <FileJson size={22} strokeWidth={1} />
+                                        <h2>Select a saved file</h2>
+                                        <p>
+                                            Inspect cases, checks and recorded
+                                            execution evidence here.
+                                        </p>
+                                        <span>
+                                            thadam <span lang="ta">தடம்</span>
+                                        </span>
+                                    </div>
+                                )}
+                            </section>
+                            {artifact && !action && !newSuite && (
+                                <div className="inspector-footer">
+                                    <span>
+                                        {kindName[artifact.kind] ||
+                                            artifact.kind}
+                                    </span>
+                                    <span>
+                                        File updated{" "}
+                                        {new Date(
+                                            Number(
+                                                String(artifact.modified_ns),
+                                            ) / 1e6,
+                                        ).toLocaleString(undefined, {
+                                            month: "short",
+                                            day: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                        })}
+                                    </span>
+                                </div>
                             )}
-                        </>
-                    )}
-                    <footer>
-                        <span>
-                            THADAM <span className="footer-tamil">தடம்</span>
-                        </span>
-                        <span>Observable evidence. Explicit expectations.</span>
-                    </footer>
-                </main>
+                        </section>
+                    </main>
+                )}
             </div>
         </div>
     );
 }
 
-function ArtifactTable({
+function ArtifactList({
     items,
+    selected,
     onOpen,
 }: {
     items: Item[];
+    selected: string | null;
     onOpen: (item: Item) => void;
 }) {
     return (
-        <div className="table-scroll">
-            <table className="artifact-table">
-                <thead>
-                    <tr>
-                        <th>Artifact</th>
-                        <th>Type</th>
-                        <th>Result</th>
-                        <th>Cases</th>
-                        <th className="runtime-column">Runtime</th>
-                        <th className="updated-column">File updated</th>
-                        <th>
-                            <span className="sr-only">Open</span>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {items.map((item) => (
-                        <tr key={item.path}>
-                            <td>
-                                <button
-                                    className="file-link"
-                                    onClick={() => onOpen(item)}
-                                >
-                                    <FileJson size={17} />
-                                    <span>
-                                        <strong>
-                                            {item.suite?.id ||
-                                                titlePath(item.path)}
-                                        </strong>
-                                        <small>
-                                            {item.path}
-                                            {item.suite
-                                                ? " · " + item.suite.revision
-                                                : ""}
-                                        </small>
-                                    </span>
-                                </button>
-                            </td>
-                            <td>
-                                <span className="type-label">
-                                    {kindName[item.kind] || item.kind}
+        <div className="artifact-list">
+            {items.map((item) => (
+                <button
+                    key={item.path}
+                    className={
+                        "artifact-row " +
+                        (selected === item.path ? "selected" : "")
+                    }
+                    aria-label={"Open " + item.path}
+                    aria-current={selected === item.path ? "true" : undefined}
+                    onClick={() => onOpen(item)}
+                >
+                    <div className="artifact-row-main">
+                        <strong title={item.path}>
+                            {titlePath(item.path)}
+                        </strong>
+                        <span className="artifact-row-meta">
+                            <span>
+                                {item.suite?.id ||
+                                    kindName[item.kind] ||
+                                    item.kind}
+                            </span>
+                            {item.suite && (
+                                <span className="revision-label">
+                                    {item.suite.revision}
                                 </span>
-                            </td>
-                            <td>
-                                <Badge status={outcome(item)} />
-                                {item.summary && "passed" in item.summary && (
-                                    <small className="row-outcomes">
-                                        <span>
-                                            {item.summary.passed} passed
-                                        </span>
-                                        <span
-                                            className={
-                                                item.summary.failed
-                                                    ? "amber"
-                                                    : ""
-                                            }
-                                        >
-                                            {item.summary.failed} failed
-                                        </span>
-                                        <span
-                                            className={
-                                                item.summary.errors ? "red" : ""
-                                            }
-                                        >
-                                            {item.summary.errors} errors
-                                        </span>
-                                    </small>
-                                )}
-                            </td>
-                            <td className="numeric">{item.cases}</td>
-                            <td className="runtime-column duration">
-                                {item.duration_ms == null
-                                    ? "Unavailable"
-                                    : Number(String(item.duration_ms)).toFixed(
-                                          2,
-                                      ) + " ms"}
-                            </td>
-                            <td className="date updated-column">
-                                {new Date(
-                                    Number(String(item.modified_ns)) / 1e6,
-                                ).toLocaleString(undefined, {
-                                    month: "short",
-                                    day: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                })}
-                            </td>
-                            <td>
-                                <button
-                                    className="icon-button"
-                                    aria-label={"Open " + item.path}
-                                    onClick={() => onOpen(item)}
-                                >
-                                    <ArrowRight size={16} />
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+                            )}
+                        </span>
+                    </div>
+                    <div className="artifact-row-result">
+                        <Badge status={outcome(item)} />
+                        <span>
+                            {item.duration_ms == null
+                                ? `${item.cases} ${item.cases === 1 ? "case" : "cases"}`
+                                : Number(String(item.duration_ms)).toFixed(2) +
+                                  " ms"}
+                        </span>
+                    </div>
+                    <span className="sr-only">
+                        {kindName[item.kind] || item.kind}. {item.cases} cases.{" "}
+                        {item.summary && "passed" in item.summary
+                            ? `${item.summary.passed} passed, ${item.summary.failed} failed, ${item.summary.errors} errors.`
+                            : ""}{" "}
+                        File updated{" "}
+                        {new Date(
+                            Number(String(item.modified_ns)) / 1e6,
+                        ).toLocaleString()}
+                        .
+                    </span>
+                </button>
+            ))}
         </div>
     );
 }
