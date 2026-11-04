@@ -1,6 +1,8 @@
 # Milestone 3: compare saved agent runs
 
-**Status:** implemented in Thadam 0.3.0. This document specifies single-run comparison. [Repeated evaluation and reliability comparison](03-reliability.md) are also implemented with separate artifact kinds and commands; a pytest plugin and async execution remain planned.
+**Status:** implemented in Thadam 0.3.0. This document specifies single-run comparison. [Repeated evaluation and reliability comparison](03-reliability.md) and [explicit async execution](03-async-execution.md) are also implemented; a dedicated pytest plugin remains planned.
+
+For the browser workflow, see the [illustrated comparison view](../dashboard-tour.md#compare-a-candidate-with-a-baseline).
 
 ## Outcome
 

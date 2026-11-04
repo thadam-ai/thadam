@@ -8,6 +8,9 @@ explicitly review and approve baselines. The CLI remains available for scripting
 and CI. The interface is React/TypeScript, bundled with the Python package.
 End users do not need Node.js, a hosted account, or a model provider to view reports.
 
+See the [visual dashboard tour](dashboard-tour.md) for failure inspection, suite
+editing, regression comparison, and scenario review in both themes.
+
 ## Launch from VS Code
 
 Open **Terminal → New Terminal** in this repository:
