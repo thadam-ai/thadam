@@ -459,3 +459,126 @@ def test_async_job_settings_rejected_before_import(client, project, extra):
     assert response.status_code == 400
     assert client.get("/api/jobs").json() == []
     assert not (project / "never-written.json").exists()
+
+
+@pytest.mark.parametrize("attempt", [None, 2])
+def test_regression_case_review_and_guarded_append(client, project, attempt):
+    from thadam import report_to_dict, run_repeated
+    from thadam.repetition_reporting import repeated_to_dict
+
+    cases = [Case("observed", {"value": 1}, (OutputEquals("answer", {"value": 2}),))]
+    data = (
+        report_to_dict(run_suite(lambda value: value, cases))
+        if attempt is None
+        else repeated_to_dict(run_repeated(lambda value: value, cases, attempts=2))
+    )
+    path = project / "observed.json"
+    path.write_text(json.dumps(data))
+    original = path.read_bytes()
+    source = client.get("/api/artifact", params={"path": "observed.json"}).json()
+    created = client.post(
+        "/api/regression/create",
+        json={
+            "path": "observed.json",
+            "fingerprint": source["fingerprint"],
+            "case_id": "observed",
+            "attempt": attempt,
+        },
+    )
+    assert created.status_code == 200, created.text
+    draft = created.json()
+    assert draft["data"]["case"]["assertions"] == []
+    assert draft["data"]["source"]["attempt"] == attempt
+    assert draft["data"]["source"]["run"]["cases"][0]["output"] == {"value": 1}
+    body = {
+        "path": draft["path"],
+        "fingerprint": draft["fingerprint"],
+        "destination": "cases.json",
+        "expected_fingerprint": None,
+        "suite_id": "echo",
+        "revision": "2",
+    }
+    assert client.post("/api/regression/preview", json=body).status_code == 400
+    assert (
+        client.post(
+            "/api/regression/review",
+            json={
+                "path": draft["path"],
+                "fingerprint": draft["fingerprint"],
+                "case": draft["data"]["case"],
+                "reviewed": True,
+            },
+        ).status_code
+        == 400
+    )
+    case = {
+        **draft["data"]["case"],
+        "assertions": [{"id": "correct", "type": "output_equals", "expected": {"value": 2}}],
+    }
+    review_body = {
+        "path": draft["path"],
+        "fingerprint": draft["fingerprint"],
+        "case": case,
+        "reviewed": True,
+    }
+    review = client.post("/api/regression/review", json=review_body)
+    assert review.status_code == 200, review.text
+    draft = review.json()
+    assert client.post("/api/regression/review", json=review_body).status_code == 400
+    target = client.get("/api/artifact", params={"path": "cases.json"}).json()
+    body.update(fingerprint=draft["fingerprint"], expected_fingerprint=target["fingerprint"])
+    assert client.post("/api/regression/preview", json={**body, "revision": "1"}).status_code == 400
+    preview = client.post("/api/regression/preview", json=body)
+    assert preview.status_code == 200, preview.text
+    assert len(preview.json()["cases"]) == 2
+    assert (
+        client.post("/api/regression/publish", json={**body, "confirmed": False}).status_code == 400
+    )
+    saved = client.post("/api/regression/publish", json={**body, "confirmed": True})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["data"] == preview.json()
+    assert (
+        client.post("/api/regression/publish", json={**body, "confirmed": True}).status_code == 400
+    )
+    new_body = {
+        **body,
+        "destination": "new-suite.json",
+        "expected_fingerprint": None,
+        "suite_id": "new",
+        "revision": "v1",
+        "confirmed": True,
+    }
+    fresh = client.post("/api/regression/publish", json=new_body)
+    assert fresh.status_code == 200, fresh.text
+    assert client.post("/api/regression/publish", json=new_body).status_code == 400
+    protected = {
+        **body,
+        "destination": "observed.json",
+        "expected_fingerprint": source["fingerprint"],
+        "confirmed": True,
+    }
+    assert client.post("/api/regression/publish", json=protected).status_code == 400
+    assert path.read_bytes() == original
+    assert client.get("/api/artifact", params={"path": draft["path"]}).json()["data"]["reviewed"]
+
+
+def test_regression_creation_rejects_stale_source_and_bad_attempt(client, project):
+    from thadam import report_to_dict
+
+    data = report_to_dict(run_suite(lambda value: value, [Case("a", 1, (OutputEquals("a", 1),))]))
+    (project / "run.json").write_text(json.dumps(data))
+    source = client.get("/api/artifact", params={"path": "run.json"}).json()
+    body = {
+        "path": "run.json",
+        "fingerprint": source["fingerprint"],
+        "case_id": "a",
+        "attempt": None,
+    }
+    for changes in [
+        {"fingerprint": "stale"},
+        {"attempt": True},
+        {"case_id": "absent"},
+        {"path": "../run.json"},
+    ]:
+        assert client.post("/api/regression/create", json={**body, **changes}).status_code == 400
+    assert not (project / "regression-drafts").exists()

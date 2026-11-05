@@ -195,3 +195,13 @@ selected plaintext context, generation metadata and append-only exact-content
 review evidence; credentials remain outside projects. Suite/report/baseline
 schemas and evaluation rules are unchanged. A saved suite requires no generation
 provider; model-generated correctness remains a human-reviewed proposal.
+
+## Reviewed regression cases
+
+`regression.py` validates schema-1 regression drafts and snapshots original run
+evidence independently of editable cases. `dashboard/regression_api.py` owns
+explicit create/review/preview/save actions, using workspace confinement and the
+existing guarded suite writer. `dashboard/src/regression.tsx` presents review and
+suite preview; individual repeated attempts retain their one-based source index.
+No agent/verifier execution or provider call occurs in this workflow. See the
+[workflow and draft contract](milestones/04-regression-cases.md).

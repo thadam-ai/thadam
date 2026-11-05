@@ -4,7 +4,7 @@
 
 Open-source testing, evaluation, and reliability for AI agents. Thadam helps developers test expected behavior, understand failures, and catch regressions before deployment.
 
-> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, tool assertions, saved-report regression comparison, and repeated-evaluation reliability gates work. The optional local dashboard works; scenario generation remains planned.
+> **Project status: early development.** The local runner, SDK, CLI, optional LangGraph integration, tool assertions, saved-report regression comparison, repeated-evaluation reliability gates, local dashboard, and reviewable scenario suggestions work from the checkout. [PyPI v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/) is published; newer features on `main` require a source checkout. See the [release scope](publishing.md#published-release-and-current-checkout).
 
 ## What works today
 
@@ -22,6 +22,8 @@ Open-source testing, evaluation, and reliability for AI agents. Thadam helps dev
 Task-specific correctness comes from developer-supplied expectations or verifiers. The runner executes trusted application code in your local Python process. It runs cases sequentially, with no automatic retries, enforced timeouts, or sandbox. Plain Python functions provide input/output evidence; the optional LangGraph adapter additionally records instrumented model and tool calls. Tool assertions require explicit tracing evidence.
 
 For async agents and bounded concurrency, see the [async execution guide](milestones/03-async-execution.md). The synchronous workflows below remain sequential by default.
+
+For generating and reviewing proposed cases, see the [scenario suggestions guide](milestones/04-scenario-suggestions.md). Live ChatGPT sign-in and model requests still require an explicit manual check with an eligible account.
 
 ## Explore the CLI
 

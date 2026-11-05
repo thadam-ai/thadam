@@ -11,7 +11,7 @@
 
 For instrumentation and tool assertions, also read `docs/milestones/02-langgraph.md`.
 
-This is a Python package for testing and evaluating AI agents. The product is **Thadam (தடம்)**. The distribution/install name is `thadam-ai`; use `thadam` for Python imports, module commands, and the CLI. The separate PyPI project named `thadam` is unrelated. First public publication is pending; do not claim the package is available until a PyPI upload succeeds.
+This is a Python package for testing and evaluating AI agents. The product is **Thadam (தடம்)**. The distribution/install name is `thadam-ai`; use `thadam` for Python imports, module commands, and the CLI. The separate PyPI project named `thadam` is unrelated. Version 0.3.0 was published to PyPI on 2026-10-30. Features added after that tag currently require a source checkout; do not describe them as available in the published package until a release containing them succeeds. See `ROADMAP.md` and `docs/publishing.md` for release scope.
 
 ## Current implementation
 
@@ -152,3 +152,14 @@ side effect. Dashboard generation shares one active process and interruption rul
 Tests use controlled HTTP/JWT fixtures without real keys or plan usage. Dashboard
 CI installs `.[dev,dashboard,ai]` to exercise optional authentication/provider checks.
 Live authentication and paid model generation remain explicit manual checks.
+
+## Regression drafts
+
+The first workflow of milestone 4.5 is implemented; read
+`docs/milestones/04-regression-cases.md`. `regression.py` owns strict schema-1
+`regression_draft` validation and independent source-run snapshots. Dashboard
+create/review/preview/publish actions use existing workspace/suite guards.
+Expectations start empty; source output is never automatically the expected value.
+Draft review is explicit acknowledgement, not authenticated identity. Saved suites
+retain existing schemas; keep the draft for provenance. Review labels, external
+imports, masking, and guided fix verification remain planned.
