@@ -2,6 +2,9 @@
 
 Mode: Operate. Target: local browser dashboard (`dashboard/src`).
 
+Current implementation: [dashboard screenshots and visual tour](dashboard-tour.md).
+Refresh instructions and fixture provenance live with the [image assets](images/dashboard/README.md).
+
 ## Confirmed direction
 
 The user's supplied reference screenshots are the visual authority: an inset, warm

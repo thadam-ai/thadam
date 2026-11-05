@@ -147,6 +147,11 @@ review and approval remain separate workflows.
 
 ## Dashboard
 
+![Scenario draft reviewer with pending controlled proposals and explicit review actions](../images/dashboard/scenario-review.jpg)
+
+Scripted demo proposals; no live model request is shown.
+[See the complete dashboard tour](../dashboard-tour.md).
+
 Open **Suites → Suggest**. Choose your connection, load account models, enter the
 behavior contract, optionally select a source suite and individual context cases,
 and preview the outgoing context. Acknowledgement enables generation. The

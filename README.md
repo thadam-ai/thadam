@@ -42,6 +42,10 @@ inspect evidence, compare results, and review baselines locally. End users need
 no Node.js tools or hosted account. See the [dashboard guide](docs/dashboard.md)
 for your own project and repeat launches.
 
+![Thadam dashboard showing failed checks with expected and actual outputs](docs/images/dashboard/evaluation.jpg)
+
+Controlled demo data. [Explore the dashboard →](docs/dashboard-tour.md)
+
 ## Find what you need
 
 | I want to… | Guide |
