@@ -405,7 +405,13 @@ export function JobList({
     );
 }
 
-export function EvaluationView({ data }: { data: Data }) {
+export function EvaluationView({
+    data,
+    onRegression,
+}: {
+    data: Data;
+    onRegression?: (id: string, attempt: number | null) => void;
+}) {
     const c = counts(data),
         repeated = data.kind === "repeated_run";
     return (
@@ -467,15 +473,28 @@ export function EvaluationView({ data }: { data: Data }) {
                 </dl>
             </details>
             {repeated ? (
-                <RepeatedView data={data} />
+                <RepeatedView data={data} onRegression={onRegression} />
             ) : (
-                <CaseList cases={data.cases || []} />
+                <CaseList
+                    cases={data.cases || []}
+                    onRegression={
+                        onRegression
+                            ? (id) => onRegression(id, null)
+                            : undefined
+                    }
+                />
             )}
         </>
     );
 }
 
-export function CaseList({ cases }: { cases: Data[] }) {
+export function CaseList({
+    cases,
+    onRegression,
+}: {
+    cases: Data[];
+    onRegression?: (id: string) => void;
+}) {
     const [search, setSearch] = useState(""),
         [status, setStatus] = useState("all"),
         [page, setPage] = useState(0);
@@ -542,6 +561,11 @@ export function CaseList({ cases }: { cases: Data[] }) {
                             {Number(String(test.duration_ms)).toFixed(2)} ms
                         </span>
                     </summary>
+                    {onRegression && (
+                        <Button onClick={() => onRegression(test.id)}>
+                            Create regression case
+                        </Button>
+                    )}
                     <CaseEvidence test={test} />
                 </details>
             ))}
@@ -787,7 +811,13 @@ export function TraceView({ test }: { test: Data }) {
     );
 }
 
-export function RepeatedView({ data }: { data: Data }) {
+export function RepeatedView({
+    data,
+    onRegression,
+}: {
+    data: Data;
+    onRegression?: (id: string, attempt: number | null) => void;
+}) {
     const [attempt, setAttempt] = useState(0),
         [caseSearch, setCaseSearch] = useState("");
     const groups = new Map<
@@ -994,7 +1024,15 @@ export function RepeatedView({ data }: { data: Data }) {
             <div className="attempt-id">
                 Run ID <code>{data.runs[attempt].run_id}</code>
             </div>
-            <CaseList key={attempt} cases={data.runs[attempt].cases} />
+            <CaseList
+                key={attempt}
+                cases={data.runs[attempt].cases}
+                onRegression={
+                    onRegression
+                        ? (id) => onRegression(id, attempt + 1)
+                        : undefined
+                }
+            />
         </>
     );
 }

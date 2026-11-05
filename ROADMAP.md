@@ -3,9 +3,41 @@
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
 **Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, and reviewable scenario suggestions are implemented.
-**Next build:** controlled tool failures and simulated environments (milestone 5).
+**Next build:** review labels and recorded-example imports (milestone 4.5, workflow 2). Creating reviewed regression cases from saved results is implemented; guided fix verification follows before milestone 5.
+
+**Published release:** [`thadam-ai` v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/),
+released on 2026-10-30. Completed features below describe `main`; reliability
+gates, baseline review, the dashboard, async execution, and scenario suggestions
+were added after that release and currently require a source checkout.
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
+
+## Product direction and build order
+
+Thadam helps developers turn observed agent behavior into reviewed test cases,
+explainable evaluations, and repeatable release checks. Keep the local SDK, CLI,
+suites, and basic evaluations useful without a hosted service or model provider.
+Optional integrations and shared services should consume those same contracts.
+
+The 2026-11-04 priority review draws on Raindrop's
+[local debugger and replay](https://www.raindrop.ai/docs/workshop/overview/) and
+[curated datasets](https://www.raindrop.ai/docs/platform/datasets/), alongside
+Latitude's [trace-derived datasets](https://docs.latitude.so/datasets/overview),
+[evaluation alignment](https://docs.latitude.so/evaluations/alignment), and
+[local simulations](https://docs.latitude.so/test-and-fix/simulations).
+These workflows inform our priorities; the milestones below define Thadam's scope.
+
+| Priority | Milestones | User benefit |
+| --- | --- | --- |
+| Next | 4.5 | Turn an observed failure into a reviewed test and verify a fix |
+| Core testing expansion | 5–7 | Test conversations and recovery, evaluate semantic behavior, and compare configurations |
+| Connect and investigate | 8–9 | Reuse existing telemetry and coding tools, and track recurring failures |
+| Longer term, after user validation | 10–11 | Monitor live behavior and collaborate through optional shared services |
+
+Start each milestone with the smallest complete workflow and a concrete user
+example. Specify any new artifact formats, migration rules, and execution/data
+boundaries before implementation. Validate later priorities with real projects
+before taking on continuous ingestion or shared infrastructure.
 
 ## Dashboard design refinement
 
@@ -57,7 +89,9 @@ introduce hosted infrastructure, a sandbox or automatic baseline updates.
 - [x] Add repository CI for core and optional LangGraph tests, Ruff checks, and package build/install validation.
 - [x] Prepare `thadam-ai` distribution metadata and a validated GitHub-to-PyPI Trusted Publishing workflow.
 - [x] Configure the `pypi` release environment with owner approval and version-tag restrictions.
-- [ ] Complete owner PyPI 2FA/pending-publisher setup and publish the first `thadam-ai` release.
+- [x] Publish the first `thadam-ai` release through Trusted Publishing: [v0.3.0](https://github.com/thadam-ai/thadam/releases/tag/v0.3.0), available on PyPI since 2026-10-30.
+- [ ] Publish a follow-up release containing the newer features implemented on `main`.
+- [ ] Complete and record the explicit live-provider check for scenario suggestions, including sign-in, model access, and an actual generation request.
 - [x] Require the repository CI checks before merging to `main`, after their first successful GitHub run.
 
 ## 1. Run one agent against saved test cases
@@ -138,43 +172,192 @@ require explicit acknowledgement; ordinary execution/comparison never approves.
 
 Generated expectations are proposals. Coverage and correctness still need a developer-defined contract or environment verifier.
 
-## 5. Exercise failures and simulated environments
+## 4.5. Turn real failures into reviewed regression tests
 
-**Outcome:** a developer checks how an agent recovers from a controlled tool failure.
+**Status:** in progress. Workflow 1 is implemented in the checkout; workflows 2 and 3 remain planned. [Workflow and draft contract](docs/milestones/04-regression-cases.md).
+
+**Outcome:** a developer starts with an observed failure, saves an independently
+reviewed regression case, and sees whether a candidate fix meets the same checks.
+
+### 1. Create a regression case from an existing result
+
+- [x] Add an explicit dashboard action to create a draft case from a saved case result, including a selected repeated attempt.
+- [x] Retain the source artifact, case/attempt identity, original input/output, and relevant observable evidence as provenance.
+- [x] Let the developer edit the input and supply expected behavior through supported JSON assertions before accepting the case.
+- [x] Preview the resulting suite and save selected reviewed cases using existing suite identity, revision, and stale-write guards.
+
+### 2. Review and import recorded examples
+
+- [ ] Attach good, bad, or needs-review verdicts, notes, and failure tags to saved results without modifying the original execution evidence or gate outcome.
+- [ ] Import recorded examples through a documented JSONL/CSV format with explicit field mapping, structural validation, and duplicate review.
+- [ ] Preserve source IDs and supplied context; examples lacking trusted expectations remain reviewable drafts and cannot count as passing tests.
+- [ ] Provide configurable field masking and a data preview before importing, exporting, or sending selected examples to a provider; document redaction limits.
+- [ ] Search and filter drafts and reviewed examples by case, review state, and failure tags.
+
+### 3. Make verifying the fix easier
+
+- [ ] Run the saved reviewed suite against a deliberately selected candidate using the existing runner and progress/interruption behavior.
+- [ ] Show original and candidate evidence together, with per-check changes and existing single/repeated comparison decisions when contracts are compatible.
+- [ ] Make changed contracts or missing comparable baseline evidence explicit; require a fresh reviewed baseline when necessary.
+- [ ] Export the reviewed suite and resulting reports for the existing pytest/CI workflow; keep baseline approval a separate explicit action.
+
+The observed answer is evidence, not an automatically correct expectation. Human
+labels do not overwrite recorded assertion results. Importing or reviewing an
+example does not execute agents or verifiers. Imported partial traces retain
+unavailable evidence explicitly. Saving a case, running a candidate, comparing
+reports, and approving a baseline remain distinct actions.
+
+Completion requires a controlled end-to-end example: inspect a bad result, review
+the expected behavior, save the case, reproduce the failure, and verify a fix.
+Include an import with incomplete evidence and an incompatible comparison path.
+
+## 5. Exercise failures and conversation simulations
+
+**Status:** planned, after milestone 4.5.
+
+**Outcome:** a developer checks whether an agent completes a conversation and
+recovers from controlled failures while preserving the expected state.
 
 - [ ] Add tool fixtures for exceptions, invalid responses, and unavailable services.
-- [ ] Specify supported timeout and cancellation behavior for each execution mode.
-- [ ] Assert bounded retries, recovery behavior, and allowed environment changes.
-- [ ] Add stateful test environments with resettable fixtures.
-- [ ] Turn discovered failures into saved regression cases.
+- [ ] Define a conversation scenario with ordered user/agent turns, per-turn checks, final outcome checks, and explicit state lifecycle/reset rules.
+- [ ] Support scripted follow-up turns and session evidence for context retention, repeated questions, and behavior after a correction.
+- [ ] Assert tool-call/retry limits, recovery behavior, and allowed observable state changes.
+- [ ] Specify supported timeout, turn-limit, cancellation, and cleanup behavior for each execution mode before offering enforcement guarantees.
+- [ ] Add resettable stateful fixtures and retain partial conversation/tool evidence on failure or interruption.
+- [ ] Save discovered failures through milestone 4.5's reviewed regression workflow.
 
-## 6. Expand interoperability and collaboration
+Begin with scripted conversations and controlled tools. Any later model-driven
+user simulator needs explicit budgets, stopping rules, recorded configuration,
+and a supplied success criterion. Observable state changes require instrumentation;
+scenario execution does not imply sandboxing or hidden-reasoning access.
 
-**Outcome:** projects use the same local contracts with more integrations and optional shared services.
+## 6. Evaluate behavior with reviewed rubrics
 
-- [ ] Add LangChain, CrewAI, and API adapters based on concrete user demand.
-- [ ] Export execution evidence through OpenTelemetry where it fits the event model.
-- [ ] Add production-trace import compatible with the local dashboard and existing evidence contracts.
-- [ ] Design hosted runs, scheduling, result history, and team collaboration around the existing engine.
+**Status:** planned. Builds on existing assertion/verifier contracts and milestone 4.5's reviewed examples.
 
-Keep local execution, the SDK, CLI, and basic evaluations useful as open source. Hosted services should consume the same contracts.
+**Outcome:** a developer evaluates useful behavior even when a correct response
+can have several wordings, and can inspect why the evaluator reached its verdict.
+
+- [ ] Add recurring deterministic checks such as JSON schema, text/regex, and numeric constraints where real suites establish the need.
+- [ ] Add optional rubric-based model evaluators for supplied criteria such as task completion, relevance, and policy adherence, with references/context when needed.
+- [ ] Version evaluator definitions and retain rubric, provider/model, configuration, verdict, explanation, and reported usage in comparable evidence.
+- [ ] Compare evaluator verdicts against a separate set of human-reviewed examples; expose disagreement and false-positive/negative examples before enabling a gate.
+- [ ] Keep evaluator failures, unavailable evidence, and uncertain decisions explicit; never silently count them as passes.
+- [ ] Provide explicit request/cost budgets and optional provider adapters; retain deterministic checks and user-supplied Python verifiers without model dependencies.
+
+Generated cases and generated evaluators need independent review. An LLM verdict
+is a recorded judgment against a supplied rubric, not proof of factual correctness.
+Changing a rubric/model must follow declared comparison compatibility rules;
+evaluation or calibration never silently revises release criteria or baselines.
+
+## 7. Compare configurations, quality, latency, and cost
+
+**Status:** planned. Builds on current regression/reliability comparisons; uses milestone 6 for rubric-based metrics.
+
+**Outcome:** a developer can compare prompt/model/agent configurations on the same
+reviewed suite and understand the quality, speed, and usage tradeoffs.
+
+- [ ] Define named experiment configurations and run the same suite with explicit attempt counts, lifecycle modes, and scheduling settings.
+- [ ] Retain available code/prompt/model revisions, provider settings, suite/evaluator revisions, and scheduling configuration so differences remain inspectable.
+- [ ] Show side-by-side outputs, per-check outcomes, pass-rate changes, recorded latency, and reported token usage for each configuration.
+- [ ] Add versioned provider pricing inputs or provider-reported costs, with visible pricing coverage and unavailable values rather than zero-cost assumptions.
+- [ ] Support explicit quality, latency, token, and cost policies with documented sample requirements and full gate evidence.
+- [ ] Keep statistical uncertainty separate from configured pass-rate tolerances; distinguish inconclusive evidence from a demonstrated improvement.
+- [ ] Save/export experiment definitions and results for local use and CI while preserving existing report readers and pure comparison behavior.
+
+Use observed data and declared configurations. Replaying an input does not
+reproduce an external service's past state. Report comparisons continue to execute
+no agents or verifiers; an explicit experiment runner owns new execution.
+
+## 8. Connect existing agents, telemetry, and coding assistants
+
+**Status:** planned. Select integrations from concrete user projects; implement them incrementally.
+
+**Outcome:** a developer connects an existing agent with little setup, brings its
+recorded failures into Thadam, and uses the same evidence from a coding assistant.
+
+- [ ] Provide guided project setup and diagnostics that validate a connection and explain missing tracing before a first evaluation.
+- [ ] Add an explicit HTTP agent adapter and define a TypeScript execution contract that reuses suite/check semantics, based on user demand.
+- [ ] Add selected framework/provider tracing integrations beyond LangGraph with clear capture boundaries and optional dependencies.
+- [ ] Import/export supported OpenTelemetry traces with documented field mapping, source provenance, and honest completeness/usage flags.
+- [ ] Add a documented bridge for externally curated datasets or exported traces, beginning with one real workflow such as Latitude datasets or Raindrop evidence.
+- [ ] Expose project-confined report inspection, comparison, and draft proposal tools through an optional MCP server and a documented setup/investigation skill.
+- [ ] Use explicit project-scoped actions for agent execution, provider requests, and artifact writes; preserve review and baseline approval guards.
+
+The generic JSONL/CSV importer in milestone 4.5 remains usable independently.
+Imported telemetry never invents expectations, complete traces, or passing checks.
+MCP access follows the same SDK, confinement, credential, and review rules as the
+CLI/dashboard. Viewing an external trace or importing examples does not replay it.
+
+## 9. Track recurring failures and investigate evidence
+
+**Status:** planned, after evidence capture/review and stable configuration metadata.
+
+**Outcome:** a developer sees which failure patterns recur, which revisions first
+showed them, and whether a verified fix continues to hold across evaluations.
+
+- [ ] Build a local history index over saved reports, annotations, suite revisions, and experiment/configuration metadata, with rebuildable source links.
+- [ ] Group known failures by reviewed tags/check identities first; offer optional semantic grouping with inspectable supporting examples.
+- [ ] Track occurrence counts, affected cases/sessions, first/last seen, and open, resolved, ignored, or regressed status.
+- [ ] Add content and metadata search, saved filters, and an optional semantic search path with clear coverage/ranking limits.
+- [ ] Link each tracked problem to reviewed regression cases, fixes, and the evaluations that verified them; detect observed recurrences.
+- [ ] Offer optional evidence-linked investigation summaries and a focused export for a coding assistant or GitHub issue, with explicit user-directed sharing.
+
+Keep generated clusters and root-cause explanations reviewable. Similar symptoms
+do not establish a shared cause. This milestone starts with local saved evidence;
+continuous production discovery belongs to milestone 10.
+
+## 10. Monitor production behavior and verify rollouts
+
+**Status:** longer-term, subject to demand and operational validation. Requires reviewed evaluation methods, telemetry mappings, and failure history from earlier milestones.
+
+**Outcome:** a team discovers failures in real usage, verifies them locally, and
+checks whether a deployed change reduced the same behavior.
+
+- [ ] Add opt-in continuous trace/event ingestion with bounded processing, explicit retention, deletion, and configurable capture/redaction policies.
+- [ ] Associate events with supplied session/user, environment, and deployment metadata; keep evaluation/simulation traffic separate from production.
+- [ ] Run explicitly enabled conditions or reviewed evaluators on scoped/sampled traffic and surface processing cost, coverage, and failures.
+- [ ] Track named behavior signals and emerging failure patterns using recorded evidence and human feedback.
+- [ ] Add threshold/recurrence monitors, incident state, deduplicated notifications, and explicit email/Slack/webhook routing.
+- [ ] Compare deployment cohorts on observed quality and available latency/usage/cost, explaining population, sampling, and attribution limits.
+- [ ] Connect an alert to a reviewed local regression case, candidate verification, and a post-deploy check using the same behavior definition.
+
+Specify data handling and deployment boundaries before ingesting customer traffic.
+Redaction is best effort, and a quiet monitor does not prove there are no failures.
+Evidence may support a proposed fix; automatic code changes, merges, deployments,
+and baseline promotion require separate explicitly designed workflows.
+
+## 11. Collaborate through optional shared services
+
+**Status:** longer-term, after validation of the local workflow and production needs.
+
+**Outcome:** a team shares reviewed suites, findings, and evaluation history while
+controlling who can view data, execute agents, and approve release criteria.
+
+- [ ] Add shared project history, durable review queues, reviewer attribution, comments, and explicit approval/audit records.
+- [ ] Define authentication, project isolation, roles, and permissions for viewing evidence, editing suites, running jobs, and approving baselines.
+- [ ] Support private deployments and an optional hosted service using the same SDK and versioned artifacts.
+- [ ] Add explicit scheduled runs and external workers with documented resource, interruption, and execution-isolation boundaries.
+- [ ] Provide retention/deletion, backup/export, credential storage, and operational diagnostics suitable for the selected deployment model.
+- [ ] Preserve a useful open-source local path for suites, execution, deterministic evaluation, comparison, and reviewed artifact export.
+
+Local approval artifacts currently record acknowledgement, not authenticated
+identity. Shared services must add the relevant identity and access controls
+explicitly, without reinterpreting old artifacts as authenticated approvals.
 
 ## Ideas to evaluate later
 
 These are possibilities, not committed milestones. Promote an idea when a concrete user need, an owner, and acceptance criteria exist.
 
 - Minimize a failing scenario to a smaller reproducible case.
-- Suggest failure clusters from repeated test runs.
-- Compare prompts and models using the same reviewed suite.
 - Measure scenario coverage against declared behavior contracts.
-- Add optional rubric-based model judges with calibration examples and recorded uncertainty.
-- Track cost budgets when trustworthy usage and pricing inputs are available.
-- Provide editor integrations and machine-readable report inspection for coding agents.
-- Support private team deployments and external execution workers.
+- Add retrieval-specific evaluation when projects supply source documents, expected evidence, and concrete quality criteria.
+- Add model-driven user simulators after scripted conversation scenarios establish reliable stopping and success rules.
 
-## Decisions to revisit after milestone 1
+## Decisions to revisit with users
 
-- Which real agent workflow should the first LangGraph integration support?
-- Which assertion types recur enough to become built-in checks?
-- Should pytest become the primary interface or remain an integration alongside the CLI?
-- What feedback demonstrates that scenario generation is the next most useful feature?
+- Which real failure takes too much work to turn into a trusted regression case today?
+- Which repeated custom verifiers justify a built-in deterministic check or optional rubric evaluator?
+- Which integration, external dataset source, or runtime is blocking adoption in a real project?
+- Do users get more value from the CLI/pytest workflow, dashboard review, or coding-agent tools?
+- What usage and operational evidence justifies continuous monitoring or shared infrastructure?

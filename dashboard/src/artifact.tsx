@@ -1,3 +1,7 @@
+import { useState } from "react";
+import { api } from "./api";
+import { ErrorBox } from "./components";
+import { RegressionDraft } from "./regression";
 import {
     evaluation,
     kindName,
@@ -15,16 +19,50 @@ export function ArtifactView({
     catalog,
     onOpen,
     onSaved,
+    onDirty = () => {},
 }: {
     artifact: Artifact;
     catalog: Catalog;
     onOpen: (item: Item) => void;
     onSaved: (artifact: Artifact) => void;
+    onDirty?: (dirty: boolean) => void;
 }) {
+    const [error, setError] = useState("");
+    const [creating, setCreating] = useState(false);
+    async function create(id: string, attempt: number | null) {
+        if (creating) return;
+        setCreating(true);
+        setError("");
+        try {
+            onSaved(
+                await api<Artifact>("regression/create", {
+                    path: artifact.path,
+                    fingerprint: artifact.fingerprint,
+                    case_id: id,
+                    attempt,
+                }),
+            );
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setCreating(false);
+        }
+    }
+    if (artifact.kind === "regression_draft")
+        return (
+            <RegressionDraft
+                artifact={artifact}
+                catalog={catalog}
+                onSaved={onSaved}
+                onDirty={onDirty}
+            />
+        );
     const data = artifact.data;
     const value = evaluation(data);
     return (
         <>
+            {error && <ErrorBox error={error} />}
+            {creating && <p role="status">Creating regression draft…</p>}
             <div className="page-heading">
                 <div>
                     <div className="title-with-badge">
@@ -62,7 +100,14 @@ export function ArtifactView({
             ) : artifact.kind.includes("comparison") ? (
                 <ComparisonView data={data} catalog={catalog} onOpen={onOpen} />
             ) : (
-                <EvaluationView data={data} />
+                <EvaluationView
+                    data={data}
+                    onRegression={
+                        ["run", "repeated_run"].includes(artifact.kind)
+                            ? create
+                            : undefined
+                    }
+                />
             )}
         </>
     );

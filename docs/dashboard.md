@@ -36,9 +36,10 @@ thadam dashboard /path/to/your/project
 thadam dashboard . --port 8766 --no-browser
 ```
 
-In an installed distribution, the optional dependency name is `thadam-ai[dashboard]`.
-The public package release is still pending; installation from the checkout works
-now. Add `[langgraph]` separately when your agent uses that optional adapter. Agents
+The dashboard was added after the published `thadam-ai` v0.3.0 release; install it
+from this checkout with `'.[dashboard]'`. A future release containing the dashboard
+will expose `thadam-ai[dashboard]`. Add `[langgraph]` separately when your agent uses
+that optional adapter. Agents
 use the same Python environment as the server; install application dependencies
 there. Only the selected project is the worker's working directory.
 
@@ -215,3 +216,10 @@ No agent is executed and no baseline is approved by generation or saving.
 See [scenario suggestions](milestones/04-scenario-suggestions.md) for connection,
 privacy, interruption, artifact and revision contracts, CLI/SDK examples, and a
 controlled demo requiring no subscription or network.
+
+## Create a regression case
+
+Open a saved run case, or select an individual repeated attempt, and choose
+**Create regression case**. Review the original evidence, supply explicit checks,
+save the reviewed draft, and preview a new or existing suite before saving.
+See the [workflow and draft contract](milestones/04-regression-cases.md).

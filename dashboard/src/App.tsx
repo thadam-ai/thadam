@@ -63,7 +63,7 @@ const icons = [
     ShieldCheck,
 ];
 function pageFor(item: Item): Page {
-    return ["suite", "scenario_draft"].includes(item.kind)
+    return ["suite", "scenario_draft", "regression_draft"].includes(item.kind)
         ? "Suites"
         : item.kind.includes("comparison")
           ? "Comparisons"
@@ -237,7 +237,9 @@ export function App() {
         (item) =>
             page === "Overview" ||
             (page === "Suites" &&
-                ["suite", "scenario_draft"].includes(item.kind)) ||
+                ["suite", "scenario_draft", "regression_draft"].includes(
+                    item.kind,
+                )) ||
             (page === "Evaluations" &&
                 ["run", "repeated_run"].includes(item.kind)) ||
             (page === "Comparisons" && item.kind.includes("comparison")) ||
@@ -878,6 +880,9 @@ export function App() {
                                             artifact={artifact}
                                             catalog={catalog!}
                                             onOpen={open}
+                                            onDirty={(value) => {
+                                                dirty.current = value;
+                                            }}
                                             onSaved={saved}
                                         />
                                     )
