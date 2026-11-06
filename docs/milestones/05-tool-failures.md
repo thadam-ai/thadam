@@ -32,8 +32,15 @@ Wrap a factory with `FixtureAgent` and pass it to existing runners:
 
 ```python
 from thadam import (
-    FixtureAgent, FixtureTools, OutputEquals, TestCase, ToolCallCount,
-    ToolRaise, ToolReturn, ToolScript, run_suite,
+    FixtureAgent,
+    FixtureTools,
+    OutputEquals,
+    TestCase,
+    ToolCallCount,
+    ToolRaise,
+    ToolReturn,
+    ToolScript,
+    run_suite,
 )
 
 
@@ -57,10 +64,12 @@ case = TestCase(
         ToolCallCount("bounded-retry", "get_order", min_calls=2, max_calls=2),
     ),
     tool_fixtures={
-        "get_order": ToolScript((
-            ToolRaise("ConnectionError", "Order service unavailable"),
-            ToolReturn({"amount_cents": 2500}),
-        )),
+        "get_order": ToolScript(
+            (
+                ToolRaise("ConnectionError", "Order service unavailable"),
+                ToolReturn({"amount_cents": 2500}),
+            )
+        ),
     },
 )
 report = run_suite(FixtureAgent(create_agent), [case])
