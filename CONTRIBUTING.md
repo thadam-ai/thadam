@@ -22,7 +22,7 @@ python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 ```
 
-The distribution is named `thadam-ai`; source imports and the CLI remain `thadam`. Editable installation is for contributors. The public PyPI release is pending; see the [publishing guide](docs/publishing.md) for owner setup and release instructions.
+The distribution is named `thadam-ai`; source imports and the CLI remain `thadam`. Editable installation is for contributors and includes the latest features on `main`. [Version 0.3.0 is published on PyPI](https://pypi.org/project/thadam-ai/0.3.0/); see the [publishing guide](docs/publishing.md) for release scope and maintainer instructions.
 
 Run the formatter and linter before opening a pull request:
 

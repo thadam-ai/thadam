@@ -67,7 +67,11 @@ class Workspace:
             raise ValueError("Expected a Thadam JSON object")
         kind = raw.get("kind")
         digest = None
-        if kind == "scenario_draft":
+        if kind == "regression_draft":
+            from thadam.regression import validate_regression_draft
+
+            data = validate_regression_draft(raw)
+        elif kind == "scenario_draft":
             from thadam.generation import validate_draft
 
             data = validate_draft(raw)
@@ -147,7 +151,11 @@ class Workspace:
                         if "run_id" in evaluation
                         else None
                     ),
-                    cases=len(evaluation.get("candidates", evaluation.get("cases", []))),
+                    cases=(
+                        1
+                        if artifact["kind"] == "regression_draft"
+                        else len(evaluation.get("candidates", evaluation.get("cases", [])))
+                    ),
                 )
                 if artifact["kind"] == "suite":
                     artifact["suite"] = data.get("suite")

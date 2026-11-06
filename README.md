@@ -7,9 +7,12 @@ behavior, run your agent locally, inspect failures, and catch regressions before
 accepting a change.
 
 **Status:** early development. The Python SDK, CLI, local dashboard, optional
-LangGraph tracing, regression/reliability comparisons, and baseline review work
-from this checkout. The first public PyPI release is pending. The distribution
-name is `thadam-ai`; Python imports and the CLI use `thadam`.
+LangGraph tracing, regression/reliability comparisons, baseline review, and scenario
+suggestions work from this checkout. [PyPI v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/)
+is published; this guide covers newer features on `main`, so use the checkout
+below for the dashboard, reliability gates, baseline review, async execution, and
+scenario suggestions. The distribution name is `thadam-ai`; Python imports and
+the CLI use `thadam`.
 
 ## Get started
 

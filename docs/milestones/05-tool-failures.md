@@ -219,6 +219,11 @@ before. Saved agent settings retain the mode. Opening configuration or discoveri
 a suite never imports application code. Results show full saved scripts, checks,
 every fixture event and every attempt; comparison and approval use the SDK rules.
 
+Saved case results also support **Create regression case** through the
+[reviewed regression workflow](04-regression-cases.md). Source scripts remain in
+the draft's full run snapshot and are included in the explicitly previewed/saved
+fixture suite. Source outputs remain evidence, never inferred expectations.
+
 ## Validation
 
 Controlled tests cover exceptions, malformed responses, recovery, bounded and
