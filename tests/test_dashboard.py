@@ -10,7 +10,7 @@ pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
-from thadam import OutputEquals, SuiteIdentity, compare_reports, run_suite
+from thadam import OutputEquals, SuiteIdentity, compare_reports, report_to_dict, run_suite
 from thadam import TestCase as Case
 from thadam import TestSuite as Suite
 from thadam.comparison_loading import comparison_from_dict
@@ -183,6 +183,63 @@ def test_settings_save_without_import_and_invalid_reference(client):
     agents[0]["reference"] = "bad"
     assert client.put("/api/agents", json=agents).status_code == 400
     assert client.get("/api/agents").json()[0]["reference"] == "does_not_exist:run"
+
+
+@pytest.mark.parametrize("attempts,async_execution", [(1, False), (2, False), (2, True)])
+def test_dashboard_fixture_configuration_execution_and_saved_evidence(
+    client, project, attempts, async_execution
+):
+    data = suite_data()
+    data["schema_version"] = 3
+    data["cases"][0]["tool_fixtures"] = {
+        "lookup": {
+            "steps": [
+                {"type": "raise", "error": "ConnectionError", "message": "offline"},
+                {"type": "return", "value": 1},
+            ],
+            "repeat_last": False,
+        }
+    }
+    data["cases"][0]["assertions"].append(
+        {
+            "id": "retry-count",
+            "type": "tool_call_count",
+            "tool": "lookup",
+            "min_calls": 2,
+            "max_calls": 2,
+        }
+    )
+    response = client.put(
+        "/api/suite", json={"path": "fixtures.json", "data": data, "fingerprint": None}
+    )
+    assert response.status_code == 200, response.text
+    (project / "recovery.py").write_text(
+        "def create(tools):\n    def run(value):\n        try:\n            return tools['lookup'](value)\n        except ConnectionError:\n            return tools['lookup'](value)\n    return run\n"
+    )
+    settings = {
+        "suite": "fixtures.json",
+        "reference": "recovery:create",
+        "attempts": attempts,
+        "mode": "shared",
+        "agent_revision": "v1",
+        "report": "recovery.json",
+        "async_execution": async_execution,
+        "max_concurrency": 2 if async_execution else 1,
+    }
+    assert client.post("/api/jobs", json=settings).status_code == 400
+    settings["mode"] = "fixtures"
+    agent = [{"name": "Recovery", "reference": "recovery:create", "mode": "fixtures"}]
+    assert client.put("/api/agents", json=agent).status_code == 200
+    assert client.get("/api/agents").json() == agent
+    response = client.post("/api/jobs", json=settings)
+    assert response.status_code == 200, response.text
+    result = completed(client)
+    assert result["state"] == "completed" and result["exit_code"] == 0
+    saved = client.get("/api/artifact", params={"path": "recovery.json"}).json()["data"]
+    assert saved["schema_version"] == (5 if attempts == 1 else 2)
+    run = saved if attempts == 1 else saved["runs"][0]
+    assert len(run["cases"][0]["events"]) == 2
+    assert run["cases"][0]["tool_fixtures"] == data["cases"][0]["tool_fixtures"]
 
 
 def test_compare_review_approve_and_normal_write_protection(client, project):
@@ -582,3 +639,174 @@ def test_regression_creation_rejects_stale_source_and_bad_attempt(client, projec
     ]:
         assert client.post("/api/regression/create", json={**body, **changes}).status_code == 400
     assert not (project / "regression-drafts").exists()
+
+
+@pytest.mark.parametrize("attempt", [None, 2])
+@pytest.mark.parametrize("append", [False, True])
+def test_regression_from_fixture_run_retains_scripts_without_executing_them(
+    client, project, attempt, append
+):
+    from thadam import (
+        FixtureAgent,
+        ToolCallCount,
+        ToolRaise,
+        ToolReturn,
+        ToolScript,
+        load_suite,
+        run_repeated,
+    )
+    from thadam.fixtures import fixtures_to_dict
+    from thadam.repetition_reporting import repeated_to_dict
+
+    calls = []
+    scripts = {
+        "lookup": ToolScript(
+            (ToolRaise("ConnectionError", "offline"), ToolReturn(1), ToolReturn(99)),
+            repeat_last=True,
+        )
+    }
+
+    def factory(tools):
+        calls.append(True)
+
+        def invoke(value):
+            try:
+                return tools["lookup"](value)
+            except ConnectionError:
+                return tools["lookup"](value)
+
+        return invoke
+
+    cases = [
+        Case(
+            "failure",
+            1,
+            (OutputEquals("answer", 2), ToolCallCount("attempts", "lookup", 2, 2)),
+            tool_fixtures=scripts,
+        )
+    ]
+    data = (
+        report_to_dict(run_suite(FixtureAgent(factory), cases))
+        if attempt is None
+        else repeated_to_dict(run_repeated(FixtureAgent(factory), cases, attempts=2))
+    )
+    original_calls = len(calls)
+    path = project / "fixture-run.json"
+    path.write_text(json.dumps(data))
+    original_bytes = path.read_bytes()
+    source = client.get("/api/artifact", params={"path": path.name}).json()
+    created = client.post(
+        "/api/regression/create",
+        json={
+            "path": path.name,
+            "fingerprint": source["fingerprint"],
+            "case_id": "failure",
+            "attempt": attempt,
+        },
+    )
+    assert created.status_code == 200, created.text
+    draft = created.json()
+    assert draft["data"]["case"]["assertions"] == []
+    reviewed_case = {
+        **draft["data"]["case"],
+        "assertions": [{"id": "reviewed", "type": "output_equals", "expected": 2}],
+    }
+    response = client.post(
+        "/api/regression/review",
+        json={
+            "path": draft["path"],
+            "fingerprint": draft["fingerprint"],
+            "case": reviewed_case,
+            "reviewed": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    draft = response.json()
+    target = suite_data()
+    target["schema_version"] = 3
+    target["cases"][0]["tool_fixtures"] = fixtures_to_dict(scripts)
+    response = client.put(
+        "/api/suite", json={"path": "fixture-suite.json", "data": target, "fingerprint": None}
+    )
+    assert response.status_code == 200
+    body = {
+        "path": draft["path"],
+        "fingerprint": draft["fingerprint"],
+        "destination": "fixture-suite.json" if append else "regressions.json",
+        "expected_fingerprint": response.json()["fingerprint"] if append else None,
+        "suite_id": "echo" if append else "regressions",
+        "revision": "2",
+    }
+    # Appending fixture evidence to an ordinary suite must require explicit migration.
+    plain = client.get("/api/artifact", params={"path": "cases.json"}).json()
+    refused = client.post(
+        "/api/regression/preview",
+        json={
+            **body,
+            "destination": "cases.json",
+            "expected_fingerprint": plain["fingerprint"],
+            "suite_id": "echo",
+        },
+    )
+    assert refused.status_code == 400 and "fixture suite" in refused.json()["error"]
+    preview = client.post("/api/regression/preview", json=body)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["schema_version"] == 3
+    assert preview.json()["cases"][-1]["tool_fixtures"] == fixtures_to_dict(scripts)
+    saved = client.post("/api/regression/publish", json={**body, "confirmed": True})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["data"] == preview.json()
+    assert path.read_bytes() == original_bytes and len(calls) == original_calls
+    report = run_suite(FixtureAgent(factory), load_suite(project / body["destination"]))
+    assert report.cases[-1].status == "failed"
+    assert [event.status for event in report.cases[-1].events] == ["error", "completed"]
+
+
+def test_ordinary_regression_can_be_appended_to_fixture_suite(client, project):
+    data = report_to_dict(
+        run_suite(lambda value: value, [Case("plain", 1, (OutputEquals("out", 1),))])
+    )
+    (project / "plain.json").write_text(json.dumps(data))
+    source = client.get("/api/artifact", params={"path": "plain.json"}).json()
+    created = client.post(
+        "/api/regression/create",
+        json={
+            "path": "plain.json",
+            "fingerprint": source["fingerprint"],
+            "case_id": "plain",
+            "attempt": None,
+        },
+    ).json()
+    case = {
+        **created["data"]["case"],
+        "assertions": [{"id": "reviewed", "type": "output_equals", "expected": 1}],
+    }
+    reviewed = client.post(
+        "/api/regression/review",
+        json={
+            "path": created["path"],
+            "fingerprint": created["fingerprint"],
+            "case": case,
+            "reviewed": True,
+        },
+    ).json()
+    target = suite_data()
+    target["schema_version"] = 3
+    target["cases"][0]["tool_fixtures"] = {}
+    saved = client.put(
+        "/api/suite", json={"path": "fixture-suite.json", "data": target, "fingerprint": None}
+    ).json()
+    result = client.post(
+        "/api/regression/publish",
+        json={
+            "path": reviewed["path"],
+            "fingerprint": reviewed["fingerprint"],
+            "destination": "fixture-suite.json",
+            "expected_fingerprint": saved["fingerprint"],
+            "suite_id": "echo",
+            "revision": "2",
+            "confirmed": True,
+        },
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["data"]["cases"][-1]["tool_fixtures"] == {}

@@ -13,6 +13,7 @@ from thadam.models import (
     JSONValue,
     OutputEquals,
     ToolArgumentsMatch,
+    ToolCallCount,
     ToolCalled,
     ToolNotCalled,
     Verifier,
@@ -27,7 +28,7 @@ def evaluate_assertion(
     trace_complete: bool | None = None,
 ) -> AssertionResult:
     """Evaluate a validated built-in assertion without executing an agent."""
-    if isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch)):
+    if isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch, ToolCallCount)):
         return _evaluate_tool(assertion, events, trace_complete)
     if isinstance(assertion, OutputEquals):
         passed = json_equal(assertion.expected, output)
@@ -56,7 +57,7 @@ def evaluate_assertion(
 
 
 def _evaluate_tool(
-    assertion: ToolCalled | ToolNotCalled | ToolArgumentsMatch,
+    assertion: ToolCalled | ToolNotCalled | ToolArgumentsMatch | ToolCallCount,
     events: tuple[ExecutionEvent, ...] | None,
     trace_complete: bool | None,
 ) -> AssertionResult:
@@ -80,6 +81,17 @@ def _evaluate_tool(
         expected = {"tool": assertion.tool, "arguments_subset": deepcopy(assertion.expected)}
         actual = [{"event_id": call.id, "arguments": deepcopy(call.input)} for call in calls]
         message = f"Every call to {assertion.tool!r} must match the selected arguments"
+    elif isinstance(assertion, ToolCallCount):
+        passed = len(calls) >= assertion.min_calls and (
+            assertion.max_calls is None or len(calls) <= assertion.max_calls
+        )
+        expected = {
+            "tool": assertion.tool,
+            "min_calls": assertion.min_calls,
+            "max_calls": assertion.max_calls,
+        }
+        actual = {"calls": len(calls)}
+        message = f"Tool {assertion.tool!r} was called {len(calls)} time(s)"
     else:
         passed = bool(calls) if isinstance(assertion, ToolCalled) else not calls
         expected = {"tool": assertion.tool, "called": isinstance(assertion, ToolCalled)}

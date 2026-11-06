@@ -2,6 +2,9 @@ import { ChevronRight, CircleAlert, Plus, Save, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, json, parseJSON, type Artifact, type Data } from "./api";
 import { Badge, Button, ErrorBox, Field, titlePath, uid } from "./components";
+import { JsonInput } from "./json-input";
+import { FixtureEditor } from "./fixtures";
+export { JsonInput } from "./json-input";
 const emptySuite = {
     schema_version: 2,
     suite: { id: "my-agent", revision: "v1" },
@@ -25,52 +28,8 @@ const types = [
     "tool_called",
     "tool_not_called",
     "tool_arguments_match",
+    "tool_call_count",
 ];
-export function JsonInput({
-    label,
-    value,
-    onChange,
-    onValid,
-}: {
-    label: string;
-    value: unknown;
-    onChange: (value: any) => void;
-    onValid: (valid: boolean) => void;
-}) {
-    const [text, setText] = useState(json(value)),
-        [error, setError] = useState("");
-    useEffect(() => {
-        setText(json(value));
-        setError("");
-        onValid(true);
-    }, [json(value)]);
-    return (
-        <Field label={label}>
-            <textarea
-                aria-label={label}
-                className={"code-input " + (error ? "invalid" : "")}
-                aria-invalid={!!error}
-                value={text}
-                rows={4}
-                spellCheck={false}
-                onChange={(e) => {
-                    setText(e.target.value);
-                    try {
-                        const parsed = parseJSON(e.target.value);
-                        setError("");
-                        onValid(true);
-                        onChange(parsed);
-                    } catch {
-                        setError("Enter valid JSON");
-                        onValid(false);
-                    }
-                }}
-            />
-            {error && <small className="red">{error}</small>}
-        </Field>
-    );
-}
-
 export function SuiteEditor({
     artifact,
     onSaved,
@@ -261,7 +220,7 @@ export function SuiteEditor({
                             onChange={(e) => setPath(e.target.value)}
                         />
                     </Field>
-                    {data?.schema_version === 2 ? (
+                    {data?.suite ? (
                         <>
                             <Field label="Suite ID">
                                 <input
@@ -399,6 +358,9 @@ export function SuiteEditor({
                                         ...data!.cases,
                                         {
                                             id: "case-" + uid(),
+                                            ...(data.schema_version === 3
+                                                ? { tool_fixtures: {} }
+                                                : {}),
                                             input: {},
                                             assertions: [
                                                 {
@@ -485,6 +447,48 @@ export function SuiteEditor({
                                         )
                                     }
                                 />
+                                {data.schema_version === 3 ? (
+                                    <FixtureEditor
+                                        value={test.tool_fixtures || {}}
+                                        onChange={(tool_fixtures) =>
+                                            caseChange(index, {
+                                                ...test,
+                                                tool_fixtures,
+                                            })
+                                        }
+                                        onValid={(valid) =>
+                                            validity(
+                                                caseKey(index) + ":fixtures",
+                                                valid,
+                                            )
+                                        }
+                                    />
+                                ) : (
+                                    <Button
+                                        quiet
+                                        onClick={() =>
+                                            change({
+                                                ...data,
+                                                schema_version: 3,
+                                                suite: data.suite || {
+                                                    id: titlePath(path).replace(
+                                                        ".json",
+                                                        "",
+                                                    ),
+                                                    revision: "v1",
+                                                },
+                                                cases: data.cases.map(
+                                                    (item: Data) => ({
+                                                        ...item,
+                                                        tool_fixtures: {},
+                                                    }),
+                                                ),
+                                            })
+                                        }
+                                    >
+                                        Configure tool failures
+                                    </Button>
+                                )}
                                 <div className="section-heading">
                                     <h3>Assertions</h3>
                                     <Button
@@ -564,6 +568,13 @@ export function SuiteEditor({
                                                                         }
                                                                       : {
                                                                             tool: "tool_name",
+                                                                            ...(type ===
+                                                                            "tool_call_count"
+                                                                                ? {
+                                                                                      min_calls: 0,
+                                                                                      max_calls: 3,
+                                                                                  }
+                                                                                : {}),
                                                                             ...(type ===
                                                                             "tool_arguments_match"
                                                                                 ? {
@@ -657,6 +668,80 @@ export function SuiteEditor({
                                                         }
                                                     />
                                                 </Field>
+                                            )}
+                                            {check.type ===
+                                                "tool_call_count" && (
+                                                <div className="form-grid">
+                                                    {(
+                                                        [
+                                                            "min_calls",
+                                                            "max_calls",
+                                                        ] as const
+                                                    ).map((bound) => (
+                                                        <Field
+                                                            key={bound}
+                                                            label={
+                                                                bound ===
+                                                                "min_calls"
+                                                                    ? "Minimum calls"
+                                                                    : "Maximum calls"
+                                                            }
+                                                            hint={
+                                                                bound ===
+                                                                "max_calls"
+                                                                    ? "Leave blank for no upper bound. Counts failed attempts too; does not stop execution."
+                                                                    : undefined
+                                                            }
+                                                        >
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                step={1}
+                                                                value={
+                                                                    check[
+                                                                        bound
+                                                                    ] ?? ""
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) =>
+                                                                    caseChange(
+                                                                        index,
+                                                                        {
+                                                                            ...test,
+                                                                            assertions:
+                                                                                test.assertions.map(
+                                                                                    (
+                                                                                        a: Data,
+                                                                                        i: number,
+                                                                                    ) =>
+                                                                                        i ===
+                                                                                        ci
+                                                                                            ? {
+                                                                                                  ...a,
+                                                                                                  [bound]:
+                                                                                                      event
+                                                                                                          .target
+                                                                                                          .value ===
+                                                                                                          "" &&
+                                                                                                      bound ===
+                                                                                                          "max_calls"
+                                                                                                          ? null
+                                                                                                          : Number(
+                                                                                                                event
+                                                                                                                    .target
+                                                                                                                    .value,
+                                                                                                            ),
+                                                                                              }
+                                                                                            : a,
+                                                                                ),
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </Field>
+                                                    ))}
+                                                </div>
                                             )}
                                             {check.type ===
                                             "output_has_keys" ? (

@@ -11,8 +11,14 @@ from thadam._json import validate_json
 from thadam.adapters.python import validate_agent
 from thadam.assertions import evaluate_assertion, evaluate_verifier
 from thadam.contracts import snapshot_definitions
-from thadam.errors import AgentExecutionError, SuiteValidationError, TraceUnavailableError
+from thadam.errors import (
+    AgentConfigurationError,
+    AgentExecutionError,
+    SuiteValidationError,
+    TraceUnavailableError,
+)
 from thadam.events import snapshot_trace
+from thadam.fixtures import FixtureAgent, FixtureConfigurationError, FixtureTraceError
 from thadam.models import (
     Agent,
     AgentResult,
@@ -91,10 +97,23 @@ def _prepare_run(
             input=deepcopy(case.input),
             assertions=tuple(deepcopy(case.assertions)),
             verifiers=tuple(case.verifiers),
+            tool_fixtures=deepcopy(
+                case.tool_fixtures
+                if case.tool_fixtures is not None
+                else {}
+                if isinstance(agent, FixtureAgent)
+                else None
+            ),
         )
         for case in validate_suite(cases)
     )
     validate_agent(agent, allow_async=allow_async)
+    if isinstance(agent, FixtureAgent):
+        agent.validate(allow_async=allow_async)
+    elif any(case.tool_fixtures is not None for case in validated):
+        raise AgentConfigurationError(
+            "Tool fixture suites require FixtureAgent or --fixture-factory"
+        )
     definitions = tuple(snapshot_definitions(case) for case in validated)
     return identity, validated, definitions
 
@@ -102,7 +121,11 @@ def _prepare_run(
 def _run_case(agent: Agent, case: TestCase) -> CaseResult:
     started = perf_counter()
     try:
-        output = agent(deepcopy(case.input))
+        output = (
+            agent.invoke_case(case.tool_fixtures, deepcopy(case.input))
+            if isinstance(agent, FixtureAgent)
+            else agent(deepcopy(case.input))
+        )
     except (Exception, SystemExit) as error:
         return _agent_error(case, started, error)
     return _finish_case(output, case, started)
@@ -117,7 +140,11 @@ def _agent_error(case: TestCase, started: float, error: Exception | SystemExit) 
         return _execution_error(
             case,
             started,
-            "agent",
+            "fixture"
+            if isinstance(error.original, FixtureConfigurationError)
+            else "trace"
+            if isinstance(error.original, FixtureTraceError)
+            else "agent",
             error.original,
             events=events,
             trace_complete=error.trace_complete,
@@ -204,13 +231,14 @@ def _finish_case(output: object, case: TestCase, started: float) -> CaseResult:
         events=events,
         trace_complete=trace_complete,
         trace_warnings=trace_warnings,
+        tool_fixtures=deepcopy(case.tool_fixtures),
     )
 
 
 def _execution_error(
     case: TestCase,
     started: float,
-    source: Literal["agent", "output", "trace"],
+    source: Literal["agent", "output", "trace", "fixture"],
     error: Exception | SystemExit,
     *,
     events: tuple[ExecutionEvent, ...] | None = None,
@@ -226,4 +254,5 @@ def _execution_error(
         events=events,
         trace_complete=trace_complete,
         trace_warnings=trace_warnings,
+        tool_fixtures=deepcopy(case.tool_fixtures),
     )

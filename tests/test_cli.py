@@ -171,6 +171,7 @@ def test_command_help_has_executable_application_examples(tmp_path, command):
 
     (tmp_path / "my_agent.py").write_text(
         "def run(value):\n    return value\ndef create():\n    return run\n"
+        "def create_with_tools(tools):\n    return run\n"
     )
     suite = {
         "schema_version": 1,

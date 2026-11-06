@@ -1,0 +1,130 @@
+{
+  "schema_version": 3,
+  "suite": {
+    "id": "refund-tool-recovery",
+    "revision": "v1"
+  },
+  "cases": [
+    {
+      "id": "temporary-outage",
+      "input": {
+        "order_id": "order-001"
+      },
+      "tool_fixtures": {
+        "get_order": {
+          "steps": [
+            {
+              "type": "raise",
+              "error": "ConnectionError",
+              "message": "Order service unavailable"
+            },
+            {
+              "type": "return",
+              "value": {
+                "amount_cents": 2500
+              }
+            }
+          ],
+          "repeat_last": false
+        }
+      },
+      "assertions": [
+        {
+          "id": "refund-decision",
+          "type": "output_equals",
+          "expected": {
+            "approved": true,
+            "amount_cents": 2500,
+            "reason": "eligible"
+          }
+        },
+        {
+          "id": "lookup-attempts",
+          "type": "tool_call_count",
+          "tool": "get_order",
+          "min_calls": 2,
+          "max_calls": 2
+        }
+      ]
+    },
+    {
+      "id": "invalid-response",
+      "input": {
+        "order_id": "order-001"
+      },
+      "tool_fixtures": {
+        "get_order": {
+          "steps": [
+            {
+              "type": "return",
+              "value": {
+                "amount_cents": "unknown"
+              }
+            },
+            {
+              "type": "return",
+              "value": {
+                "amount_cents": 2500
+              }
+            }
+          ],
+          "repeat_last": false
+        }
+      },
+      "assertions": [
+        {
+          "id": "refund-decision",
+          "type": "output_equals",
+          "expected": {
+            "approved": true,
+            "amount_cents": 2500,
+            "reason": "eligible"
+          }
+        },
+        {
+          "id": "lookup-attempts",
+          "type": "tool_call_count",
+          "tool": "get_order",
+          "min_calls": 2,
+          "max_calls": 2
+        }
+      ]
+    },
+    {
+      "id": "permanent-outage",
+      "input": {
+        "order_id": "order-001"
+      },
+      "tool_fixtures": {
+        "get_order": {
+          "steps": [
+            {
+              "type": "raise",
+              "error": "TimeoutError",
+              "message": "Scripted timeout; no real waiting"
+            }
+          ],
+          "repeat_last": true
+        }
+      },
+      "assertions": [
+        {
+          "id": "refund-decision",
+          "type": "output_equals",
+          "expected": {
+            "approved": false,
+            "amount_cents": 0,
+            "reason": "service_unavailable"
+          }
+        },
+        {
+          "id": "lookup-attempts",
+          "type": "tool_call_count",
+          "tool": "get_order",
+          "min_calls": 2,
+          "max_calls": 2
+        }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import asdict
 
 from thadam._json import json_equal
+from thadam.fixtures import fixtures_to_dict
 from thadam.models import (
     Assertion,
     CaseResult,
@@ -13,6 +14,7 @@ from thadam.models import (
     SuiteIdentity,
     TestCase,
     ToolArgumentsMatch,
+    ToolCallCount,
     ToolCalled,
     ToolNotCalled,
 )
@@ -40,6 +42,7 @@ def snapshot_definitions(case: TestCase) -> tuple[CheckDefinition, ...]:
         ToolCalled: "tool_called",
         ToolNotCalled: "tool_not_called",
         ToolArgumentsMatch: "tool_arguments_match",
+        ToolCallCount: "tool_call_count",
     }
     definitions = []
     for assertion in case.assertions:
@@ -85,6 +88,11 @@ def case_contract_issues(baseline: CaseResult | None, candidate: CaseResult | No
     if candidate is None:
         return ["Case missing from candidate"]
     issues = []
+    if not json_equal(
+        None if baseline.tool_fixtures is None else fixtures_to_dict(baseline.tool_fixtures),
+        None if candidate.tool_fixtures is None else fixtures_to_dict(candidate.tool_fixtures),
+    ):
+        issues.append("Tool fixture contract changed")
     if not json_equal(baseline.input, candidate.input):
         issues.append("Case input changed")
     old = {check.id: check for check in baseline.check_definitions}

@@ -62,26 +62,40 @@ def register_regression(app, workspace):
         draft = current(body)["data"]
         if not draft["reviewed"]:
             raise ValueError("Review the input and expectations before saving a suite")
+        source = draft["source"]
+        original = next(case for case in source["run"]["cases"] if case["id"] == source["case_id"])
+        fixture_case = "tool_fixtures" in original
+        case = deepcopy(draft["case"])
+        if fixture_case:
+            # Include the retained scripts in the explicit suite preview so
+            # saving cannot silently remove the original failure setup.
+            case["tool_fixtures"] = deepcopy(original["tool_fixtures"])
         destination = workspace.path(body["destination"])
         if destination.exists():
             target = workspace.read(body["destination"])
             if target["kind"] != "suite" or target["fingerprint"] != body["expected_fingerprint"]:
                 raise ValueError("Destination changed or is not a suite; reload before saving")
             data = deepcopy(target["data"])
+            if fixture_case and data["schema_version"] != 3:
+                raise ValueError(
+                    "Fixture regression cases require a fixture suite. Create a new suite or enable tool fixtures in the destination editor first."
+                )
             if data.get("suite"):
                 if body["suite_id"] != data["suite"]["id"]:
                     raise ValueError("Keep the existing suite ID")
                 if body["revision"] == data["suite"]["revision"]:
                     raise ValueError("Change the suite revision before adding a case")
                 data["suite"]["revision"] = body["revision"]
-            data["cases"].append(draft["case"])
+            if data["schema_version"] == 3:
+                case.setdefault("tool_fixtures", {})
+            data["cases"].append(case)
         else:
             if body["expected_fingerprint"] is not None:
                 raise ValueError("Destination changed; reload before saving")
             data = {
-                "schema_version": 2,
+                "schema_version": 3 if fixture_case else 2,
                 "suite": {"id": body["suite_id"], "revision": body["revision"]},
-                "cases": [draft["case"]],
+                "cases": [case],
             }
         suite_from_dict(data)
         return data

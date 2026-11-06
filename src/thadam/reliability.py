@@ -111,7 +111,9 @@ def compare_repeated(
     if baseline.attempts != candidate.attempts:
         issues.append("Attempt counts differ; generate reports with equal attempts")
     if baseline.execution_mode != candidate.execution_mode:
-        issues.append("Execution modes differ; use matching shared/factory lifecycle contracts")
+        issues.append(
+            "Execution modes differ; use matching shared/factory/fixtures lifecycle contracts"
+        )
     old_contracts = {case.id: case for case in baseline.runs[0].cases}
     new_contracts = {case.id: case for case in candidate.runs[0].cases}
     old = {case.id: case for case in baseline.cases}

@@ -13,6 +13,7 @@ from uuid import uuid4
 from thadam._json import validate_json
 from thadam.adapters.python import validate_agent
 from thadam.errors import AgentConfigurationError, SuiteValidationError
+from thadam.fixtures import FixtureAgent
 from thadam.models import (
     Agent,
     AgentResult,
@@ -26,7 +27,7 @@ from thadam.runner import run_suite
 from thadam.suites import suite_identity, validate_suite
 
 AgentFactory = Callable[[], Agent]
-ExecutionMode = Literal["shared", "factory"]
+ExecutionMode = Literal["shared", "factory", "fixtures"]
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,10 @@ class RepeatedReport:
     report_id: str = field(default_factory=lambda: str(uuid4()))
     schema_version: int = field(default=1, init=False)
     kind: str = field(default="repeated_run", init=False)
+
+    def __post_init__(self) -> None:
+        if self.execution_mode == "fixtures":
+            object.__setattr__(self, "schema_version", 2)
 
     @property
     def attempts(self) -> int:
@@ -184,7 +189,11 @@ def run_repeated(
     # verifier identity just as run_suite does; never deepcopy application objects.
     prepared = tuple(
         TestCase(
-            case.id, deepcopy(case.input), tuple(deepcopy(case.assertions)), tuple(case.verifiers)
+            case.id,
+            deepcopy(case.input),
+            tuple(deepcopy(case.assertions)),
+            tuple(case.verifiers),
+            deepcopy(case.tool_fixtures),
         )
         for case in validate_suite(cases)
     )
@@ -213,7 +222,11 @@ def run_repeated(
             )
             for _ in range(attempts)
         ),
-        execution_mode="factory" if agent_factory is not None else "shared",
+        execution_mode="fixtures"
+        if isinstance(agent, FixtureAgent)
+        else "factory"
+        if agent_factory is not None
+        else "shared",
     )
 
 

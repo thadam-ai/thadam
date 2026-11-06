@@ -14,6 +14,7 @@ try:
     from langchain_core.outputs import LLMResult
     from langchain_core.runnables import RunnableConfig
     from langchain_core.runnables.config import merge_configs
+    from langchain_core.tools import StructuredTool
     from langgraph.graph.state import CompiledStateGraph
 except ImportError as error:
     raise ImportError(
@@ -22,7 +23,35 @@ except ImportError as error:
 
 from thadam._json import validate_json
 from thadam.errors import AgentConfigurationError, AgentExecutionError
+from thadam.fixtures import FixtureTool
 from thadam.models import AgentResult, EventError, ExecutionEvent, JSONValue, TokenUsage
+
+
+def fixture_tool(tool: FixtureTool, *, args_schema: type, description: str) -> StructuredTool:
+    """Connect a fixture handle through a public LangChain StructuredTool.
+
+    Supply an explicit Pydantic argument schema and description. Use this helper
+    in a FixtureAgent factory so the fixture runtime owns each tool span exactly
+    once while LangGraph continues recording models and other tools. Sync and
+    async invocation share the same per-case script. No real tool is invoked.
+    """
+    if not isinstance(tool, FixtureTool):
+        raise AgentConfigurationError("fixture_tool requires a FixtureTools handle")
+
+    def invoke(**arguments):
+        return tool.invoke(arguments)
+
+    async def ainvoke(**arguments):
+        return await tool.ainvoke(arguments)
+
+    return StructuredTool.from_function(
+        func=invoke,
+        coroutine=ainvoke,
+        name=tool.name,
+        description=description,
+        args_schema=args_schema,
+        metadata={"thadam_fixture_tool": True},
+    )
 
 
 class LangGraphAgent:
@@ -149,6 +178,7 @@ class _EventCollector(BaseCallbackHandler):
         self._events: dict[str, ExecutionEvent] = {}
         self._starts: dict[str, float] = {}
         self._warnings: list[str] = []
+        self._fixture_runs: set[str] = set()
 
     def on_tool_start(
         self,
@@ -160,6 +190,10 @@ class _EventCollector(BaseCallbackHandler):
         inputs: dict | None = None,
         **kwargs: Any,
     ) -> None:
+        if (kwargs.get("metadata") or {}).get("thadam_fixture_tool") is True:
+            with self._lock:
+                self._fixture_runs.add(str(run_id))
+            return
         self._begin(
             "tool",
             serialized,
@@ -263,6 +297,8 @@ class _EventCollector(BaseCallbackHandler):
             _snapshot(output) if error is None or output is not None else (None, False)
         )
         with self._lock:
+            if str(run_id) in self._fixture_runs:
+                return
             event = self._events.get(str(run_id))
             if event is None or event.status != "incomplete":
                 self._warnings.append(f"Unmatched end callback for {run_id}")

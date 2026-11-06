@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, and reviewable scenario suggestions are implemented.
-**Next build:** review labels and recorded-example imports (milestone 4.5, workflow 2). Creating reviewed regression cases from saved results is implemented; guided fix verification follows before milestone 5.
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, reviewed regression cases, and controlled tool-failure testing are implemented.
+**Next build:** review labels and recorded-example imports (milestone 4.5, workflow 2). Creating reviewed regression cases from saved results is implemented; guided fix verification and the remaining milestone 5 workflows are planned.
 
 **Published release:** [`thadam-ai` v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/),
 released on 2026-10-30. Completed features below describe `main`; reliability
@@ -213,18 +213,28 @@ Include an import with incomplete evidence and an incompatible comparison path.
 
 ## 5. Exercise failures and conversation simulations
 
-**Status:** planned, after milestone 4.5.
+**Status:** partially implemented. Controlled tool failures and retry-count checks are available; conversation simulation and stateful environments remain planned.
 
 **Outcome:** a developer checks whether an agent completes a conversation and
 recovers from controlled failures while preserving the expected state.
 
-- [ ] Add tool fixtures for exceptions, invalid responses, and unavailable services.
+- [x] Add tool fixtures for exceptions, invalid responses, and unavailable services through the SDK, CLI and dashboard. See [controlled tool failures](docs/milestones/05-tool-failures.md).
 - [ ] Define a conversation scenario with ordered user/agent turns, per-turn checks, final outcome checks, and explicit state lifecycle/reset rules.
 - [ ] Support scripted follow-up turns and session evidence for context retention, repeated questions, and behavior after a correction.
-- [ ] Assert tool-call/retry limits, recovery behavior, and allowed observable state changes.
-- [ ] Specify supported timeout, turn-limit, cancellation, and cleanup behavior for each execution mode before offering enforcement guarantees.
+- [x] Assert inclusive tool-call/retry bounds and recovery through explicit output/tool checks.
+- [ ] Assert allowed observable state changes.
+- [x] Specify scripted timeout errors, cooperative async cancellation and existing dashboard interruption for current execution modes; no enforced execution deadline.
+- [ ] Specify conversation turn limits, enforced deadlines and additional cleanup behavior before offering enforcement guarantees.
 - [ ] Add resettable stateful fixtures and retain partial conversation/tool evidence on failure or interruption.
-- [ ] Save discovered failures through milestone 4.5's reviewed regression workflow.
+- [x] Save discovered single/repeated case failures through milestone 4.5's reviewed regression workflow, retaining controlled fixture scripts.
+
+Fixture suites use schema 3, fixture runs schema 5 and repeated fixture runs schema
+2 with mode `fixtures`. Existing suite/run/repeated formats retain their contracts.
+Factories receive controlled tools afresh for every case attempt. Scripts are
+reviewed case contracts, including unused steps; changed scripts are incompatible
+without an intentional baseline transition. Call bounds evaluate completed
+evidence and do not stop execution. Stateful environments, call-order checks and
+enforced deadlines remain outside the implemented slice.
 
 Begin with scripted conversations and controlled tools. Any later model-driven
 user simulator needs explicit budgets, stopping rules, recorded configuration,

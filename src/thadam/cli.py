@@ -23,6 +23,7 @@ from thadam.errors import (
     ReportWriteError,
     SuiteValidationError,
 )
+from thadam.fixtures import FixtureAgent
 from thadam.models import Agent
 from thadam.reliability import compare_repeated
 from thadam.reliability_reporting import format_reliability_comparison, write_reliability_comparison
@@ -64,6 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "  2. Expose a synchronous Python callable, such as my_agent:run.\n"
             "  3. Run it and save the evidence:\n\n"
             "  thadam run cases.json --agent my_agent:run --report artifacts/run.json\n\n"
+            "  thadam run cases.json --fixture-factory my_agent:create_with_tools\n\n"
             "Choose a workflow\n"
             "  run -> compare                 Check results before and after a change.\n"
             "  repeat -> compare-repeated     Check reliability across many attempts.\n\n"
@@ -115,9 +117,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     run.add_argument(
-        "suite", type=Path, help="Path to a schema-1 or identified schema-2 JSON suite"
+        "suite", type=Path, help="Path to a legacy, identified, or tool-fixture JSON suite"
     )
-    run.add_argument("--agent", required=True, help="Agent reference: module:callable")
+    run_selection = run.add_mutually_exclusive_group(required=True)
+    run_selection.add_argument("--agent", help="Agent reference: module:callable")
+    run_selection.add_argument(
+        "--fixture-factory", help="Fresh agent per case: module:factory accepting FixtureTools"
+    )
     run.add_argument("--report", type=Path, help="Write a JSON report to this path")
     run.add_argument(
         "--agent-revision", help="Explicit application revision recorded in the report"
@@ -158,6 +164,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "  thadam repeat cases.json --agent my_agent:run --attempts 20\n"
             "  thadam repeat cases.json --agent my_agent:run --report artifacts/repeated.json\n"
             "  thadam repeat cases.json --agent-factory my_agent:create --attempts 20\n\n"
+            "  thadam repeat cases.json --fixture-factory my_agent:create_with_tools --attempts 5\n\n"
             "--agent reuses one callable across all attempts.\n"
             "--agent-factory calls a zero-argument factory for each case invocation.\n"
             "Next: review a baseline, then use thadam compare-repeated --help.\n"
@@ -165,12 +172,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     repeat.add_argument(
-        "suite", type=Path, help="Path to a schema-1 or identified schema-2 JSON suite"
+        "suite", type=Path, help="Path to a legacy, identified, or tool-fixture JSON suite"
     )
     selection = repeat.add_mutually_exclusive_group(required=True)
     selection.add_argument("--agent", help="Shared synchronous agent: module:callable")
     selection.add_argument(
         "--agent-factory", help="Fresh agent per case: module:zero_argument_factory"
+    )
+    selection.add_argument(
+        "--fixture-factory", help="Fresh agent per case: module:factory accepting FixtureTools"
     )
     repeat.add_argument(
         "--attempts",
@@ -339,12 +349,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.max_concurrency != 1 and not arguments.async_execution:
             raise SuiteValidationError("--max-concurrency requires --async")
         cases = load_suite(arguments.suite)
+        if any(case.tool_fixtures is not None for case in cases) and not arguments.fixture_factory:
+            raise SuiteValidationError("Tool fixture suites require --fixture-factory")
         # Agent imports and execution may print; keep those logs out of the summary.
         with redirect_stdout(sys.stderr):
             if arguments.command == "repeat":
                 factory = None
                 agent = None
-                if arguments.agent_factory:
+                if arguments.fixture_factory:
+                    agent = FixtureAgent(_load_reference(arguments.fixture_factory))
+                elif arguments.agent_factory:
                     factory = _load_reference(arguments.agent_factory)
                     validate_factory(factory, allow_async=arguments.async_execution)
                 else:
@@ -362,7 +376,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ),
                 )
             else:
-                agent = _load_agent(arguments.agent, allow_async=arguments.async_execution)
+                agent = (
+                    FixtureAgent(_load_reference(arguments.fixture_factory))
+                    if arguments.fixture_factory
+                    else _load_agent(arguments.agent, allow_async=arguments.async_execution)
+                )
                 report = (run_suite_async if arguments.async_execution else run_suite)(
                     agent,
                     cases,
@@ -391,7 +409,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     style=style,
                     width=shutil.get_terminal_size().columns,
                     suite=str(arguments.suite),
-                    agent=arguments.agent,
+                    agent=arguments.fixture_factory or arguments.agent,
                     verbose=arguments.verbose,
                 )
             )

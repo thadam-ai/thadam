@@ -1481,6 +1481,32 @@ pre {
 .check-editor > .field {
     margin-top: 14px;
 }
+.fixture-editor {
+    margin-block: 20px;
+}
+.fixture-editor > .muted {
+    margin-bottom: 14px;
+}
+.fixture-step + .fixture-step {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+.fixture-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 20px;
+    margin-top: 12px;
+}
+.fixture-editor > .inline-field {
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+.fixture-editor > .inline-field > .field {
+    flex: 1 1 160px;
+    min-width: 0;
+}
 .check-fields {
     display: flex;
     align-items: flex-end;

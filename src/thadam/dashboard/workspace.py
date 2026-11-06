@@ -226,8 +226,8 @@ class Workspace:
                 or not all(item["reference"].split(":"))
             ):
                 raise ValueError("Use a module:callable reference")
-            if item["mode"] not in ("shared", "factory"):
-                raise ValueError("Choose shared or factory mode")
+            if item["mode"] not in ("shared", "factory", "fixtures"):
+                raise ValueError("Choose shared, factory, or fixtures mode")
         if not writing:
             return agents
         # Settings are private application state, not a report format.

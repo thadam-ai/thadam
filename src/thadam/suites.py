@@ -8,6 +8,7 @@ from typing import overload
 
 from thadam._json import read_json, validate_json
 from thadam.errors import SuiteValidationError
+from thadam.fixtures import parse_fixtures, validate_fixtures
 from thadam.models import (
     Assertion,
     OutputEquals,
@@ -15,6 +16,7 @@ from thadam.models import (
     SuiteIdentity,
     TestCase,
     ToolArgumentsMatch,
+    ToolCallCount,
     ToolCalled,
     ToolNotCalled,
     Verifier,
@@ -65,7 +67,7 @@ def suite_identity(
 
 
 def load_suite(path: str | Path) -> tuple[TestCase, ...] | TestSuite:
-    """Read schema 1 cases or a schema 2 identified suite; raise SuiteValidationError."""
+    """Read legacy, identified or fixture suites; raise SuiteValidationError."""
     try:
         data = read_json(path)
     except (OSError, UnicodeError, ValueError, RecursionError) as error:
@@ -78,13 +80,13 @@ def suite_from_dict(data: object) -> tuple[TestCase, ...] | TestSuite:
     """Validate a saved suite object without file access or application imports."""
 
     version = data.get("schema_version") if isinstance(data, dict) else None
-    if type(version) is not int or version not in (1, 2):
-        raise SuiteValidationError("suite.schema_version must be the integer 1 or 2")
+    if type(version) is not int or version not in (1, 2, 3):
+        raise SuiteValidationError("suite.schema_version must be the integer 1, 2, or 3")
     _require_fields(
-        data, {"schema_version", "cases"} | ({"suite"} if version == 2 else set()), "suite"
+        data, {"schema_version", "cases"} | ({"suite"} if version >= 2 else set()), "suite"
     )
     identity = None
-    if version == 2:
+    if version >= 2:
         _require_fields(data["suite"], {"id", "revision"}, "suite.suite")
         identity = suite_identity((), SuiteIdentity(**data["suite"]))
     if not isinstance(data["cases"], list):
@@ -93,14 +95,25 @@ def suite_from_dict(data: object) -> tuple[TestCase, ...] | TestSuite:
     cases = []
     for index, raw in enumerate(data["cases"]):
         location = f"suite.cases[{index}]"
-        _require_fields(raw, {"id", "input", "assertions"}, location)
+        _require_fields(
+            raw,
+            {"id", "input", "assertions"} | ({"tool_fixtures"} if version == 3 else set()),
+            location,
+        )
         if not isinstance(raw["assertions"], list):
             raise SuiteValidationError(f"{location}.assertions must be an array")
         assertions = tuple(
             parse_assertion(assertion, f"{location}.assertions[{i}]")
             for i, assertion in enumerate(raw["assertions"])
         )
-        cases.append(TestCase(id=raw["id"], input=raw["input"], assertions=assertions))
+        cases.append(
+            TestCase(
+                id=raw["id"],
+                input=raw["input"],
+                assertions=assertions,
+                tool_fixtures=parse_fixtures(raw["tool_fixtures"]) if version == 3 else None,
+            )
+        )
     validated = validate_suite(cases)
     return TestSuite(identity, validated) if identity is not None else validated
 
@@ -115,6 +128,7 @@ def validate_suite(cases: Sequence[TestCase]) -> tuple[TestCase, ...]:
         if not isinstance(case, TestCase):
             raise SuiteValidationError(f"{location} must be a TestCase")
         _unique_id(case.id, seen, location)
+        validate_fixtures(case.tool_fixtures)
         try:
             validate_json(case.input, f"{location}.input")
         except ValueError as error:
@@ -161,7 +175,7 @@ def _validate_assertion(assertion: object, location: str) -> None:
             raise SuiteValidationError(
                 f"{location}: keys must be a non-empty sequence of unique strings"
             )
-    elif isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch)):
+    elif isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch, ToolCallCount)):
         if not isinstance(assertion.tool, str) or not assertion.tool.strip():
             raise SuiteValidationError(f"{location}: tool must be a non-empty string")
         try:
@@ -170,6 +184,14 @@ def _validate_assertion(assertion: object, location: str) -> None:
                 if not isinstance(assertion.expected, dict) or not assertion.expected:
                     raise ValueError("Expected tool arguments must be a non-empty object")
                 validate_json(assertion.expected)
+            if isinstance(assertion, ToolCallCount):
+                if type(assertion.min_calls) is not int or assertion.min_calls < 0:
+                    raise ValueError("min_calls must be a non-negative integer")
+                if assertion.max_calls is not None and (
+                    type(assertion.max_calls) is not int
+                    or assertion.max_calls < assertion.min_calls
+                ):
+                    raise ValueError("max_calls must be None or an integer at least min_calls")
         except ValueError as error:
             raise SuiteValidationError(f"{location}: {error}") from error
     else:
@@ -224,6 +246,9 @@ def parse_assertion(raw: object, location: str) -> Assertion:
     if raw.get("type") == "tool_arguments_match":
         _require_fields(raw, {"id", "type", "tool", "expected"}, location)
         return ToolArgumentsMatch(id=raw["id"], tool=raw["tool"], expected=raw["expected"])
+    if raw.get("type") == "tool_call_count":
+        _require_fields(raw, {"id", "type", "tool", "min_calls", "max_calls"}, location)
+        return ToolCallCount(raw["id"], raw["tool"], raw["min_calls"], raw["max_calls"])
     raise SuiteValidationError(f"{location}: unknown assertion type {raw.get('type')!r}")
 
 

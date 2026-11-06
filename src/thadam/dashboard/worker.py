@@ -10,6 +10,7 @@ from pathlib import Path
 
 from thadam.async_runner import run_repeated_async, run_suite_async
 from thadam.cli import _load_agent, _load_reference
+from thadam.fixtures import FixtureAgent
 from thadam.repetition import run_repeated
 from thadam.repetition_reporting import write_repeated
 from thadam.reporting import write_report
@@ -75,6 +76,11 @@ def main() -> int:
         suite_runner = run_suite_async if async_execution else run_suite
         reference = specification["reference"]
         revision = specification.get("agent_revision") or None
+        fixture_agent = (
+            FixtureAgent(_load_reference(reference))
+            if specification["mode"] == "fixtures"
+            else None
+        )
         if specification["attempts"] > 1 or specification["mode"] == "factory":
             if specification["mode"] == "factory":
                 result = repeat_runner(
@@ -87,7 +93,7 @@ def main() -> int:
                 )
             else:
                 result = repeat_runner(
-                    _load_agent(reference, allow_async=async_execution),
+                    fixture_agent or _load_agent(reference, allow_async=async_execution),
                     cases,
                     attempts=specification["attempts"],
                     agent_revision=revision,
@@ -99,7 +105,7 @@ def main() -> int:
             write_repeated(result, directory / "result.json")
         else:
             result = suite_runner(
-                _load_agent(reference, allow_async=async_execution),
+                fixture_agent or _load_agent(reference, allow_async=async_execution),
                 cases,
                 agent_revision=revision,
                 on_case_complete=progress,

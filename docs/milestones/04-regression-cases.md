@@ -29,6 +29,16 @@ the preview/destination, and select **Save reviewed suite**. A changed draft or
 existing destination requires reloading; new destinations never overwrite files.
 The saved suite uses the existing suite format and can run through the CLI/SDK.
 
+For a source case from a controlled fixture evaluation, the preview and saved
+suite retain the source case's complete tool scripts, including unused responses
+and explicit repetition. New destinations use identified fixture suite schema 3.
+Existing destinations must already be fixture suites; enable tool fixtures in the
+suite editor first when needed. An ordinary regression case appended to a fixture
+suite starts with an explicit empty script object. Inspect these scripts in the
+suite preview, then configure any additional responses in the saved suite editor.
+Run fixture suites through an explicit tool fixture factory as described in the
+[tool-failure guide](05-tool-failures.md). Saving still executes no agents or tools.
+
 ## Draft evidence and boundaries
 
 `kind: "regression_draft"`, `schema_version: 1` has these fields:

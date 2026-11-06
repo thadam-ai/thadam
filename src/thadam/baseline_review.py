@@ -10,6 +10,7 @@ from pathlib import Path
 from thadam._json import json_equal, read_json, validate_json
 from thadam.contracts import equivalent_definitions
 from thadam.errors import ReportValidationError
+from thadam.fixtures import fixtures_to_dict
 from thadam.models import CaseResult, JSONValue, RunReport
 from thadam.repetition import RepeatedReport
 from thadam.repetition_loading import repeated_from_dict, require_consistent, validate_repeated
@@ -104,7 +105,15 @@ def _validated(report: Evaluation) -> Evaluation:
 def _declaration(case: CaseResult | None) -> JSONValue:
     if case is None:
         return None
-    return {"input": case.input, "checks": [asdict(check) for check in case.check_definitions]}
+    return {
+        "input": case.input,
+        "checks": [asdict(check) for check in case.check_definitions],
+        **(
+            {"tool_fixtures": fixtures_to_dict(case.tool_fixtures)}
+            if case.tool_fixtures is not None
+            else {}
+        ),
+    }
 
 
 def review_baseline(candidate: Evaluation, baseline: Evaluation | None = None) -> BaselineReview:
@@ -145,6 +154,18 @@ def review_baseline(candidate: Evaluation, baseline: Evaluation | None = None) -
             continue
         if not json_equal(left.input, right.input):
             changes.append(ContractChange("input_changed", case_id, None, left.input, right.input))
+        before_fixtures = (
+            None if left.tool_fixtures is None else fixtures_to_dict(left.tool_fixtures)
+        )
+        after_fixtures = (
+            None if right.tool_fixtures is None else fixtures_to_dict(right.tool_fixtures)
+        )
+        if not json_equal(before_fixtures, after_fixtures):
+            changes.append(
+                ContractChange(
+                    "tool_fixtures_changed", case_id, None, before_fixtures, after_fixtures
+                )
+            )
         a = {check.id: check for check in left.check_definitions}
         b = {check.id: check for check in right.check_definitions}
         for check_id in [*a, *(key for key in b if key not in a)]:

@@ -98,6 +98,16 @@ expectations, or `agent:create` in factory mode. Save an agent name to reuse it.
 Python agent implementations and custom verifier code stay in your editor;
 reports containing SDK verifier outcomes remain fully inspectable.
 
+For controlled failures, use **Configure tool failures** in a case editor. Add
+named scripts with JSON returns or simulated errors, optionally repeat the final
+response, and add `tool_call_count` checks for inclusive attempt bounds. Scripts
+are saved case contracts and require a suite revision change when edited.
+Choose **Tool fixture factory** in execution settings and supply a factory that
+accepts `FixtureTools`; one attempt is supported. Scripts reset per invocation,
+including repeated/async runs. Results include **Configured tool fixtures** and
+the observed calls. See [the integration and controlled demo](milestones/05-tool-failures.md).
+Call bounds and scripted timeout errors do not impose execution deadlines.
+
 ## Evidence and job lifecycle
 
 Opening an artifact is read-only. Supported files are suites, schema-3/4 runs,

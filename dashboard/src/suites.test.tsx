@@ -61,6 +61,147 @@ function editor() {
 }
 
 describe("suite editor state", () => {
+    it("saves tool scripts and call bounds in an identified schema-3 suite", async () => {
+        vi.mocked(api).mockResolvedValue(artifact);
+        editor();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Configure tool failures" }),
+        );
+        fireEvent.change(
+            screen.getByRole("textbox", { name: "New fixture tool name" }),
+            { target: { value: "get_order" } },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Add tool" }));
+        fireEvent.change(screen.getByRole("combobox", { name: "Response 1" }), {
+            target: { value: "raise" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Add response" }));
+        fireEvent.change(
+            screen.getByRole("textbox", {
+                name: "Returned JSON for get_order, response 2",
+            }),
+            { target: { value: '{"amount":25}' } },
+        );
+        fireEvent.click(
+            screen.getByRole("checkbox", { name: "Repeat final response" }),
+        );
+        fireEvent.change(screen.getByRole("combobox", { name: "Check type" }), {
+            target: { value: "tool_call_count" },
+        });
+        fireEvent.change(screen.getByRole("textbox", { name: "Tool name" }), {
+            target: { value: "get_order" },
+        });
+        fireEvent.change(
+            screen.getByRole("spinbutton", { name: "Minimum calls" }),
+            { target: { value: "2" } },
+        );
+        fireEvent.change(
+            screen.getByRole("spinbutton", { name: /Maximum calls/ }),
+            { target: { value: "2" } },
+        );
+        fireEvent.click(screen.getByText("Suite settings"));
+        fireEvent.change(
+            screen.getByRole("textbox", { name: /Suite revision/ }),
+            { target: { value: "2" } },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+        await waitFor(() =>
+            expect(api).toHaveBeenCalledWith(
+                "suite",
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        schema_version: 3,
+                        cases: expect.arrayContaining([
+                            expect.objectContaining({
+                                id: "first",
+                                tool_fixtures: {
+                                    get_order: {
+                                        steps: [
+                                            {
+                                                type: "raise",
+                                                error: "ConnectionError",
+                                                message: "Service unavailable",
+                                            },
+                                            {
+                                                type: "return",
+                                                value: { amount: 25 },
+                                            },
+                                        ],
+                                        repeat_last: true,
+                                    },
+                                },
+                                assertions: [
+                                    {
+                                        id: "out",
+                                        type: "tool_call_count",
+                                        tool: "get_order",
+                                        min_calls: 2,
+                                        max_calls: 2,
+                                    },
+                                ],
+                            }),
+                            expect.objectContaining({
+                                id: "second",
+                                tool_fixtures: {},
+                            }),
+                        ]),
+                    }),
+                }),
+                "PUT",
+            ),
+        );
+    });
+    it("retains invalid fixture JSON across cases and clears it when the tool is removed", () => {
+        editor();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Configure tool failures" }),
+        );
+        fireEvent.change(
+            screen.getByRole("textbox", { name: "New fixture tool name" }),
+            { target: { value: "lookup" } },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Add tool" }));
+        fireEvent.change(
+            screen.getByRole("textbox", {
+                name: "Returned JSON for lookup, response 1",
+            }),
+            { target: { value: '{"unfinished":' } },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Edit second" }));
+        expect(
+            (
+                screen.getByRole("button", {
+                    name: "Save changes",
+                }) as HTMLButtonElement
+            ).disabled,
+        ).toBe(true);
+        fireEvent.click(screen.getByRole("button", { name: /Edit first/ }));
+        expect(
+            (
+                screen.getByRole("textbox", {
+                    name: "Returned JSON for lookup, response 1",
+                }) as HTMLTextAreaElement
+            ).value,
+        ).toBe('{"unfinished":');
+        fireEvent.click(screen.getByRole("button", { name: "Remove tool" }));
+        expect(
+            (
+                screen.getByRole("button", {
+                    name: "Save changes",
+                }) as HTMLButtonElement
+            ).disabled,
+        ).toBe(false);
+        fireEvent.click(screen.getByRole("button", { name: "Add case" }));
+        fireEvent.click(screen.getByRole("button", { name: /^JSON$/ }));
+        const raw = JSON.parse(
+            (
+                screen.getByRole("textbox", {
+                    name: "Suite JSON",
+                }) as HTMLTextAreaElement
+            ).value,
+        );
+        expect(raw.cases.every((test: any) => test.tool_fixtures)).toBe(true);
+    });
     it("keeps invalid JSON blocked when another case is removed", async () => {
         editor();
         fireEvent.change(screen.getAllByRole("textbox", { name: "Input" })[0], {

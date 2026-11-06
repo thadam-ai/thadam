@@ -57,6 +57,7 @@ Controlled demo data. [Explore the dashboard →](docs/dashboard-tour.md)
 | Suggest cases with ChatGPT or your OpenAI API key | [Reviewable scenario suggestions](docs/milestones/04-scenario-suggestions.md) |
 | Run async agents or overlap cases | [Async execution and concurrency](docs/milestones/03-async-execution.md) |
 | Trace a LangGraph agent and check tool calls | [LangGraph integration](docs/milestones/02-langgraph.md) |
+| Test tool failures, recovery, and retry bounds | [Controlled tool failures](docs/milestones/05-tool-failures.md) |
 | Compare a baseline with a candidate | [Regression comparison](docs/milestones/03-regression-comparison.md) |
 | Measure repeated-run reliability | [Reliability gates](docs/milestones/03-reliability.md) |
 | Review and approve an intentional baseline change | [Baseline review](docs/milestones/03-baseline-review.md) |

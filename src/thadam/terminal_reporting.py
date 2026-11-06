@@ -6,6 +6,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 
+from thadam.fixtures import fixtures_to_dict
 from thadam.models import AssertionResult, CaseError, CaseResult, RunReport
 from thadam.terminal import ColorRole, TerminalStyle, display_text
 
@@ -231,6 +232,12 @@ def case_evidence(view: ReportView, case: CaseResult, *, verbose: bool = False) 
             + json.dumps([asdict(item) for item in case.check_definitions], ensure_ascii=False),
             indent=4,
         )
+        if case.tool_fixtures is not None:
+            view.add(
+                "tool fixtures: "
+                + json.dumps(fixtures_to_dict(case.tool_fixtures), ensure_ascii=False),
+                indent=4,
+            )
     for result in case.assertions:
         if verbose or not result.passed:
             view.section(

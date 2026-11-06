@@ -170,3 +170,15 @@ publication failure. OAuth checks must reject invalid signatures, issuer, audien
 nonce/state, expired/replayed callbacks, lost plan scopes and account replacement.
 Credentials and raw remote error messages must not appear in public status or logs.
 Live ChatGPT sign-in or model generation is a separate explicit manual check.
+
+### Controlled tool-failure checks
+
+Read [the fixture contract](docs/milestones/05-tool-failures.md). Run
+`python -m pytest -q tests/test_fixtures.py tests/test_fixture_langgraph.py tests/test_dashboard.py`
+with the applicable optional extras, plus the dashboard npm checks above.
+Core fixtures require no optional dependencies; the graph/API modules skip when
+their extras are absent. Validate caught missing/exhausted calls, repeated final
+steps, unused contracts, factory isolation, cancellation/observer cleanup, partial
+and invalid child traces, inclusive counts, changed scripts and revision guards.
+Keep new suite/run/repeated schemas separate from legacy formats. Scripted timeout
+errors and call-count checks must never be described as execution enforcement.

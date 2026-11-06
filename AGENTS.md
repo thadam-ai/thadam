@@ -163,3 +163,17 @@ Expectations start empty; source output is never automatically the expected valu
 Draft review is explicit acknowledgement, not authenticated identity. Saved suites
 retain existing schemas; keep the draft for provenance. Review labels, external
 imports, masking, and guided fix verification remain planned.
+
+## Controlled tool failures
+
+Read `docs/milestones/05-tool-failures.md`. `FixtureAgent(factory)` receives fresh
+`FixtureTools` for every case attempt through existing sync/async runners.
+`fixtures.py` owns scripts, handles, sticky errors and evidence. Identified fixture
+suites/runs use schemas 3/5; repeated fixture runs use schema 2 and mode `fixtures`.
+Legacy formats remain unchanged. Full scripts participate in compatibility/review,
+including unused steps. Missing/exhausted calls cannot be caught into a pass and
+never fall through to a real service. `ToolCallCount` counts all observed attempts
+after execution and requires complete explicit evidence; it does not stop retries.
+Use the optional LangGraph `fixture_tool` helper to avoid duplicate spans. Keep
+dashboard suite revision/stale-write and process interruption guards. Stateful
+environments, call-order checks and enforced deadlines remain planned.

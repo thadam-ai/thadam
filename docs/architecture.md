@@ -42,6 +42,7 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/adapters/python.py` | Validate the synchronous Python callable contract | Require one positional input; runner owns invocation |
 | `src/thadam/adapters/langgraph.py` | Execute compiled graphs with public model/tool callbacks | Optional imports, per-invocation collectors, JSON state mapping, fresh checkpoint threads |
 | `src/thadam/events.py` | Validate and snapshot execution evidence | Reject invalid traces; preserve unknown-versus-empty semantics |
+| `src/thadam/fixtures.py` | Strict script declarations, controlled tool handles and fresh-agent factories | Per-invocation state, sticky unplanned calls, explicit evidence; no real-service fallback or enforced timeout |
 | `src/thadam/assertions.py` | Built-in assertions and Python verifier contract | Return evidence; do not invoke the agent |
 | `src/thadam/contracts.py` | Snapshot and compare declared check definitions | Keep declared expectations separate from observed results |
 | `src/thadam/report_loading.py` | Strict run-report parsing and evidence validation | Reject missing, inconsistent, or unsupported data without importing agent code |
@@ -205,3 +206,22 @@ existing guarded suite writer. `dashboard/src/regression.tsx` presents review an
 suite preview; individual repeated attempts retain their one-based source index.
 No agent/verifier execution or provider call occurs in this workflow. See the
 [workflow and draft contract](milestones/04-regression-cases.md).
+
+## Controlled tool failures
+
+`FixtureAgent(factory)` opts existing runners into a fresh `factory(FixtureTools)`
+per case attempt. The runner snapshots case scripts before application code;
+`fixtures.py` validates/serializes them and owns independent synchronous/async tool
+handles, script consumption, sticky configuration errors, closure and evidence.
+`ToolCallCount` shares the existing pure assertion/definition/loading path.
+Fixture runs use schema 5, identified fixture suites schema 3, and repeated fixture
+evaluations schema 2 with mode `fixtures`. Older formats remain unchanged.
+
+`contracts.py`, repeated loading and baseline review include full scripts in case
+compatibility, including unused steps. Strict loaders check fixture events against
+the declared steps without executing a factory. The optional LangGraph
+`fixture_tool` helper marks its public StructuredTool callbacks so fixture-owned
+spans are counted once while other callbacks remain. Core imports stay dependency
+free. Dashboard `fixtures.tsx` extends the suite editor, and its existing job
+controller selects the explicit factory mode. See [the lifecycle and evidence
+contract](milestones/05-tool-failures.md).
