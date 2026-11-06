@@ -149,7 +149,11 @@ export function RunPanel({
                         </Field>
                         <Field
                             label="Agent reference"
-                            hint="Your Python module:callable, imported only when you run."
+                            hint={
+                                mode === "fixtures"
+                                    ? "Factory accepting FixtureTools and returning a fresh agent for each case. Imported only when you run."
+                                    : "Your Python module:callable, imported only when you run."
+                            }
                         >
                             <input
                                 value={reference}
@@ -220,6 +224,9 @@ export function RunPanel({
                                 >
                                     <option value="shared">
                                         Shared callable
+                                    </option>
+                                    <option value="fixtures">
+                                        Tool fixture factory
                                     </option>
                                     <option value="factory">
                                         Fresh factory per invocation
@@ -655,6 +662,16 @@ export function CaseEvidence({ test }: { test: Data }) {
                     )}
                 </div>
             </details>
+            {test.tool_fixtures !== undefined && (
+                <details className="raw-detail">
+                    <summary>Configured tool fixtures</summary>
+                    <p className="muted">
+                        Saved responses include unused steps. Each invocation
+                        starts with a fresh script.
+                    </p>
+                    <Json value={test.tool_fixtures} />
+                </details>
+            )}
             <TraceView test={test} />
         </div>
     );

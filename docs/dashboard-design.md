@@ -86,3 +86,20 @@ existing case-list/detail composition with a visible review decision per case.
 FORM: ordinary extension of the pinned Operate workspace; preserve its navigation,
 file library and responsive pane behavior. No new visual-world selection applies.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Tool fixture extension direction contract
+
+THESIS: configure controlled failures beside each case's input and checks, using
+the existing focused editor. Fixture configuration is saved test content.
+OWN-WORLD: inherit the Operate workspace, Inter, quiet surfaces, existing fields,
+buttons, semantic colors and independent scrolling panes.
+STORY: connect an explicit Python factory once, add named tool scripts, choose
+returns or simulated errors, set call bounds, save a reviewed revision, and run.
+FIRST VIEWPORT: retain the case navigator and input editor; Tool fixtures sits
+between input and Assertions. Steps remain vertically readable in narrow panes.
+The existing Save action owns persistence. Execution mode offers a tool fixture
+factory with a plain explanation of fresh agents per invocation.
+FORM: local extension, code-led; no new page, visual-world selection or seed.
+Invalid JSON blocks Save and survives navigation between cases. Repetition is an
+explicit checkbox; simulated timeout errors are labeled as scripted responses.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

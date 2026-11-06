@@ -32,7 +32,9 @@ expected outcome follows from supplied rules), and case: {id, input, assertions}
 Use stable unique case/check IDs, distinct from existing cases. Each assertion uses
 an existing Thadam type: output_equals {id,type,expected}, output_has_keys
 {id,type,keys}, tool_called or tool_not_called {id,type,tool}, or
- tool_arguments_match {id,type,tool,expected}. Do not invent assertion types
+tool_arguments_match {id,type,tool,expected}, or tool_call_count
+{id,type,tool,min_calls,max_calls} (inclusive integer bounds; max_calls may be null).
+Do not invent assertion types
 or Python verifiers. Tool checks require explicit runtime tracing. Never substitute
 mere output shape for semantic correctness. If correctness is underspecified,
 leave assertions empty and explain what the developer must supply in uncertainty.
@@ -111,7 +113,23 @@ def validate_request(request: dict) -> dict:
     if not isinstance(data["schemas"], dict):
         raise ValueError("schemas must be an object")
     if data["existing_cases"]:
-        suite_from_dict({"schema_version": 1, "cases": data["existing_cases"]})
+        fixture_cases = any("tool_fixtures" in case for case in data["existing_cases"])
+        suite_from_dict(
+            {
+                "schema_version": 3 if fixture_cases else 1,
+                **(
+                    {"suite": {"id": "generation-context", "revision": "preview"}}
+                    if fixture_cases
+                    else {}
+                ),
+                "cases": [
+                    {**case, "tool_fixtures": case.get("tool_fixtures", {})}
+                    if fixture_cases
+                    else case
+                    for case in data["existing_cases"]
+                ],
+            }
+        )
     if not (data["examples"] or data["schemas"] or data["existing_cases"]):
         raise ValueError("Supply input/output examples, schemas, or selected existing cases")
     if len(json.dumps(data).encode()) > 1024 * 1024:
@@ -375,7 +393,14 @@ def selected_suite(
         if not revision or revision == suite["suite"]["revision"]:
             raise ValueError("Choose a new suite revision for the added cases")
         suite["suite"]["revision"] = revision
-    suite["cases"].extend(deepcopy(accepted))
+    suite["cases"].extend(
+        [
+            {**deepcopy(case), "tool_fixtures": {}}
+            if suite["schema_version"] == 3
+            else deepcopy(case)
+            for case in accepted
+        ]
+    )
     suite_from_dict(suite)
     return suite
 

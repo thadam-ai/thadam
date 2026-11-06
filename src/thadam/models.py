@@ -51,8 +51,41 @@ class ToolArgumentsMatch:
     expected: dict[str, JSONValue]
 
 
+@dataclass(frozen=True)
+class ToolCallCount:
+    """Bound total observed tool attempts, including attempts that raise."""
+
+    id: str
+    tool: str
+    min_calls: int = 0
+    max_calls: int | None = None
+
+
+@dataclass(frozen=True)
+class ToolReturn:
+    """Return an independent JSON value from a scripted tool invocation."""
+
+    value: JSONValue
+
+
+@dataclass(frozen=True)
+class ToolRaise:
+    """Raise a built-in TimeoutError, ConnectionError, or RuntimeError."""
+
+    error: Literal["TimeoutError", "ConnectionError", "RuntimeError"]
+    message: str
+
+
+@dataclass(frozen=True)
+class ToolScript:
+    """Ordered fixture responses; exhaustion errors unless repeat_last is explicit."""
+
+    steps: tuple[ToolReturn | ToolRaise, ...]
+    repeat_last: bool = False
+
+
 Assertion: TypeAlias = (
-    OutputEquals | OutputHasKeys | ToolCalled | ToolNotCalled | ToolArgumentsMatch
+    OutputEquals | OutputHasKeys | ToolCalled | ToolNotCalled | ToolArgumentsMatch | ToolCallCount
 )
 
 
@@ -146,6 +179,7 @@ class TestCase:
     input: JSONValue
     assertions: tuple[Assertion, ...] = ()
     verifiers: tuple[Verifier, ...] = ()
+    tool_fixtures: dict[str, ToolScript] | None = None
 
 
 @dataclass(frozen=True)
@@ -172,7 +206,7 @@ class AssertionResult:
 class CaseError:
     """An execution or evaluation error, distinct from a failed expectation."""
 
-    source: Literal["agent", "output", "verifier", "assertion", "trace"]
+    source: Literal["agent", "output", "verifier", "assertion", "trace", "fixture"]
     type: str
     message: str
     assertion_id: str | None = None
@@ -194,6 +228,7 @@ class CaseResult:
     trace_complete: bool | None = None
     trace_warnings: tuple[str, ...] = ()
     check_definitions: tuple[CheckDefinition, ...] = ()
+    tool_fixtures: dict[str, ToolScript] | None = None
 
 
 @dataclass(frozen=True)
@@ -218,7 +253,9 @@ class RunReport:
     schema_version: int = field(default=3, init=False)
 
     def __post_init__(self) -> None:
-        if self.suite is not None:
+        if any(case.tool_fixtures is not None for case in self.cases):
+            object.__setattr__(self, "schema_version", 5)
+        elif self.suite is not None:
             object.__setattr__(self, "schema_version", 4)
 
     @property

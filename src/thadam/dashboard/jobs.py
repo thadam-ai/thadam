@@ -92,8 +92,10 @@ class Jobs:
             attempts = specification["attempts"]
             if type(attempts) is not int or attempts < 1:
                 raise ValueError("Attempts must be an integer of at least 1")
-            if specification["mode"] not in ("shared", "factory"):
-                raise ValueError("Choose shared or factory mode")
+            if specification["mode"] not in ("shared", "factory", "fixtures"):
+                raise ValueError("Choose shared, factory, or fixtures mode")
+            if artifact["data"]["schema_version"] == 3 and specification["mode"] != "fixtures":
+                raise ValueError("Tool fixture suites require Tool fixture factory mode")
             if specification["mode"] == "factory" and attempts < 2:
                 raise ValueError(
                     "Factory mode uses repeated evaluations; choose at least 2 attempts"

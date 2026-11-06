@@ -9,6 +9,7 @@ from time import perf_counter
 
 from thadam.adapters.python import validate_agent
 from thadam.errors import AgentConfigurationError, SuiteValidationError
+from thadam.fixtures import FixtureAgent
 from thadam.models import Agent, AsyncAgent, CaseResult, RunReport, SuiteIdentity, TestCase
 from thadam.repetition import RepeatedReport, validate_factory
 from thadam.runner import _agent_error, _finish_case, _prepare_run
@@ -64,7 +65,11 @@ async def run_suite_async(
         for index, case in pending:
             started = perf_counter()
             try:
-                output = agent(deepcopy(case.input))
+                output = (
+                    agent.ainvoke_case(case.tool_fixtures, deepcopy(case.input))
+                    if isinstance(agent, FixtureAgent)
+                    else agent(deepcopy(case.input))
+                )
                 if inspect.isawaitable(output):
                     output = await output
             except (Exception, SystemExit) as error:
@@ -144,4 +149,11 @@ async def run_repeated_async(
                 on_case_complete=on_case_complete,
             )
         )
-    return RepeatedReport(tuple(runs), "factory" if agent_factory is not None else "shared")
+    return RepeatedReport(
+        tuple(runs),
+        "fixtures"
+        if isinstance(agent, FixtureAgent)
+        else "factory"
+        if agent_factory is not None
+        else "shared",
+    )

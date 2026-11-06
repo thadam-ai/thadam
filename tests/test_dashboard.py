@@ -185,6 +185,63 @@ def test_settings_save_without_import_and_invalid_reference(client):
     assert client.get("/api/agents").json()[0]["reference"] == "does_not_exist:run"
 
 
+@pytest.mark.parametrize("attempts,async_execution", [(1, False), (2, False), (2, True)])
+def test_dashboard_fixture_configuration_execution_and_saved_evidence(
+    client, project, attempts, async_execution
+):
+    data = suite_data()
+    data["schema_version"] = 3
+    data["cases"][0]["tool_fixtures"] = {
+        "lookup": {
+            "steps": [
+                {"type": "raise", "error": "ConnectionError", "message": "offline"},
+                {"type": "return", "value": 1},
+            ],
+            "repeat_last": False,
+        }
+    }
+    data["cases"][0]["assertions"].append(
+        {
+            "id": "retry-count",
+            "type": "tool_call_count",
+            "tool": "lookup",
+            "min_calls": 2,
+            "max_calls": 2,
+        }
+    )
+    response = client.put(
+        "/api/suite", json={"path": "fixtures.json", "data": data, "fingerprint": None}
+    )
+    assert response.status_code == 200, response.text
+    (project / "recovery.py").write_text(
+        "def create(tools):\n    def run(value):\n        try:\n            return tools['lookup'](value)\n        except ConnectionError:\n            return tools['lookup'](value)\n    return run\n"
+    )
+    settings = {
+        "suite": "fixtures.json",
+        "reference": "recovery:create",
+        "attempts": attempts,
+        "mode": "shared",
+        "agent_revision": "v1",
+        "report": "recovery.json",
+        "async_execution": async_execution,
+        "max_concurrency": 2 if async_execution else 1,
+    }
+    assert client.post("/api/jobs", json=settings).status_code == 400
+    settings["mode"] = "fixtures"
+    agent = [{"name": "Recovery", "reference": "recovery:create", "mode": "fixtures"}]
+    assert client.put("/api/agents", json=agent).status_code == 200
+    assert client.get("/api/agents").json() == agent
+    response = client.post("/api/jobs", json=settings)
+    assert response.status_code == 200, response.text
+    result = completed(client)
+    assert result["state"] == "completed" and result["exit_code"] == 0
+    saved = client.get("/api/artifact", params={"path": "recovery.json"}).json()["data"]
+    assert saved["schema_version"] == (5 if attempts == 1 else 2)
+    run = saved if attempts == 1 else saved["runs"][0]
+    assert len(run["cases"][0]["events"]) == 2
+    assert run["cases"][0]["tool_fixtures"] == data["cases"][0]["tool_fixtures"]
+
+
 def test_compare_review_approve_and_normal_write_protection(client, project):
     run(client, path="old.json")
     completed(client)

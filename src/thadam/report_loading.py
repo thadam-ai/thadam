@@ -8,6 +8,7 @@ from thadam.assertions import evaluate_assertion
 from thadam.contracts import definition_assertion
 from thadam.errors import ReportValidationError, TraceUnavailableError
 from thadam.events import snapshot_trace
+from thadam.fixtures import parse_fixtures, validate_fixture_evidence
 from thadam.models import (
     AssertionResult,
     CaseError,
@@ -24,7 +25,7 @@ from thadam.suites import suite_identity
 
 
 def load_report(path: str | Path) -> RunReport:
-    """Load schema-3/4 evidence or an approved baseline; raise ReportValidationError.
+    """Load schema-3/4/5 evidence or an approved baseline; raise ReportValidationError.
 
     Legacy reports need fresh runs because they lack declared check contracts.
     Agent modules and custom verifiers are never imported or executed.
@@ -62,11 +63,11 @@ def report_from_dict(data: object) -> RunReport:
             raise ValueError("Legacy reports cannot be compared; generate fresh schema-3 reports")
         version = data.get("schema_version") if isinstance(data, dict) else None
         fields = (set(RunReport.__dataclass_fields__) - {"suite"}) | {"summary"}
-        _fields(data, fields | ({"suite"} if version == 4 else set()), "report")
-        if type(version) is not int or version not in (3, 4):
-            raise ValueError("report.schema_version must be the integer 3 or 4")
+        _fields(data, fields | ({"suite"} if version in (4, 5) else set()), "report")
+        if type(version) is not int or version not in (3, 4, 5):
+            raise ValueError("report.schema_version must be the integer 3, 4, or 5")
         identity = None
-        if version == 4:
+        if version == 4 or version == 5 and data["suite"] is not None:
             _fields(data["suite"], {"id", "revision"}, "report.suite")
             identity = suite_identity((), SuiteIdentity(**data["suite"]))
         if type(data["evaluation_version"]) is not int or data["evaluation_version"] != 1:
@@ -74,7 +75,9 @@ def report_from_dict(data: object) -> RunReport:
         _text(data["run_id"], "report.run_id")
         if data["agent_revision"] is not None:
             _text(data["agent_revision"], "report.agent_revision")
-        cases = tuple(_case(raw) for raw in _array(data["cases"], "report.cases"))
+        cases = tuple(
+            _case(raw, fixture_run=version == 5) for raw in _array(data["cases"], "report.cases")
+        )
         if not cases:
             raise ValueError("A run report must contain at least one case")
         _unique([case.id for case in cases], "case IDs")
@@ -90,8 +93,12 @@ def report_from_dict(data: object) -> RunReport:
         raise ReportValidationError(str(error)) from error
 
 
-def _case(raw: object) -> CaseResult:
-    _fields(raw, set(CaseResult.__dataclass_fields__), "case")
+def _case(raw: object, *, fixture_run: bool = False) -> CaseResult:
+    _fields(
+        raw,
+        set(CaseResult.__dataclass_fields__) - (set() if fixture_run else {"tool_fixtures"}),
+        "case",
+    )
     _text(raw["id"], "case.id")
     if raw["status"] not in ("passed", "failed", "error"):
         raise ValueError("Unknown case status")
@@ -111,6 +118,8 @@ def _case(raw: object) -> CaseResult:
     assertions = tuple(_assertion(item) for item in _array(raw["assertions"], "assertions"))
     _unique([item.id for item in assertions], "assertion result IDs")
     errors = tuple(_error(item) for item in _array(raw["errors"], "errors"))
+    if any(error.source == "fixture" for error in errors) and not fixture_run:
+        raise ValueError("Fixture errors require schema-5 fixture evidence")
     warnings = _array(raw["trace_warnings"], "trace_warnings")
     if any(not isinstance(warning, str) for warning in warnings):
         raise ValueError("Trace warnings must be strings")
@@ -132,9 +141,14 @@ def _case(raw: object) -> CaseResult:
             "events": events,
             "trace_warnings": tuple(warnings),
             "check_definitions": definitions,
+            "tool_fixtures": parse_fixtures(raw["tool_fixtures"]) if fixture_run else None,
         }
     )
     _outcomes(case)
+    if fixture_run:
+        validate_fixture_evidence(
+            case.tool_fixtures, case.events, any(error.source == "fixture" for error in errors)
+        )
     return case
 
 
@@ -170,7 +184,7 @@ def _assertion(raw: object) -> AssertionResult:
 
 def _error(raw: object) -> CaseError:
     _fields(raw, set(CaseError.__dataclass_fields__), "case error")
-    if raw["source"] not in ("agent", "output", "trace", "assertion", "verifier"):
+    if raw["source"] not in ("agent", "output", "trace", "assertion", "verifier", "fixture"):
         raise ValueError("Unknown case error source")
     _text(raw["type"], "error.type")
     if not isinstance(raw["message"], str):

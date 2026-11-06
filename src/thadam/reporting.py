@@ -10,6 +10,7 @@ from pathlib import Path
 
 from thadam._json import read_json
 from thadam.errors import ReportWriteError
+from thadam.fixtures import fixtures_to_dict
 from thadam.models import JSONValue, RunReport
 from thadam.terminal import TerminalStyle, display_text
 from thadam.terminal_reporting import ROLES, ReportView, case_evidence, run_counts
@@ -19,7 +20,13 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
     """Return the JSON report contract, including computed summary counts."""
     return {
         "schema_version": report.schema_version,
-        **({"suite": asdict(report.suite)} if report.suite is not None else {}),
+        **(
+            {"suite": asdict(report.suite) if report.suite else None}
+            if report.schema_version == 5
+            else {"suite": asdict(report.suite)}
+            if report.suite is not None
+            else {}
+        ),
         "evaluation_version": report.evaluation_version,
         "agent_revision": report.agent_revision,
         "run_id": report.run_id,
@@ -41,6 +48,11 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
                 "trace_complete": case.trace_complete,
                 "trace_warnings": list(case.trace_warnings),
                 "check_definitions": [asdict(check) for check in case.check_definitions],
+                **(
+                    {"tool_fixtures": fixtures_to_dict(case.tool_fixtures)}
+                    if case.tool_fixtures is not None
+                    else {}
+                ),
             }
             for case in report.cases
         ],

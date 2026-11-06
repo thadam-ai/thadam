@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, and reviewable scenario suggestions are implemented.
-**Next build:** controlled tool failures and simulated environments (milestone 5).
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, and controlled tool-failure testing are implemented.
+**Next build:** resettable stateful test environments and allowed-change checks (remaining milestone 5 work).
 
 Milestones below are ordered by dependency and user value, not promised release dates. An unchecked item is planned. Mark an item complete only when implementation, meaningful checks, and usage documentation are present. Keep this file current as work lands.
 
@@ -142,11 +142,20 @@ Generated expectations are proposals. Coverage and correctness still need a deve
 
 **Outcome:** a developer checks how an agent recovers from a controlled tool failure.
 
-- [ ] Add tool fixtures for exceptions, invalid responses, and unavailable services.
-- [ ] Specify supported timeout and cancellation behavior for each execution mode.
-- [ ] Assert bounded retries, recovery behavior, and allowed environment changes.
+- [x] Add tool fixtures for exceptions, invalid responses, and unavailable services through the SDK, CLI and dashboard. See [controlled tool failures](docs/milestones/05-tool-failures.md).
+- [x] Specify supported timeout and cancellation behavior for each execution mode: scripted errors, cooperative async cancellation and existing dashboard interruption; no enforced execution deadline.
+- [x] Assert bounded retry attempts with inclusive tool call counts, and recovery with explicit output/tool checks.
+- [ ] Assert allowed environment changes.
 - [ ] Add stateful test environments with resettable fixtures.
 - [ ] Turn discovered failures into saved regression cases.
+
+Fixture suites use schema 3, fixture runs schema 5 and repeated fixture runs schema
+2 with mode `fixtures`. Existing suite/run/repeated formats retain their contracts.
+Factories receive controlled tools afresh for every case attempt. Scripts are
+reviewed case contracts, including unused steps; changed scripts are incompatible
+without an intentional baseline transition. Call bounds evaluate completed
+evidence and do not stop execution. Stateful environments, call-order checks and
+enforced deadlines remain outside the implemented slice.
 
 ## 6. Expand interoperability and collaboration
 

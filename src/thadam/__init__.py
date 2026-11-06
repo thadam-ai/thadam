@@ -33,6 +33,13 @@ from thadam.errors import (
     ReportWriteError,
     SuiteValidationError,
 )
+from thadam.fixtures import (
+    FixtureAgent,
+    FixtureConfigurationError,
+    FixtureFactory,
+    FixtureTool,
+    FixtureTools,
+)
 from thadam.generation import (
     GenerationProvider,
     GenerationResult,
@@ -64,8 +71,12 @@ from thadam.models import (
     TestCase,
     TokenUsage,
     ToolArgumentsMatch,
+    ToolCallCount,
     ToolCalled,
     ToolNotCalled,
+    ToolRaise,
+    ToolReturn,
+    ToolScript,
     Verifier,
 )
 from thadam.reliability import (
@@ -93,6 +104,15 @@ from thadam.runner import run_suite
 from thadam.suites import TestSuite, load_suite
 
 __all__ = [
+    "FixtureAgent",
+    "FixtureConfigurationError",
+    "FixtureFactory",
+    "FixtureTool",
+    "FixtureTools",
+    "ToolCallCount",
+    "ToolRaise",
+    "ToolReturn",
+    "ToolScript",
     "GenerationProvider",
     "GenerationResult",
     "load_draft",
