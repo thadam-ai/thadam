@@ -810,3 +810,70 @@ def test_ordinary_regression_can_be_appended_to_fixture_suite(client, project):
     )
     assert result.status_code == 200, result.text
     assert result.json()["data"]["cases"][-1]["tool_fixtures"] == {}
+
+
+def test_regression_from_simulation_preserves_turns_and_state_in_schema_four(client, project):
+    from examples.refund_conversation_agent import create
+    from thadam import FixtureAgent, load_suite
+
+    cases = load_suite("examples/refund_conversation_cases.json")
+    report = run_suite(FixtureAgent(create), cases)
+    source_path = project / "simulation.json"
+    source_path.write_text(json.dumps(report_to_dict(report)))
+    source = client.get("/api/artifact", params={"path": source_path.name}).json()
+    created = client.post(
+        "/api/regression/create",
+        json={
+            "path": source_path.name,
+            "fingerprint": source["fingerprint"],
+            "case_id": report.cases[0].id,
+            "attempt": None,
+        },
+    )
+    assert created.status_code == 200, created.text
+    draft = created.json()
+    draft_case = draft["data"]["case"]
+    assert [turn["id"] for turn in draft_case["conversation"]] == [
+        "initial-request",
+        "correction",
+        "confirmation",
+        "repeat-request",
+    ]
+    assert draft_case["state_fixture"] == {"initial": {"refunds": []}}
+    assert draft_case["tool_fixtures"] == {}
+    draft_case["assertions"] = [
+        {
+            "id": "refund-result",
+            "type": "output_equals",
+            "expected": report.cases[0].output,
+        }
+    ]
+    reviewed = client.post(
+        "/api/regression/review",
+        json={
+            "path": draft["path"],
+            "fingerprint": draft["fingerprint"],
+            "case": draft_case,
+            "reviewed": True,
+        },
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    draft = reviewed.json()
+    body = {
+        "path": draft["path"],
+        "fingerprint": draft["fingerprint"],
+        "destination": "simulation-regressions.json",
+        "expected_fingerprint": None,
+        "suite_id": "simulation-regressions",
+        "revision": "v1",
+    }
+    preview = client.post("/api/regression/preview", json=body)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["schema_version"] == 4
+    assert preview.json()["cases"][0]["conversation"] == draft_case["conversation"]
+    assert preview.json()["cases"][0]["state_fixture"] == draft_case["state_fixture"]
+    published = client.post("/api/regression/publish", json={**body, "confirmed": True})
+    assert published.status_code == 200, published.text
+
+    replay = run_suite(FixtureAgent(create), load_suite(project / body["destination"]))
+    assert replay.summary.passed == 1

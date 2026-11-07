@@ -121,8 +121,8 @@ def _same_contract(first: RunReport, other: RunReport) -> None:
         ):
             raise ValueError(f"Case {case_id!r} fixture contracts differ between attempts")
         if not json_equal(
-            [(turn.id, turn.message) for turn in left.conversation],
-            [(turn.id, turn.message) for turn in right.conversation],
+            [asdict(turn) for turn in left.conversation],
+            [asdict(turn) for turn in right.conversation],
         ) or not json_equal(
             None if left.state_fixture is None else left.state_fixture.initial,
             None if right.state_fixture is None else right.state_fixture.initial,

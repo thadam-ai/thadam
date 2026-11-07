@@ -23,6 +23,10 @@ class TraceUnavailableError(ValueError):
     """A tool assertion lacks the execution evidence needed to reach a verdict."""
 
 
+class ConversationOutputError(ValueError):
+    """A conversation agent returned a response outside the JSON contract."""
+
+
 class AgentExecutionError(Exception):
     """Preserve observed events when an instrumented agent raises an exception."""
 

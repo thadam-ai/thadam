@@ -14,6 +14,7 @@ from thadam.contracts import snapshot_definitions
 from thadam.errors import (
     AgentConfigurationError,
     AgentExecutionError,
+    ConversationOutputError,
     SuiteValidationError,
     TraceUnavailableError,
 )
@@ -159,6 +160,8 @@ def _agent_error(case: TestCase, started: float, error: Exception | SystemExit) 
             if isinstance(error.original, FixtureConfigurationError)
             else "trace"
             if isinstance(error.original, FixtureTraceError)
+            else "output"
+            if isinstance(error.original, ConversationOutputError)
             else "agent",
             error.original,
             events=events,

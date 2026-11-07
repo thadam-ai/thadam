@@ -39,6 +39,12 @@ suite preview, then configure any additional responses in the saved suite editor
 Run fixture suites through an explicit tool fixture factory as described in the
 [tool-failure guide](05-tool-failures.md). Saving still executes no agents or tools.
 
+For a source case from a schema-6 conversation/state simulation, the draft also
+retains its ordered conversation, initial state, and tool scripts. New destinations
+use identified suite schema 4, and simulation cases can only be appended to schema-4
+suites. Plain or fixture-only cases appended to schema 4 receive empty conversation
+and null state fields. Review the complete setup in the preview before publishing.
+
 ## Draft evidence and boundaries
 
 `kind: "regression_draft"`, `schema_version: 1` has these fields:

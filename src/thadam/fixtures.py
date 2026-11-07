@@ -16,7 +16,12 @@ from uuid import uuid4
 
 from thadam._json import json_equal, validate_json
 from thadam.adapters.python import validate_agent
-from thadam.errors import AgentConfigurationError, AgentExecutionError, SuiteValidationError
+from thadam.errors import (
+    AgentConfigurationError,
+    AgentExecutionError,
+    ConversationOutputError,
+    SuiteValidationError,
+)
 from thadam.events import snapshot_trace
 from thadam.models import (
     Agent,
@@ -488,7 +493,7 @@ def _sync_conversation(agent: Agent, value: JSONValue, turns, tools: FixtureTool
     warnings = []
     complete = True
     history = []
-    for turn in turns:
+    for turn_index, turn in enumerate(turns):
         turn_started = perf_counter()
         try:
             output = agent(_conversation_input(value, turn, history))
@@ -497,13 +502,11 @@ def _sync_conversation(agent: Agent, value: JSONValue, turns, tools: FixtureTool
                     output.close()
                 raise AgentConfigurationError("Async conversation agents require run_suite_async")
             output, child, child_complete, child_warnings = _conversation_output(
-                output, turn_started, tools
+                output, turn_started, tools, turn_index
             )
         except AgentExecutionError as error:
             offset = (turn_started - getattr(tools, "_agent_started", tools._started)) * 1000
-            current_events = tuple(
-                replace(event, started_at_ms=event.started_at_ms + offset) for event in error.events
-            )
+            current_events = _namespace_events(error.events, turn_index, offset)
             raise AgentExecutionError(
                 error.original,
                 events=tuple(events) + current_events,
@@ -522,6 +525,17 @@ def _sync_conversation(agent: Agent, value: JSONValue, turns, tools: FixtureTool
         events.extend(child)
         complete = complete and child_complete
         warnings.extend(child_warnings)
+        try:
+            validate_json(output, "conversation response")
+            output = deepcopy(output)
+        except Exception as error:
+            raise AgentExecutionError(
+                ConversationOutputError(str(error)),
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            ) from error
         outputs.append(ConversationTurnResult(turn.id, deepcopy(turn.message), deepcopy(output)))
         history.extend(
             (
@@ -538,20 +552,18 @@ async def _async_conversation(agent, value, turns, tools: FixtureTools) -> Agent
     warnings = []
     complete = True
     history = []
-    for turn in turns:
+    for turn_index, turn in enumerate(turns):
         turn_started = perf_counter()
         try:
             output = agent(_conversation_input(value, turn, history))
             if inspect.isawaitable(output):
                 output = await output
             output, child, child_complete, child_warnings = _conversation_output(
-                output, turn_started, tools
+                output, turn_started, tools, turn_index
             )
         except AgentExecutionError as error:
             offset = (turn_started - getattr(tools, "_agent_started", tools._started)) * 1000
-            current_events = tuple(
-                replace(event, started_at_ms=event.started_at_ms + offset) for event in error.events
-            )
+            current_events = _namespace_events(error.events, turn_index, offset)
             raise AgentExecutionError(
                 error.original,
                 events=tuple(events) + current_events,
@@ -570,6 +582,17 @@ async def _async_conversation(agent, value, turns, tools: FixtureTools) -> Agent
         events.extend(child)
         complete = complete and child_complete
         warnings.extend(child_warnings)
+        try:
+            validate_json(output, "conversation response")
+            output = deepcopy(output)
+        except Exception as error:
+            raise AgentExecutionError(
+                ConversationOutputError(str(error)),
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            ) from error
         outputs.append(ConversationTurnResult(turn.id, deepcopy(turn.message), deepcopy(output)))
         history.extend(
             (
@@ -580,17 +603,30 @@ async def _async_conversation(agent, value, turns, tools: FixtureTools) -> Agent
     return AgentResult(outputs[-1].output, tuple(events), complete, tuple(warnings), tuple(outputs))
 
 
-def _conversation_output(output, turn_started: float, tools: FixtureTools):
+def _conversation_output(output, turn_started: float, tools: FixtureTools, turn_index: int):
     events = ()
     complete = True
     warnings = ()
     if isinstance(output, AgentResult):
-        events = snapshot_trace(output.events, output.trace_complete, output.trace_warnings)
+        try:
+            events = snapshot_trace(output.events, output.trace_complete, output.trace_warnings)
+        except ValueError as error:
+            raise FixtureTraceError(str(error)) from error
         offset = (turn_started - getattr(tools, "_agent_started", tools._started)) * 1000
-        events = tuple(
-            replace(event, started_at_ms=event.started_at_ms + offset) for event in events
-        )
+        events = _namespace_events(events, turn_index, offset)
         complete, warnings = output.trace_complete, output.trace_warnings
         output = output.output
-    validate_json(output, "conversation response")
-    return deepcopy(output), events, complete, warnings
+    return output, events, complete, warnings
+
+
+def _namespace_events(events: tuple[ExecutionEvent, ...], turn_index: int, offset: float):
+    prefix = f"conversation-turn-{turn_index}:"
+    return tuple(
+        replace(
+            event,
+            id=prefix + event.id,
+            parent_id=None if event.parent_id is None else prefix + event.parent_id,
+            started_at_ms=event.started_at_ms + offset,
+        )
+        for event in events
+    )

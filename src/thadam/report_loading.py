@@ -293,6 +293,10 @@ def _outcomes(case: CaseResult) -> None:
         _builtin_outcomes(case, results, check_errors)
     if case.output_available and len(case.conversation_results) != len(case.conversation):
         raise ValueError("A completed conversation must retain every turn response")
+    if case.output_available and case.conversation:
+        final_turn = case.conversation_results[-1]
+        if not final_turn.output_available or not json_equal(case.output, final_turn.output):
+            raise ValueError("Case output disagrees with the final conversation response")
     if not case.conversation and case.conversation_results:
         raise ValueError("Conversation results require a declared conversation")
     event_ids = {event.id for event in case.events or ()}

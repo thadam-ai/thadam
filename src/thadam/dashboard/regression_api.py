@@ -65,18 +65,26 @@ def register_regression(app, workspace):
         source = draft["source"]
         original = next(case for case in source["run"]["cases"] if case["id"] == source["case_id"])
         fixture_case = "tool_fixtures" in original
+        simulation_case = source["run"]["schema_version"] == 6
         case = deepcopy(draft["case"])
         if fixture_case:
             # Include the retained scripts in the explicit suite preview so
             # saving cannot silently remove the original failure setup.
             case["tool_fixtures"] = deepcopy(original["tool_fixtures"])
+        if simulation_case:
+            case["conversation"] = deepcopy(original["conversation"])
+            case["state_fixture"] = deepcopy(original["state_fixture"])
         destination = workspace.path(body["destination"])
         if destination.exists():
             target = workspace.read(body["destination"])
             if target["kind"] != "suite" or target["fingerprint"] != body["expected_fingerprint"]:
                 raise ValueError("Destination changed or is not a suite; reload before saving")
             data = deepcopy(target["data"])
-            if fixture_case and data["schema_version"] != 3:
+            if simulation_case and data["schema_version"] != 4:
+                raise ValueError(
+                    "Simulation regression cases require an identified simulation suite (schema 4)"
+                )
+            if fixture_case and data["schema_version"] not in (3, 4):
                 raise ValueError(
                     "Fixture regression cases require a fixture suite. Create a new suite or enable tool fixtures in the destination editor first."
                 )
@@ -88,12 +96,16 @@ def register_regression(app, workspace):
                 data["suite"]["revision"] = body["revision"]
             if data["schema_version"] == 3:
                 case.setdefault("tool_fixtures", {})
+            elif data["schema_version"] == 4:
+                case.setdefault("tool_fixtures", {})
+                case.setdefault("conversation", [])
+                case.setdefault("state_fixture", None)
             data["cases"].append(case)
         else:
             if body["expected_fingerprint"] is not None:
                 raise ValueError("Destination changed; reload before saving")
             data = {
-                "schema_version": 3 if fixture_case else 2,
+                "schema_version": 4 if simulation_case else 3 if fixture_case else 2,
                 "suite": {"id": body["suite_id"], "revision": body["revision"]},
                 "cases": [case],
             }

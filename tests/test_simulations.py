@@ -4,9 +4,12 @@ import asyncio
 from pathlib import Path
 
 from thadam import (
+    AgentResult,
     ConversationTurn,
+    ExecutionEvent,
     FixtureAgent,
     OutputEquals,
+    ReportValidationError,
     StateChanges,
     StateEquals,
     StateFixture,
@@ -21,6 +24,7 @@ from thadam import (
     write_report,
 )
 from thadam import TestCase as Case
+from thadam.repetition_loading import repeated_from_dict
 from thadam.repetition_reporting import repeated_to_dict
 from thadam.report_loading import report_from_dict
 
@@ -129,3 +133,118 @@ def test_async_simulations_use_same_conversation_and_state_contract():
         assert [turn.output["count"] for turn in report.cases[0].conversation_results] == [1, 2]
 
     asyncio.run(exercise())
+
+
+def test_report_loader_rejects_final_output_that_disagrees_with_transcript():
+    case = Case(
+        "final-response",
+        None,
+        (OutputEquals("answer", "ok"),),
+        conversation=(ConversationTurn("one", "hello"),),
+    )
+    report = run_suite(FixtureAgent(lambda _tools: lambda _request: "ok"), [case])
+    raw = report_to_dict(report)
+    raw["cases"][0]["conversation_results"][0]["output"] = "wrong"
+
+    try:
+        report_from_dict(raw)
+    except ReportValidationError as error:
+        assert "final conversation response" in str(error)
+    else:
+        raise AssertionError("Contradictory final conversation evidence was accepted")
+
+
+def test_child_trace_ids_and_parent_links_are_namespaced_per_turn():
+    def trace():
+        return (
+            ExecutionEvent("span", "model", "chat", "completed", 0, duration_ms=1),
+            ExecutionEvent(
+                "child",
+                "tool",
+                "lookup",
+                "completed",
+                0,
+                parent_id="span",
+                duration_ms=1,
+            ),
+        )
+
+    def create(_tools):
+        def agent(request):
+            return AgentResult(request["turn_id"], trace())
+
+        return agent
+
+    case = Case(
+        "same-local-trace-ids",
+        None,
+        (OutputEquals("last", "two"),),
+        conversation=(ConversationTurn("one", "first"), ConversationTurn("two", "second")),
+    )
+    report = run_suite(FixtureAgent(create), [case])
+    result = report.cases[0]
+
+    assert result.status == "passed"
+    assert [event.id for event in result.events] == [
+        "conversation-turn-0:span",
+        "conversation-turn-0:child",
+        "conversation-turn-1:span",
+        "conversation-turn-1:child",
+    ]
+    assert [event.parent_id for event in result.events] == [
+        None,
+        "conversation-turn-0:span",
+        None,
+        "conversation-turn-1:span",
+    ]
+    assert report_from_dict(report_to_dict(report)) == report
+
+
+def test_invalid_conversation_response_keeps_current_trace_as_output_error():
+    event = ExecutionEvent("span", "model", "chat", "completed", 0, duration_ms=1)
+
+    def create(_tools):
+        def agent(request):
+            output = "valid" if request["turn_id"] == "one" else object()
+            return AgentResult(output, (event,))
+
+        return agent
+
+    case = Case(
+        "invalid-response",
+        None,
+        (OutputEquals("last", "unused"),),
+        conversation=(ConversationTurn("one", "first"), ConversationTurn("two", "second")),
+    )
+    report = run_suite(FixtureAgent(create), [case])
+    result = report.cases[0]
+
+    assert result.status == "error"
+    assert result.errors[0].source == "output"
+    assert len(result.events) == 2 and result.trace_complete
+    assert [event.id for event in result.events] == [
+        "conversation-turn-0:span",
+        "conversation-turn-1:span",
+    ]
+    assert [turn.id for turn in result.conversation_results] == ["one"]
+    assert report_from_dict(report_to_dict(report)) == report
+
+
+def test_repeated_loader_uses_strict_json_types_for_turn_contracts():
+    case = Case(
+        "strict-turn-message",
+        None,
+        (OutputEquals("answer", "ok"),),
+        conversation=(ConversationTurn("one", {"approved": True}),),
+    )
+    repeated = run_repeated(FixtureAgent(lambda _tools: lambda _request: "ok"), [case], attempts=2)
+    raw = repeated_to_dict(repeated)
+    raw["runs"][1]["cases"][0]["conversation"][0]["message"] = {"approved": 1}
+    raw["runs"][1]["cases"][0]["conversation_results"][0]["message"] = {"approved": 1}
+
+    try:
+        repeated_from_dict(raw)
+    except ReportValidationError as error:
+        assert "simulation contracts differ" in str(error)
+    else:
+        raise AssertionError("Boolean and integer conversation contracts were treated as equal")
