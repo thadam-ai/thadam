@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, reviewed regression cases, and controlled tool-failure testing are implemented.
-**Next build:** review labels and recorded-example imports (milestone 4.5, workflow 2). Creating reviewed regression cases from saved results is implemented; guided fix verification and the remaining milestone 5 workflows are planned.
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, reviewed regression cases, result review labels, and controlled tool-failure testing are implemented.
+**Next build:** import recorded examples and make fix verification easier (milestone 4.5, workflow 2/3). Creating reviewed regression cases and labeling saved results are implemented; recorded-example imports, guided fix verification, and the remaining milestone 5 workflows are planned.
 
 **Published release:** [`thadam-ai` v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/),
 released on 2026-10-30. Completed features below describe `main`; reliability
@@ -174,7 +174,7 @@ Generated expectations are proposals. Coverage and correctness still need a deve
 
 ## 4.5. Turn real failures into reviewed regression tests
 
-**Status:** in progress. Workflow 1 is implemented in the checkout; workflows 2 and 3 remain planned. [Workflow and draft contract](docs/milestones/04-regression-cases.md).
+**Status:** in progress. Workflow 1 and result review labels are implemented in the checkout; recorded-example imports and guided verification remain planned. [Workflow and draft contract](docs/milestones/04-regression-cases.md).
 
 **Outcome:** a developer starts with an observed failure, saves an independently
 reviewed regression case, and sees whether a candidate fix meets the same checks.
@@ -188,7 +188,7 @@ reviewed regression case, and sees whether a candidate fix meets the same checks
 
 ### 2. Review and import recorded examples
 
-- [ ] Attach good, bad, or needs-review verdicts, notes, and failure tags to saved results without modifying the original execution evidence or gate outcome.
+- [x] Attach good, bad, or needs-review verdicts, notes, and failure tags to saved results without modifying the original execution evidence or gate outcome.
 - [ ] Import recorded examples through a documented JSONL/CSV format with explicit field mapping, structural validation, and duplicate review.
 - [ ] Preserve source IDs and supplied context; examples lacking trusted expectations remain reviewable drafts and cannot count as passing tests.
 - [ ] Provide configurable field masking and a data preview before importing, exporting, or sending selected examples to a provider; document redaction limits.

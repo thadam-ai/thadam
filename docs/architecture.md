@@ -48,6 +48,7 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/report_loading.py` | Strict run-report parsing and evidence validation | Reject missing, inconsistent, or unsupported data without importing agent code |
 | `src/thadam/comparison.py` | Typed comparison results, compatibility checks, and regression classification | Pure SDK behavior; validate/snapshot both reports, with no agent execution |
 | `src/thadam/comparison_reporting.py` | Comparison JSON and terminal formatting | Preserve evidence and gate result; reuse atomic artifact writes and color roles |
+| `src/thadam/result_reviews.py` | Strict review-label artifacts linked to saved evaluations | Preserve source evidence and comparison outcomes; labels are separate local data |
 | `src/thadam/repetition.py` | Repeated evaluation, lifecycle validation, and typed outcome/runtime summaries | Sequential attempts, shared callable or per-case agent factory; reuse the single-run engine |
 | `src/thadam/repetition_loading.py` | Strict repeated-run parsing and snapshots | Validate all nested runs, identical contracts across attempts, and recomputed summaries |
 | `src/thadam/repetition_reporting.py` | Repeated-run JSON and terminal evidence | Preserve complete schema-3 attempts inside repeated-run schema 1 |

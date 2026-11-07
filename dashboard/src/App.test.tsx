@@ -92,6 +92,64 @@ afterEach(() => {
 });
 
 describe("evidence workspace navigation", () => {
+    it("searches saved results by case and failure tag and filters by verdict", async () => {
+        const labeledRun = {
+            ...run,
+            review_state: "in progress",
+            review_verdicts: ["bad"],
+            review_case_ids: ["refund"],
+            review_tags: ["policy-gap"],
+        };
+        vi.mocked(api).mockImplementation(async (path: string) => {
+            if (path === "workspace")
+                return {
+                    name: "local",
+                    root: "/project",
+                    items: [labeledRun, savedSuite],
+                    invalid: [],
+                };
+            if (["jobs", "agents"].includes(path)) return [];
+            if (path === "artifact?path=report.json") return run;
+            if (path === "artifact?path=cases.json") return savedSuite;
+            if (path === "result-reviews?path=report.json")
+                return {
+                    path: "review-labels/report.json",
+                    fingerprint: null,
+                    data: { reviews: [] },
+                };
+            throw new Error("Unexpected API call: " + path);
+        });
+        render(<App />);
+        await screen.findByRole("heading", { name: "report.json" });
+        const library = screen.getByRole("region", { name: "Saved evidence" });
+        const search = screen.getByRole("textbox", {
+            name: "Search saved files",
+        });
+        fireEvent.change(search, { target: { value: "refund" } });
+        expect(
+            within(library).getByRole("button", { name: "Open report.json" }),
+        ).toBeTruthy();
+        fireEvent.change(search, { target: { value: "policy-gap" } });
+        expect(
+            within(library).getByRole("button", { name: "Open report.json" }),
+        ).toBeTruthy();
+        fireEvent.change(search, { target: { value: "" } });
+        fireEvent.change(
+            screen.getByRole("combobox", { name: "Filter by review label" }),
+            { target: { value: "good" } },
+        );
+        expect(
+            within(library).queryByRole("button", { name: "Open report.json" }),
+        ).toBeNull();
+        fireEvent.change(
+            screen.getByRole("combobox", { name: "Filter by review label" }),
+            { target: { value: "bad" } },
+        );
+        expect(
+            within(library).getByRole("button", { name: "Open report.json" }),
+        ).toBeTruthy();
+    });
+
     it("keeps the mixed file list visible while inspecting a suite and never executes code during discovery", async () => {
         render(<App />);
         // The first render includes session setup, catalog loading, automatic

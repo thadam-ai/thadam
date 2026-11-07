@@ -89,6 +89,7 @@ export function App() {
         [connected, setConnected] = useState(false);
     const [search, setSearch] = useState(""),
         [status, setStatus] = useState("all"),
+        [reviewFilter, setReviewFilter] = useState("all"),
         [jobs, setJobs] = useState<Data[]>([]);
     const [action, setAction] = useState<
         "run" | "compare" | "review" | "suggest" | null
@@ -214,6 +215,7 @@ export function App() {
         setArtifact(null);
         setSearch("");
         setStatus("all");
+        setReviewFilter("all");
         setNewSuite(false);
     }
     function open(item: Item) {
@@ -241,7 +243,9 @@ export function App() {
                     item.kind,
                 )) ||
             (page === "Evaluations" &&
-                ["run", "repeated_run"].includes(item.kind)) ||
+                ["run", "repeated_run", "result_reviews"].includes(
+                    item.kind,
+                )) ||
             (page === "Comparisons" && item.kind.includes("comparison")) ||
             (page === "Baselines" && item.kind.includes("baseline")),
     );
@@ -252,11 +256,22 @@ export function App() {
                 " " +
                 (item.suite?.id || "") +
                 " " +
-                (item.suite?.revision || "")
+                (item.suite?.revision || "") +
+                " " +
+                (item.review_case_ids || []).join(" ") +
+                " " +
+                (item.review_tags || []).join(" ")
             )
                 .toLowerCase()
                 .includes(search.toLowerCase()) &&
-            (status === "all" || outcome(item) === status),
+            (status === "all" || outcome(item) === status) &&
+            (!["run", "repeated_run", "result_reviews"].includes(item.kind) ||
+                reviewFilter === "all" ||
+                (reviewFilter === "unreviewed"
+                    ? !item.review_verdicts?.length
+                    : ["in progress", "reviewed"].includes(reviewFilter)
+                      ? item.review_state === reviewFilter
+                      : item.review_verdicts?.includes(reviewFilter))),
     );
     const evaluations = (catalog?.items || []).filter((item) =>
         ["run", "repeated_run"].includes(item.kind),
@@ -297,6 +312,7 @@ export function App() {
         setAction(next);
         setSearch("");
         setStatus("all");
+        setReviewFilter("all");
     }
     async function saved(next: Artifact) {
         dirty.current = false;
@@ -572,6 +588,36 @@ export function App() {
                                         </option>
                                     ))}
                                 </select>
+                                {(page === "Evaluations" ||
+                                    page === "Overview") && (
+                                    <select
+                                        aria-label="Filter by review label"
+                                        value={reviewFilter}
+                                        onChange={(event) =>
+                                            setReviewFilter(event.target.value)
+                                        }
+                                    >
+                                        {[
+                                            "all",
+                                            "unreviewed",
+                                            "in progress",
+                                            "reviewed",
+                                            "good",
+                                            "bad",
+                                            "needs_review",
+                                        ].map((value) => (
+                                            <option key={value} value={value}>
+                                                {value === "all"
+                                                    ? "All reviews"
+                                                    : value === "needs_review"
+                                                      ? "Needs review"
+                                                      : value === "unreviewed"
+                                                        ? "No labels"
+                                                        : value}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                             {page === "Overview" && (
                                 <div
