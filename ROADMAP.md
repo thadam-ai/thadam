@@ -32,7 +32,7 @@ These workflows inform our priorities; the milestones below define Thadam's scop
 | Next | 4.5 | Turn an observed failure into a reviewed test and verify a fix |
 | Core testing expansion | 5–7 | Test conversations and recovery, evaluate semantic behavior, and compare configurations |
 | Connect and investigate | 8–9 | Reuse existing telemetry and coding tools, and track recurring failures |
-| Longer term, after user validation | 10–11 | Monitor live behavior and collaborate through optional shared services |
+| Longer term, after user validation | 10–11 | Delegate reliability work to an always-on AI teammate and collaborate through optional shared services |
 
 Start each milestone with the smallest complete workflow and a concrete user
 example. Specify any new artifact formats, migration rules, and execution/data
@@ -317,20 +317,44 @@ Keep generated clusters and root-cause explanations reviewable. Similar symptoms
 do not establish a shared cause. This milestone starts with local saved evidence;
 continuous production discovery belongs to milestone 10.
 
-## 10. Monitor production behavior and verify rollouts
+## 10. Add an always-on AI teammate for incident response
 
 **Status:** longer-term, subject to demand and operational validation. Requires reviewed evaluation methods, telemetry mappings, and failure history from earlier milestones.
 
-**Outcome:** a team discovers failures in real usage, verifies them locally, and
-checks whether a deployed change reduced the same behavior.
+**Outcome:** a team gives an AI teammate an ongoing responsibility such as
+"watch our refund agent, investigate new failures, and bring us a tested fix."
+The teammate works between conversations, carries project context forward, and
+returns with evidence, completed work, and decisions that need the team's review.
 
 - [ ] Add opt-in continuous trace/event ingestion with bounded processing, explicit retention, deletion, and configurable capture/redaction policies.
 - [ ] Associate events with supplied session/user, environment, and deployment metadata; keep evaluation/simulation traffic separate from production.
 - [ ] Run explicitly enabled conditions or reviewed evaluators on scoped/sampled traffic and surface processing cost, coverage, and failures.
 - [ ] Track named behavior signals and emerging failure patterns using recorded evidence and human feedback.
-- [ ] Add threshold/recurrence monitors, incident state, deduplicated notifications, and explicit email/Slack/webhook routing.
+- [ ] Add threshold/recurrence monitors that open incidents when explicitly configured conditions are met.
 - [ ] Compare deployment cohorts on observed quality and available latency/usage/cost, explaining population, sampling, and attribution limits.
 - [ ] Connect an alert to a reviewed local regression case, candidate verification, and a post-deploy check using the same behavior definition.
+
+### Persistent, conversational AI teammate
+
+The product shape is inspired by [Grok Bot's operational teammates](https://x.ai/news/incident-sweep)
+and [OpenAI dots](https://openai.com/index/introducing-dots/): give a bot an ongoing
+job, talk to it where the team works, and let it carry the work through to an outcome.
+Thadam's teammate specializes in agent reliability and incident investigation.
+
+- [ ] Provide a dedicated bot that teammates can message or mention in Thadam, Slack, or Teams to ask questions, assign work, give feedback, and follow an investigation in the same conversation.
+- [ ] Accept standing goals in natural language, with an explicit project scope, connected tools, usage budgets, and pause/stop controls; continue assigned work between messages.
+- [ ] Retain project context across sessions: agent architecture, repositories, suites, known failures, runbooks, prior investigations, and reviewed team feedback, with inspectable memory and project isolation.
+- [ ] Connect to deliberately selected repositories, CI results, traces/logs, metrics, issues, and support feedback; use these tools to investigate when a relevant event arrives or a configured routine wakes the bot.
+- [ ] Independently gather evidence, correlate recent changes, reproduce a failure through Thadam, and prepare a regression-case draft and tested candidate fix or draft pull request for review. Generated expectations still require independent review.
+- [ ] Return useful findings, progress, blockers, and concrete approval requests to the conversation; accept corrections and carry that context into subsequent work.
+- [ ] After an approved fix, verify recovery against the same behavior checks, watch for recurrence, and prepare an incident summary with evidence and regression-test follow-ups.
+- [ ] Support a persistent worker environment and resumable background jobs, with visible activity, bounded retries, explicit action permissions, and recorded outcomes; keep the local SDK/CLI useful independently.
+
+Start with a controlled end-to-end example: a teammate assigns "watch this agent"
+in chat, a new failure triggers an investigation, and the bot returns in that
+conversation with a reproduced failure, regression draft, and tested fix to review.
+Demonstrate follow-up feedback, continuation after a worker restart, and recovery
+verification after the team approves the fix.
 
 Specify data handling and deployment boundaries before ingesting customer traffic.
 Redaction is best effort, and a quiet monitor does not prove there are no failures.
