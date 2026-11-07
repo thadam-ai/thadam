@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from hashlib import sha256
 from uuid import uuid4
@@ -12,8 +13,19 @@ VERDICTS = ("good", "bad", "needs_review")
 
 
 def review_path(source_path: str) -> str:
-    """Return the stable project-relative sidecar path for a saved result."""
+    """Return the legacy path-only sidecar path for a saved result."""
     digest = sha256(source_path.encode("utf-8")).hexdigest()[:24]
+    return f"review-labels/{digest}.json"
+
+
+def revision_review_path(source_path: str, fingerprint: str, kind: str, source_id: str) -> str:
+    """Return a sidecar path scoped to one exact saved result revision."""
+    identity = json.dumps(
+        [source_path, fingerprint, kind, source_id],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    digest = sha256(identity.encode("utf-8")).hexdigest()[:24]
     return f"review-labels/{digest}.json"
 
 

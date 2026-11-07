@@ -14,6 +14,22 @@ function key(caseId: string, attempt: number | null) {
     return JSON.stringify([caseId, attempt]);
 }
 
+function parseTags(value: string): string[] {
+    return value
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag, index, all) => !!tag && all.indexOf(tag) === index);
+}
+
+function tagTextFor(reviews: ReviewLabel[]): Record<string, string> {
+    return Object.fromEntries(
+        reviews.map((review) => [
+            key(review.case_id, review.attempt),
+            review.tags.join(", "),
+        ]),
+    );
+}
+
 function sourceCases(
     artifact: Artifact,
 ): { id: string; attempt: number | null }[] {
@@ -45,11 +61,20 @@ export function ResultReviewEditor({
         null,
     );
     const [labels, setLabels] = useState<Record<string, ReviewLabel>>({});
+    const [tagText, setTagText] = useState<Record<string, string>>({});
     const [savedReviews, setSavedReviews] = useState<ReviewLabel[]>([]);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
     const [loaded, setLoaded] = useState(false);
-    const reviews = Object.values(labels).filter((item) => item.verdict);
+    const reviews = Object.values(labels)
+        .filter((item) => item.verdict)
+        .map((item) => ({
+            ...item,
+            tags: parseTags(
+                tagText[key(item.case_id, item.attempt)] ??
+                    item.tags.join(", "),
+            ),
+        }));
     const edited = JSON.stringify(reviews) !== JSON.stringify(savedReviews);
     useEffect(() => {
         onDirty(edited);
@@ -71,6 +96,7 @@ export function ResultReviewEditor({
                         ]),
                     ),
                 );
+                setTagText(tagTextFor(result.data.reviews));
                 setSavedReviews(result.data.reviews);
                 setError("");
             })
@@ -106,12 +132,10 @@ export function ResultReviewEditor({
         setBusy(true);
         setError("");
         try {
-            const reviews = Object.values(labels)
-                .filter((item) => item.verdict)
-                .map((item) => ({ ...item, tags: item.tags }));
             const result = await api<Artifact>("result-reviews", {
                 path: artifact.path,
                 fingerprint: artifact.fingerprint,
+                review_path: reviewPath,
                 review_fingerprint: reviewFingerprint,
                 reviews,
             });
@@ -123,6 +147,7 @@ export function ResultReviewEditor({
                     ]),
                 ),
             );
+            setTagText(tagTextFor(result.data.reviews));
             setSavedReviews(result.data.reviews);
             setReviewPath(result.path);
             setReviewFingerprint(result.fingerprint);
@@ -208,31 +233,16 @@ export function ResultReviewEditor({
                                         <Field label="Failure tags">
                                             <input
                                                 aria-label={`Failure tags for ${heading}`}
-                                                value={value.tags.join(", ")}
+                                                value={
+                                                    tagText[id] ??
+                                                    value.tags.join(", ")
+                                                }
                                                 onChange={(event) =>
-                                                    update(
-                                                        entry.id,
-                                                        entry.attempt,
-                                                        {
-                                                            tags: event.target.value
-                                                                .split(",")
-                                                                .map((tag) =>
-                                                                    tag.trim(),
-                                                                )
-                                                                .filter(
-                                                                    (
-                                                                        tag,
-                                                                        index,
-                                                                        all,
-                                                                    ) =>
-                                                                        !!tag &&
-                                                                        all.indexOf(
-                                                                            tag,
-                                                                        ) ===
-                                                                            index,
-                                                                ),
-                                                        },
-                                                    )
+                                                    setTagText((current) => ({
+                                                        ...current,
+                                                        [id]: event.target
+                                                            .value,
+                                                    }))
                                                 }
                                                 placeholder="wrong-tool, policy-gap"
                                                 disabled={!value.verdict}
@@ -292,7 +302,13 @@ export function ResultReviewsArtifact({
     onOpen: (item: Item) => void;
 }) {
     const source = artifact.data.source;
-    const sourceItem = catalog.items.find((item) => item.path === source.path);
+    const sourceItem = catalog.items.find(
+        (item) =>
+            item.path === source.path &&
+            item.fingerprint === source.fingerprint &&
+            item.kind === source.kind &&
+            item.id === source.id,
+    );
     return (
         <section className="page-content">
             <div className="page-heading">

@@ -6,9 +6,10 @@ import {
     screen,
     waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { api, type Artifact, type Data } from "./api";
-import { ResultReviewEditor } from "./result_reviews";
+import { ResultReviewsArtifact, ResultReviewEditor } from "./result_reviews";
 
 vi.mock("./api", async (original) => ({
     ...(await original<typeof import("./api")>()),
@@ -75,6 +76,7 @@ it("saves labels, notes, and tags as a separate artifact", async () => {
     expect(api).toHaveBeenCalledWith("result-reviews", {
         path: "run.json",
         fingerprint: "run-fingerprint",
+        review_path: "review-labels/abc.json",
         review_fingerprint: null,
         reviews: [
             {
@@ -85,6 +87,66 @@ it("saves labels, notes, and tags as a separate artifact", async () => {
                 tags: ["wrong-tool", "policy-gap"],
             },
         ],
+    });
+});
+
+it("keeps commas while typing tags and parses them when saving", async () => {
+    const user = userEvent.setup();
+    const artifact = {
+        path: "run.json",
+        kind: "run",
+        fingerprint: "run-fingerprint",
+        modified_ns: 0,
+        cases: 1,
+        data: {
+            run_id: "run-1",
+            cases: [{ id: "refund" }],
+        },
+    } as unknown as Artifact;
+    vi.mocked(api).mockImplementation(async (path, body) => {
+        if (path === "result-reviews?path=run.json")
+            return {
+                path: "review-labels/revision.json",
+                fingerprint: null,
+                data: { reviews: [] },
+            };
+        if (path === "result-reviews")
+            return {
+                path: "review-labels/revision.json",
+                kind: "result_reviews",
+                fingerprint: "labels-fingerprint",
+                data: { reviews: (body as Data).reviews },
+            };
+        throw new Error(path);
+    });
+    render(<ResultReviewEditor artifact={artifact} onSaved={vi.fn()} />);
+
+    fireEvent.change(
+        await screen.findByRole("combobox", {
+            name: "Review verdict for refund",
+        }),
+        { target: { value: "bad" } },
+    );
+    const tags = screen.getByRole("textbox", {
+        name: "Failure tags for refund",
+    });
+    await user.type(tags, "wrong-tool, policy-gap");
+    expect((tags as HTMLInputElement).value).toBe("wrong-tool, policy-gap");
+    fireEvent.click(screen.getByRole("button", { name: "Save review labels" }));
+
+    await waitFor(() => {
+        expect(api).toHaveBeenCalledWith(
+            "result-reviews",
+            expect.objectContaining({
+                review_path: "review-labels/revision.json",
+                reviews: [
+                    expect.objectContaining({
+                        case_id: "refund",
+                        tags: ["wrong-tool", "policy-gap"],
+                    }),
+                ],
+            }),
+        );
     });
 });
 
@@ -119,4 +181,52 @@ it("labels repeated attempts independently", async () => {
             name: "Review verdict for refund · attempt 2",
         }),
     ).toBeTruthy();
+});
+
+it("does not link an old review artifact to a replacement result", () => {
+    const review = {
+        path: "review-labels/old.json",
+        kind: "result_reviews",
+        fingerprint: "review-fingerprint",
+        modified_ns: 0,
+        cases: 1,
+        data: {
+            source: {
+                path: "run.json",
+                fingerprint: "old-fingerprint",
+                kind: "run",
+                id: "old-run",
+            },
+            reviews: [],
+        },
+    } as unknown as Artifact;
+    const catalog = {
+        name: "project",
+        root: "/project",
+        invalid: [],
+        items: [
+            {
+                path: "run.json",
+                kind: "run",
+                id: "new-run",
+                fingerprint: "new-fingerprint",
+                modified_ns: 0,
+                cases: 1,
+            },
+        ],
+    };
+    render(
+        <ResultReviewsArtifact
+            artifact={review}
+            catalog={catalog}
+            onOpen={vi.fn()}
+        />,
+    );
+    expect(
+        (
+            screen.getByRole("button", {
+                name: "Source result is unavailable",
+            }) as HTMLButtonElement
+        ).disabled,
+    ).toBe(true);
 });

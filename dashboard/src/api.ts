@@ -3,6 +3,7 @@ export type Data = Record<string, any>;
 export type Item = {
     path: string;
     kind: string;
+    id?: string;
     duration_ms?: number | null;
     suite?: { id: string; revision: string };
     summary?: Data;

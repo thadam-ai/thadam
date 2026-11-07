@@ -9,7 +9,7 @@ import pytest
 from thadam import OutputEquals, report_to_dict, run_repeated, run_suite
 from thadam import TestCase as Case
 from thadam.repetition_reporting import repeated_to_dict
-from thadam.result_reviews import result_reviews, validate_result_reviews
+from thadam.result_reviews import result_reviews, review_path, validate_result_reviews
 
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
@@ -53,6 +53,7 @@ def test_labels_are_saved_separately_and_searchable(client):
         json={
             "path": "run.json",
             "fingerprint": opened["fingerprint"],
+            "review_path": draft["path"],
             "review_fingerprint": None,
             "reviews": [
                 {
@@ -88,6 +89,7 @@ def test_result_review_writes_reject_stale_source_or_sidecar(client):
     body = {
         "path": "run.json",
         "fingerprint": opened["fingerprint"],
+        "review_path": api.get("/api/result-reviews", params={"path": "run.json"}).json()["path"],
         "review_fingerprint": None,
         "reviews": [],
     }
@@ -98,10 +100,74 @@ def test_result_review_writes_reject_stale_source_or_sidecar(client):
     source.write_text(json.dumps(source_report()))
     refreshed = api.get("/api/artifact", params={"path": "run.json"}).json()
     body["fingerprint"] = refreshed["fingerprint"]
+    body["review_path"] = api.get("/api/result-reviews", params={"path": "run.json"}).json()["path"]
     first = api.post("/api/result-reviews", json=body)
     assert first.status_code == 200, first.text
     body["review_fingerprint"] = "stale"
     assert api.post("/api/result-reviews", json=body).status_code == 400
+
+
+def test_replacement_result_gets_independent_review_labels(client):
+    api, source = client
+    original = api.get("/api/artifact", params={"path": "run.json"}).json()
+    draft = api.get("/api/result-reviews", params={"path": "run.json"}).json()
+    saved = api.post(
+        "/api/result-reviews",
+        json={
+            "path": "run.json",
+            "fingerprint": original["fingerprint"],
+            "review_path": draft["path"],
+            "review_fingerprint": draft["fingerprint"],
+            "reviews": [
+                {
+                    "case_id": "refund",
+                    "attempt": None,
+                    "verdict": "bad",
+                    "notes": "Old revision label.",
+                    "tags": ["stale"],
+                }
+            ],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    old_sidecar = saved.json()
+
+    source.write_text(json.dumps(source_report()))
+    replacement = api.get("/api/artifact", params={"path": "run.json"}).json()
+    new_draft = api.get("/api/result-reviews", params={"path": "run.json"}).json()
+    assert replacement["fingerprint"] != original["fingerprint"]
+    assert new_draft["path"] != old_sidecar["path"]
+    assert new_draft["data"]["reviews"] == []
+
+    catalog = api.get("/api/workspace").json()
+    current_run = next(item for item in catalog["items"] if item["path"] == "run.json")
+    assert current_run["review_state"] == "unreviewed"
+    assert current_run["review_verdicts"] == []
+    assert current_run["review_tags"] == []
+
+    new_saved = api.post(
+        "/api/result-reviews",
+        json={
+            "path": "run.json",
+            "fingerprint": replacement["fingerprint"],
+            "review_path": new_draft["path"],
+            "review_fingerprint": None,
+            "reviews": [
+                {
+                    "case_id": "refund",
+                    "attempt": None,
+                    "verdict": "good",
+                    "notes": "Replacement revision label.",
+                    "tags": ["current"],
+                }
+            ],
+        },
+    )
+    assert new_saved.status_code == 200, new_saved.text
+    assert new_saved.json()["path"] != old_sidecar["path"]
+    assert new_saved.json()["data"]["reviews"][0]["tags"] == ["current"]
+    old_path = source.parent / old_sidecar["path"]
+    assert json.loads(old_path.read_text()) == old_sidecar["data"]
 
 
 def test_labels_validate_case_attempt_and_tag_contracts():
@@ -139,6 +205,46 @@ def test_labels_validate_case_attempt_and_tag_contracts():
             },
             source=run,
         )
+
+
+def test_existing_path_only_sidecar_remains_editable(client):
+    api, source = client
+    opened = api.get("/api/artifact", params={"path": "run.json"}).json()
+    run = {"kind": "run", **opened["data"]}
+    legacy = result_reviews(
+        run,
+        path="run.json",
+        fingerprint=opened["fingerprint"],
+        reviews=[
+            {
+                "case_id": "refund",
+                "attempt": None,
+                "verdict": "good",
+                "notes": "Existing label.",
+                "tags": ["legacy"],
+            }
+        ],
+    )
+    legacy_path = source.parent / review_path("run.json")
+    legacy_path.parent.mkdir()
+    legacy_path.write_text(json.dumps(legacy))
+
+    draft = api.get("/api/result-reviews", params={"path": "run.json"}).json()
+    assert draft["path"] == review_path("run.json")
+    assert draft["data"]["reviews"] == legacy["reviews"]
+    saved = api.post(
+        "/api/result-reviews",
+        json={
+            "path": "run.json",
+            "fingerprint": opened["fingerprint"],
+            "review_path": draft["path"],
+            "review_fingerprint": draft["fingerprint"],
+            "reviews": [],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["path"] == review_path("run.json")
+    assert saved.json()["data"]["reviews"] == []
 
 
 def test_repeated_attempts_keep_independent_labels():
