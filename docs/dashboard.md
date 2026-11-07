@@ -233,3 +233,14 @@ Open a saved run case, or select an individual repeated attempt, and choose
 **Create regression case**. Review the original evidence, supply explicit checks,
 save the reviewed draft, and preview a new or existing suite before saving.
 See the [workflow and draft contract](milestones/04-regression-cases.md).
+
+## Run a conversation simulation
+
+Open a suite schema 4 artifact in **Suites** and edit its JSON to define ordered
+conversation turns, a fresh JSON state fixture and response/state assertions.
+Run it in **Evaluations** with **Tool fixture factory** selected. Each case attempt
+starts with the declared initial state and reuses the same factory agent across
+turns. Evaluation details show every completed user/agent exchange, initial and
+final state, configured tool scripts, checks and trace evidence. The dashboard
+uses the existing project, revision, one-active-job and interruption guards.
+See [conversation and state simulations](milestones/05-simulations.md).

@@ -14,9 +14,13 @@ from thadam.models import (
     CaseError,
     CaseResult,
     CheckDefinition,
+    ConversationTurn,
+    ConversationTurnResult,
     EventError,
     ExecutionEvent,
+    JSONValue,
     RunReport,
+    StateFixture,
     SuiteIdentity,
     TokenUsage,
 )
@@ -63,11 +67,11 @@ def report_from_dict(data: object) -> RunReport:
             raise ValueError("Legacy reports cannot be compared; generate fresh schema-3 reports")
         version = data.get("schema_version") if isinstance(data, dict) else None
         fields = (set(RunReport.__dataclass_fields__) - {"suite"}) | {"summary"}
-        _fields(data, fields | ({"suite"} if version in (4, 5) else set()), "report")
-        if type(version) is not int or version not in (3, 4, 5):
-            raise ValueError("report.schema_version must be the integer 3, 4, or 5")
+        _fields(data, fields | ({"suite"} if version in (4, 5, 6) else set()), "report")
+        if type(version) is not int or version not in (3, 4, 5, 6):
+            raise ValueError("report.schema_version must be the integer 3, 4, 5, or 6")
         identity = None
-        if version == 4 or version == 5 and data["suite"] is not None:
+        if version == 4 or version in (5, 6) and data["suite"] is not None:
             _fields(data["suite"], {"id", "revision"}, "report.suite")
             identity = suite_identity((), SuiteIdentity(**data["suite"]))
         if type(data["evaluation_version"]) is not int or data["evaluation_version"] != 1:
@@ -76,7 +80,8 @@ def report_from_dict(data: object) -> RunReport:
         if data["agent_revision"] is not None:
             _text(data["agent_revision"], "report.agent_revision")
         cases = tuple(
-            _case(raw, fixture_run=version == 5) for raw in _array(data["cases"], "report.cases")
+            _case(raw, fixture_run=version in (5, 6), simulation_run=version == 6)
+            for raw in _array(data["cases"], "report.cases")
         )
         if not cases:
             raise ValueError("A run report must contain at least one case")
@@ -93,12 +98,28 @@ def report_from_dict(data: object) -> RunReport:
         raise ReportValidationError(str(error)) from error
 
 
-def _case(raw: object, *, fixture_run: bool = False) -> CaseResult:
-    _fields(
-        raw,
-        set(CaseResult.__dataclass_fields__) - (set() if fixture_run else {"tool_fixtures"}),
-        "case",
-    )
+def _case(raw: object, *, fixture_run: bool = False, simulation_run: bool = False) -> CaseResult:
+    expected_fields = set(CaseResult.__dataclass_fields__) - {
+        "tool_fixtures",
+        "conversation",
+        "conversation_results",
+        "state_fixture",
+        "state_initial",
+        "state_final",
+    }
+    if fixture_run:
+        expected_fields.add("tool_fixtures")
+    if simulation_run:
+        expected_fields.update(
+            {
+                "conversation",
+                "conversation_results",
+                "state_fixture",
+                "state_initial",
+                "state_final",
+            }
+        )
+    _fields(raw, expected_fields, "case")
     _text(raw["id"], "case.id")
     if raw["status"] not in ("passed", "failed", "error"):
         raise ValueError("Unknown case status")
@@ -133,6 +154,38 @@ def _case(raw: object, *, fixture_run: bool = False) -> CaseResult:
             raw["trace_complete"],
             tuple(warnings),
         )
+    conversation = ()
+    conversation_results = ()
+    state_fixture = None
+    state_initial = state_final = None
+    if simulation_run:
+        if not isinstance(raw["conversation"], list) or not isinstance(
+            raw["conversation_results"], list
+        ):
+            raise ValueError("Conversation and conversation_results must be arrays")
+        conversation = tuple(
+            ConversationTurn(**_checked_object(turn, {"id", "message"}, "conversation turn"))
+            for turn in raw["conversation"]
+        )
+        conversation_results = tuple(
+            ConversationTurnResult(
+                **_checked_object(
+                    turn,
+                    {"id", "message", "output", "output_available"},
+                    "conversation result",
+                )
+            )
+            for turn in raw["conversation_results"]
+        )
+        if raw["state_fixture"] is not None:
+            state_data = _checked_object(raw["state_fixture"], {"initial"}, "state fixture")
+            state_fixture = StateFixture(state_data["initial"])
+        state_initial, state_final = raw["state_initial"], raw["state_final"]
+        validate_json(state_initial, "state_initial")
+        validate_json(state_final, "state_final")
+        _validate_conversation_evidence(
+            conversation, conversation_results, state_fixture, state_initial, state_final
+        )
     case = CaseResult(
         **{
             **raw,
@@ -142,6 +195,11 @@ def _case(raw: object, *, fixture_run: bool = False) -> CaseResult:
             "trace_warnings": tuple(warnings),
             "check_definitions": definitions,
             "tool_fixtures": parse_fixtures(raw["tool_fixtures"]) if fixture_run else None,
+            "conversation": conversation,
+            "conversation_results": conversation_results,
+            "state_fixture": state_fixture,
+            "state_initial": state_initial,
+            "state_final": state_final,
         }
     )
     _outcomes(case)
@@ -233,6 +291,10 @@ def _outcomes(case: CaseResult) -> None:
             if error.source != expected_source:
                 raise ValueError("Check error source disagrees with its definition")
         _builtin_outcomes(case, results, check_errors)
+    if case.output_available and len(case.conversation_results) != len(case.conversation):
+        raise ValueError("A completed conversation must retain every turn response")
+    if not case.conversation and case.conversation_results:
+        raise ValueError("Conversation results require a declared conversation")
     event_ids = {event.id for event in case.events or ()}
     if any(set(item.event_ids) - event_ids for item in case.assertions):
         raise ValueError("Assertion references an unknown event ID")
@@ -262,6 +324,9 @@ def _builtin_outcomes(
                 case.output,
                 events=case.events,
                 trace_complete=case.trace_complete,
+                conversation_results=case.conversation_results,
+                state_initial=case.state_initial,
+                state_final=case.state_final,
             )
         except TraceUnavailableError:
             if definition.id not in errors:
@@ -306,3 +371,38 @@ def _unique(values: list[str], location: str) -> None:
 def _duration(raw: object) -> None:
     if type(raw) not in (int, float) or raw < 0:
         raise ValueError("Case duration must be finite and non-negative")
+
+
+def _checked_object(raw: object, fields: set[str], location: str) -> dict:
+    if not isinstance(raw, dict) or raw.keys() != fields:
+        raise ValueError(f"{location} has missing or unknown fields")
+    return raw
+
+
+def _validate_conversation_evidence(
+    turns: tuple[ConversationTurn, ...],
+    results: tuple[ConversationTurnResult, ...],
+    state_fixture: StateFixture | None,
+    state_initial: JSONValue,
+    state_final: JSONValue,
+) -> None:
+    if len(results) > len(turns):
+        raise ValueError("Conversation results exceed the scripted turn count")
+    for turn in turns:
+        _text(turn.id, "conversation turn ID")
+        validate_json(turn.message, "conversation message")
+    _unique([turn.id for turn in turns], "conversation turn IDs")
+    for turn, result in zip(turns, results):
+        _text(result.id, "conversation result ID")
+        if result.id != turn.id or not json_equal(result.message, turn.message):
+            raise ValueError("Conversation result does not match its scripted turn")
+        if type(result.output_available) is not bool:
+            raise ValueError("Conversation output availability must be a boolean")
+        validate_json(result.output, "conversation response")
+        if not result.output_available and result.output is not None:
+            raise ValueError("Unavailable conversation output must be null")
+    if state_fixture is None:
+        if state_initial is not None or state_final is not None:
+            raise ValueError("State evidence requires a declared state fixture")
+    elif not json_equal(state_fixture.initial, state_initial):
+        raise ValueError("Recorded initial state differs from the fixture declaration")

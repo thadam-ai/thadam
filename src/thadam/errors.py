@@ -1,6 +1,6 @@
 """Public errors for configuration, execution evidence, and report artifacts."""
 
-from thadam.models import ExecutionEvent
+from thadam.models import ConversationTurnResult, ExecutionEvent, JSONValue
 
 
 class SuiteValidationError(ValueError):
@@ -33,9 +33,15 @@ class AgentExecutionError(Exception):
         events: tuple[ExecutionEvent, ...],
         trace_complete: bool,
         trace_warnings: tuple[str, ...] = (),
+        conversation_results: tuple[ConversationTurnResult, ...] = (),
+        state_initial: JSONValue = None,
+        state_final: JSONValue = None,
     ) -> None:
         super().__init__(str(original))
         self.original = original
         self.events = events
         self.trace_complete = trace_complete
         self.trace_warnings = trace_warnings
+        self.conversation_results = conversation_results
+        self.state_initial = state_initial
+        self.state_final = state_final

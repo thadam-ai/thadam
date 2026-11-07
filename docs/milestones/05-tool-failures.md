@@ -1,8 +1,10 @@
 # Controlled tool failures
 
 **Status:** implemented. This is the first slice of milestone 5: scripted tool
-responses and recovery checks through the SDK, CLI and local dashboard. Stateful
-external environments and enforced execution timeouts remain planned.
+responses and recovery checks through the SDK, CLI and local dashboard. The
+second slice adds scripted conversations and resettable JSON state; see
+[conversation and state simulations](05-simulations.md). External environment
+resets and enforced execution timeouts remain planned.
 
 ## Run the controlled example
 
@@ -241,5 +243,5 @@ fresh factories, independent snapshots, async overlap/cancellation, strict saved
 evidence, changed unused contracts, revision guards, CLI imports from a temporary
 project, dashboard APIs/forms, and real sync/async graph callbacks. Default checks
 need no model credentials or hosted service. This slice does not implement call
-ordering assertions, allowed environment mutations, resettable external systems,
-real-time delay simulation, or enforced deadlines.
+ordering assertions, resettable external systems, real-time delay simulation,
+or enforced deadlines.

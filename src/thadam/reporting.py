@@ -22,7 +22,7 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
         "schema_version": report.schema_version,
         **(
             {"suite": asdict(report.suite) if report.suite else None}
-            if report.schema_version == 5
+            if report.schema_version in (5, 6)
             else {"suite": asdict(report.suite)}
             if report.suite is not None
             else {}
@@ -49,8 +49,34 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
                 "trace_warnings": list(case.trace_warnings),
                 "check_definitions": [asdict(check) for check in case.check_definitions],
                 **(
-                    {"tool_fixtures": fixtures_to_dict(case.tool_fixtures)}
-                    if case.tool_fixtures is not None
+                    {"tool_fixtures": fixtures_to_dict(case.tool_fixtures or {})}
+                    if case.tool_fixtures is not None or report.schema_version == 6
+                    else {}
+                ),
+                **(
+                    {
+                        "conversation": [
+                            {"id": turn.id, "message": deepcopy(turn.message)}
+                            for turn in case.conversation
+                        ],
+                        "conversation_results": [
+                            {
+                                "id": turn.id,
+                                "message": deepcopy(turn.message),
+                                "output": deepcopy(turn.output),
+                                "output_available": turn.output_available,
+                            }
+                            for turn in case.conversation_results
+                        ],
+                        "state_fixture": (
+                            None
+                            if case.state_fixture is None
+                            else {"initial": deepcopy(case.state_fixture.initial)}
+                        ),
+                        "state_initial": deepcopy(case.state_initial),
+                        "state_final": deepcopy(case.state_final),
+                    }
+                    if report.schema_version == 6
                     else {}
                 ),
             }

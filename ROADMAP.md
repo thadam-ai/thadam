@@ -213,19 +213,19 @@ Include an import with incomplete evidence and an incompatible comparison path.
 
 ## 5. Exercise failures and conversation simulations
 
-**Status:** partially implemented. Controlled tool failures and retry-count checks are available; conversation simulation and stateful environments remain planned.
+**Status:** partially implemented. Controlled tool failures, retry-count checks, scripted conversations, and resettable JSON state fixtures are available; enforced deadlines and external environment resets remain planned.
 
 **Outcome:** a developer checks whether an agent completes a conversation and
 recovers from controlled failures while preserving the expected state.
 
 - [x] Add tool fixtures for exceptions, invalid responses, and unavailable services through the SDK, CLI and dashboard. See [controlled tool failures](docs/milestones/05-tool-failures.md).
-- [ ] Define a conversation scenario with ordered user/agent turns, per-turn checks, final outcome checks, and explicit state lifecycle/reset rules.
-- [ ] Support scripted follow-up turns and session evidence for context retention, repeated questions, and behavior after a correction.
+- [x] Define a conversation scenario with ordered user/agent turns, per-turn checks, final outcome checks, and explicit state lifecycle/reset rules.
+- [x] Support scripted follow-up turns and session evidence for context retention, repeated questions, and behavior after a correction.
 - [x] Assert inclusive tool-call/retry bounds and recovery through explicit output/tool checks.
-- [ ] Assert allowed observable state changes.
+- [x] Assert allowed observable state changes and exact final JSON state.
 - [x] Specify scripted timeout errors, cooperative async cancellation and existing dashboard interruption for current execution modes; no enforced execution deadline.
 - [ ] Specify conversation turn limits, enforced deadlines and additional cleanup behavior before offering enforcement guarantees.
-- [ ] Add resettable stateful fixtures and retain partial conversation/tool evidence on failure or interruption.
+- [x] Add resettable JSON state fixtures and retain partial conversation/tool evidence on failure.
 - [x] Save discovered single/repeated case failures through milestone 4.5's reviewed regression workflow, retaining controlled fixture scripts.
 
 Fixture suites use schema 3, fixture runs schema 5 and repeated fixture runs schema
@@ -233,13 +233,19 @@ Fixture suites use schema 3, fixture runs schema 5 and repeated fixture runs sch
 Factories receive controlled tools afresh for every case attempt. Scripts are
 reviewed case contracts, including unused steps; changed scripts are incompatible
 without an intentional baseline transition. Call bounds evaluate completed
-evidence and do not stop execution. Stateful environments, call-order checks and
-enforced deadlines remain outside the implemented slice.
+evidence and do not stop execution.
 
-Begin with scripted conversations and controlled tools. Any later model-driven
-user simulator needs explicit budgets, stopping rules, recorded configuration,
-and a supplied success criterion. Observable state changes require instrumentation;
-scenario execution does not imply sandboxing or hidden-reasoning access.
+Conversation/state suites use suite schema 4, run schema 6, and repeated-run
+schema 3 with mode `simulations`. The factory persists across ordered user turns;
+completed turn responses and initial/final fixture state are saved as evidence.
+State checks bound changed top-level keys and can require an exact final state.
+Scripts and initial state participate in compatibility and baseline review.
+See [conversation and state simulations](docs/milestones/05-simulations.md).
+
+External environment resets, call-order assertions and enforced deadlines remain
+planned. Any later model-driven user simulator needs explicit budgets, stopping
+rules, recorded configuration, and a supplied success criterion. Scenario
+execution does not imply sandboxing or hidden-reasoning access.
 
 ## 6. Evaluate behavior with reviewed rubrics
 

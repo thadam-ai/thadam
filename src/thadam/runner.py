@@ -27,6 +27,7 @@ from thadam.models import (
     CaseResult,
     CaseStatus,
     CheckDefinition,
+    ConversationTurnResult,
     ExecutionEvent,
     RunReport,
     SuiteIdentity,
@@ -104,6 +105,8 @@ def _prepare_run(
                 if isinstance(agent, FixtureAgent)
                 else None
             ),
+            conversation=tuple(deepcopy(case.conversation)),
+            state_fixture=deepcopy(case.state_fixture),
         )
         for case in validate_suite(cases)
     )
@@ -114,6 +117,14 @@ def _prepare_run(
         raise AgentConfigurationError(
             "Tool fixture suites require FixtureAgent or --fixture-factory"
         )
+    if any(case.state_fixture is not None for case in validated) and not isinstance(
+        agent, FixtureAgent
+    ):
+        raise AgentConfigurationError("State fixtures require FixtureAgent or --fixture-factory")
+    if any(case.conversation for case in validated) and not isinstance(agent, FixtureAgent):
+        raise AgentConfigurationError(
+            "Conversation suites require FixtureAgent or --fixture-factory for per-case sessions"
+        )
     definitions = tuple(snapshot_definitions(case) for case in validated)
     return identity, validated, definitions
 
@@ -121,11 +132,15 @@ def _prepare_run(
 def _run_case(agent: Agent, case: TestCase) -> CaseResult:
     started = perf_counter()
     try:
-        output = (
-            agent.invoke_case(case.tool_fixtures, deepcopy(case.input))
-            if isinstance(agent, FixtureAgent)
-            else agent(deepcopy(case.input))
-        )
+        if isinstance(agent, FixtureAgent):
+            output = agent.invoke_case(
+                case.tool_fixtures,
+                deepcopy(case.input),
+                state_fixture=case.state_fixture,
+                conversation=case.conversation,
+            )
+        else:
+            output = agent(deepcopy(case.input))
     except (Exception, SystemExit) as error:
         return _agent_error(case, started, error)
     return _finish_case(output, case, started)
@@ -149,6 +164,9 @@ def _agent_error(case: TestCase, started: float, error: Exception | SystemExit) 
             events=events,
             trace_complete=error.trace_complete,
             trace_warnings=tuple(error.trace_warnings),
+            conversation_results=error.conversation_results,
+            state_initial=error.state_initial,
+            state_final=error.state_final,
         )
     return _execution_error(case, started, "agent", error)
 
@@ -157,11 +175,24 @@ def _finish_case(output: object, case: TestCase, started: float) -> CaseResult:
     events = None
     trace_complete = None
     trace_warnings = ()
+    conversation_results = ()
+    state_initial = None
+    state_final = None
     if isinstance(output, AgentResult):
+        conversation_results = tuple(output.conversation_results)
+        state_initial, state_final = deepcopy(output.state_initial), deepcopy(output.state_final)
         try:
             events = snapshot_trace(output.events, output.trace_complete, output.trace_warnings)
         except ValueError as error:
-            return _execution_error(case, started, "trace", error)
+            return _execution_error(
+                case,
+                started,
+                "trace",
+                error,
+                conversation_results=conversation_results,
+                state_initial=state_initial,
+                state_final=state_final,
+            )
         trace_complete, trace_warnings = output.trace_complete, tuple(output.trace_warnings)
         output = output.output
 
@@ -179,6 +210,9 @@ def _finish_case(output: object, case: TestCase, started: float) -> CaseResult:
             events=events,
             trace_complete=trace_complete,
             trace_warnings=trace_warnings,
+            conversation_results=conversation_results,
+            state_initial=state_initial,
+            state_final=state_final,
         )
 
     assertions = []
@@ -191,6 +225,9 @@ def _finish_case(output: object, case: TestCase, started: float) -> CaseResult:
                     output,
                     events=events,
                     trace_complete=trace_complete,
+                    conversation_results=conversation_results,
+                    state_initial=state_initial,
+                    state_final=state_final,
                 )
             )
         except TraceUnavailableError as error:
@@ -232,6 +269,11 @@ def _finish_case(output: object, case: TestCase, started: float) -> CaseResult:
         trace_complete=trace_complete,
         trace_warnings=trace_warnings,
         tool_fixtures=deepcopy(case.tool_fixtures),
+        conversation=tuple(deepcopy(case.conversation)),
+        conversation_results=conversation_results,
+        state_fixture=deepcopy(case.state_fixture),
+        state_initial=state_initial,
+        state_final=state_final,
     )
 
 
@@ -244,6 +286,9 @@ def _execution_error(
     events: tuple[ExecutionEvent, ...] | None = None,
     trace_complete: bool | None = None,
     trace_warnings: tuple[str, ...] = (),
+    conversation_results: tuple[ConversationTurnResult, ...] = (),
+    state_initial=None,
+    state_final=None,
 ) -> CaseResult:
     return CaseResult(
         id=case.id,
@@ -255,4 +300,9 @@ def _execution_error(
         trace_complete=trace_complete,
         trace_warnings=trace_warnings,
         tool_fixtures=deepcopy(case.tool_fixtures),
+        conversation=tuple(deepcopy(case.conversation)),
+        conversation_results=tuple(deepcopy(conversation_results)),
+        state_fixture=deepcopy(case.state_fixture),
+        state_initial=deepcopy(state_initial),
+        state_final=deepcopy(state_final),
     )

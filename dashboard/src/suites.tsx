@@ -41,7 +41,9 @@ export function SuiteEditor({
 }) {
     const [text, setText] = useState(json(artifact?.data || emptySuite)),
         [path, setPath] = useState(artifact?.path || "cases.json"),
-        [tab, setTab] = useState("form"),
+        [tab, setTab] = useState(
+            artifact?.data.schema_version === 4 ? "json" : "form",
+        ),
         [selectedCase, setSelectedCase] = useState(0);
     const [error, setError] = useState(""),
         [busy, setBusy] = useState(false),
@@ -173,6 +175,7 @@ export function SuiteEditor({
                 <div className="segmented" aria-label="Editor view">
                     <button
                         className={tab === "form" ? "selected" : ""}
+                        disabled={data?.schema_version === 4}
                         onClick={() => {
                             if (!data)
                                 setError(

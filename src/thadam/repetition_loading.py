@@ -68,23 +68,31 @@ def repeated_from_dict(data: object) -> RepeatedReport:
         }
         if not isinstance(data, dict) or data.keys() != fields:
             raise ValueError("Repeated report has missing or unknown fields; expected repeated_run")
-        if type(data["schema_version"]) is not int or data["schema_version"] not in (1, 2):
-            raise ValueError("Unsupported repeated-run schema_version; expected integer 1 or 2")
+        if type(data["schema_version"]) is not int or data["schema_version"] not in (1, 2, 3):
+            raise ValueError("Unsupported repeated-run schema_version; expected integer 1, 2, or 3")
         if data["kind"] != "repeated_run":
             raise ValueError("Expected kind repeated_run")
         if not isinstance(data["report_id"], str) or not data["report_id"].strip():
             raise ValueError("report_id must be a non-empty string")
-        if data["execution_mode"] not in ("shared", "factory", "fixtures"):
-            raise ValueError("execution_mode must be shared, factory, or fixtures")
-        if (data["schema_version"] == 2) != (data["execution_mode"] == "fixtures"):
-            raise ValueError("Fixture execution requires repeated schema 2")
+        if data["execution_mode"] not in ("shared", "factory", "fixtures", "simulations"):
+            raise ValueError("execution_mode must be shared, factory, fixtures, or simulations")
+        if (data["schema_version"] == 2) != (data["execution_mode"] == "fixtures") or (
+            data["schema_version"] == 3
+        ) != (data["execution_mode"] == "simulations"):
+            raise ValueError("Execution mode disagrees with repeated-run schema")
         if type(data["attempts"]) is not int or data["attempts"] < 2:
             raise ValueError("attempts must be an integer of at least 2")
         if not isinstance(data["runs"], list) or len(data["runs"]) != data["attempts"]:
             raise ValueError("runs must contain exactly the declared number of attempts")
         runs = tuple(report_from_dict(run) for run in data["runs"])
-        if any((run.schema_version == 5) != (data["execution_mode"] == "fixtures") for run in runs):
-            raise ValueError("Repeated execution mode disagrees with nested fixture evidence")
+        if any(
+            (run.schema_version == 5) != (data["execution_mode"] == "fixtures")
+            or (run.schema_version == 6) != (data["execution_mode"] == "simulations")
+            for run in runs
+        ):
+            raise ValueError(
+                "Repeated execution mode disagrees with nested fixture/simulation evidence"
+            )
         if len({run.run_id for run in runs}) != len(runs):
             raise ValueError("Attempt run IDs must be unique")
         for run in runs[1:]:
@@ -112,6 +120,14 @@ def _same_contract(first: RunReport, other: RunReport) -> None:
             None if right.tool_fixtures is None else fixtures_to_dict(right.tool_fixtures),
         ):
             raise ValueError(f"Case {case_id!r} fixture contracts differ between attempts")
+        if not json_equal(
+            [(turn.id, turn.message) for turn in left.conversation],
+            [(turn.id, turn.message) for turn in right.conversation],
+        ) or not json_equal(
+            None if left.state_fixture is None else left.state_fixture.initial,
+            None if right.state_fixture is None else right.state_fixture.initial,
+        ):
+            raise ValueError(f"Case {case_id!r} simulation contracts differ between attempts")
         a = {check.id: check for check in left.check_definitions}
         b = {check.id: check for check in right.check_definitions}
         if not json_equal(left.input, right.input) or a.keys() != b.keys():

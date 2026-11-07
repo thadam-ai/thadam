@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** milestones 1 and 2, saved-report regression comparison, and repeated-evaluation reliability gates are implemented. Explicit async execution and bounded case concurrency are also implemented; reviewable scenario generation is implemented; hosted services remain planned.
+**Status:** milestones 1 and 2, saved-report regression comparison, repeated-evaluation reliability gates, and the conversation/state simulation slice of milestone 5 are implemented. Explicit async execution and bounded case concurrency are also implemented; reviewable scenario generation is implemented; hosted services remain planned.
 
 See [DESIGN.md](../DESIGN.md) for the agreed technology stack, rationale, and decision history.
 
@@ -42,7 +42,7 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/adapters/python.py` | Validate the synchronous Python callable contract | Require one positional input; runner owns invocation |
 | `src/thadam/adapters/langgraph.py` | Execute compiled graphs with public model/tool callbacks | Optional imports, per-invocation collectors, JSON state mapping, fresh checkpoint threads |
 | `src/thadam/events.py` | Validate and snapshot execution evidence | Reject invalid traces; preserve unknown-versus-empty semantics |
-| `src/thadam/fixtures.py` | Strict script declarations, controlled tool handles and fresh-agent factories | Per-invocation state, sticky unplanned calls, explicit evidence; no real-service fallback or enforced timeout |
+| `src/thadam/fixtures.py` | Strict tool scripts, observable JSON state, controlled handles and fresh-agent factories | Fresh state per case attempt, shared session across scripted turns, sticky unplanned calls; no real-service fallback or enforced timeout |
 | `src/thadam/assertions.py` | Built-in assertions and Python verifier contract | Return evidence; do not invoke the agent |
 | `src/thadam/contracts.py` | Snapshot and compare declared check definitions | Keep declared expectations separate from observed results |
 | `src/thadam/report_loading.py` | Strict run-report parsing and evidence validation | Reject missing, inconsistent, or unsupported data without importing agent code |
@@ -225,3 +225,15 @@ spans are counted once while other callbacks remain. Core imports stay dependenc
 free. Dashboard `fixtures.tsx` extends the suite editor, and its existing job
 controller selects the explicit factory mode. See [the lifecycle and evidence
 contract](milestones/05-tool-failures.md).
+
+## Conversation and state simulations
+
+Milestone 5's `ConversationTurn` scripts ordered user messages around one case's
+normal invocation. The runner supplies each response step with case input, the
+current turn and all prior user/assistant messages. `ConversationOutputEquals`,
+`StateEquals` and `StateChanges` are declared checks evaluated after the attempt.
+The fixture factory's `tools.state` handle reads and writes copied JSON state that
+resets for every case attempt. Simulation suites use suite schema 4, reports use
+schema 6, and repeated simulation wrappers use schema 3. Strict loading and
+comparison include the script and initial state without running application code.
+See [the simulation contract](milestones/05-simulations.md).

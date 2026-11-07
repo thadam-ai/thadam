@@ -27,7 +27,7 @@ from thadam.runner import run_suite
 from thadam.suites import suite_identity, validate_suite
 
 AgentFactory = Callable[[], Agent]
-ExecutionMode = Literal["shared", "factory", "fixtures"]
+ExecutionMode = Literal["shared", "factory", "fixtures", "simulations"]
 
 
 @dataclass(frozen=True)
@@ -97,6 +97,8 @@ class RepeatedReport:
     def __post_init__(self) -> None:
         if self.execution_mode == "fixtures":
             object.__setattr__(self, "schema_version", 2)
+        elif self.execution_mode == "simulations":
+            object.__setattr__(self, "schema_version", 3)
 
     @property
     def attempts(self) -> int:
@@ -194,6 +196,8 @@ def run_repeated(
             tuple(deepcopy(case.assertions)),
             tuple(case.verifiers),
             deepcopy(case.tool_fixtures),
+            tuple(deepcopy(case.conversation)),
+            deepcopy(case.state_fixture),
         )
         for case in validate_suite(cases)
     )
@@ -222,7 +226,10 @@ def run_repeated(
             )
             for _ in range(attempts)
         ),
-        execution_mode="fixtures"
+        execution_mode="simulations"
+        if isinstance(agent, FixtureAgent)
+        and any(case.conversation or case.state_fixture is not None for case in prepared)
+        else "fixtures"
         if isinstance(agent, FixtureAgent)
         else "factory"
         if agent_factory is not None

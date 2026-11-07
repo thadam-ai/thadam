@@ -11,8 +11,13 @@ from thadam.errors import SuiteValidationError
 from thadam.fixtures import parse_fixtures, validate_fixtures
 from thadam.models import (
     Assertion,
+    ConversationOutputEquals,
+    ConversationTurn,
     OutputEquals,
     OutputHasKeys,
+    StateChanges,
+    StateEquals,
+    StateFixture,
     SuiteIdentity,
     TestCase,
     ToolArgumentsMatch,
@@ -80,8 +85,8 @@ def suite_from_dict(data: object) -> tuple[TestCase, ...] | TestSuite:
     """Validate a saved suite object without file access or application imports."""
 
     version = data.get("schema_version") if isinstance(data, dict) else None
-    if type(version) is not int or version not in (1, 2, 3):
-        raise SuiteValidationError("suite.schema_version must be the integer 1, 2, or 3")
+    if type(version) is not int or version not in (1, 2, 3, 4):
+        raise SuiteValidationError("suite.schema_version must be the integer 1, 2, 3, or 4")
     _require_fields(
         data, {"schema_version", "cases"} | ({"suite"} if version >= 2 else set()), "suite"
     )
@@ -97,7 +102,9 @@ def suite_from_dict(data: object) -> tuple[TestCase, ...] | TestSuite:
         location = f"suite.cases[{index}]"
         _require_fields(
             raw,
-            {"id", "input", "assertions"} | ({"tool_fixtures"} if version == 3 else set()),
+            {"id", "input", "assertions"}
+            | ({"tool_fixtures"} if version == 3 else set())
+            | ({"tool_fixtures", "conversation", "state_fixture"} if version == 4 else set()),
             location,
         )
         if not isinstance(raw["assertions"], list):
@@ -111,7 +118,17 @@ def suite_from_dict(data: object) -> tuple[TestCase, ...] | TestSuite:
                 id=raw["id"],
                 input=raw["input"],
                 assertions=assertions,
-                tool_fixtures=parse_fixtures(raw["tool_fixtures"]) if version == 3 else None,
+                tool_fixtures=parse_fixtures(raw["tool_fixtures"]) if version in (3, 4) else None,
+                conversation=(
+                    _parse_conversation(raw["conversation"], f"{location}.conversation")
+                    if version == 4
+                    else ()
+                ),
+                state_fixture=(
+                    _parse_state_fixture(raw["state_fixture"], f"{location}.state_fixture")
+                    if version == 4 and raw["state_fixture"] is not None
+                    else None
+                ),
             )
         )
     validated = validate_suite(cases)
@@ -138,10 +155,41 @@ def validate_suite(cases: Sequence[TestCase]) -> tuple[TestCase, ...]:
                 raise SuiteValidationError(f"{location}.{name} must be a list or tuple")
         if not case.assertions and not case.verifiers:
             raise SuiteValidationError(f"{location} must contain at least one check")
+        if not isinstance(case.conversation, (list, tuple)):
+            raise SuiteValidationError(f"{location}.conversation must be a list or tuple")
+        turn_ids: set[str] = set()
+        for turn in case.conversation:
+            if not isinstance(turn, ConversationTurn):
+                raise SuiteValidationError(
+                    f"{location}.conversation must contain ConversationTurn values"
+                )
+            _unique_id(turn.id, turn_ids, f"{location}.conversation")
+            try:
+                validate_json(turn.message, f"{location}.conversation[{turn.id}].message")
+            except ValueError as error:
+                raise SuiteValidationError(str(error)) from error
+        if case.state_fixture is not None:
+            if not isinstance(case.state_fixture, StateFixture):
+                raise SuiteValidationError(
+                    f"{location}.state_fixture must be a StateFixture or None"
+                )
+            try:
+                validate_json(case.state_fixture.initial, f"{location}.state_fixture.initial")
+            except ValueError as error:
+                raise SuiteValidationError(str(error)) from error
         check_ids: set[str] = set()
         for assertion in case.assertions:
             _validate_assertion(assertion, location)
             _unique_id(assertion.id, check_ids, f"{location}.assertions")
+            if (
+                isinstance(assertion, ConversationOutputEquals)
+                and assertion.turn_id not in turn_ids
+            ):
+                raise SuiteValidationError(
+                    f"{location}: conversation check references unknown turn {assertion.turn_id!r}"
+                )
+            if isinstance(assertion, (StateEquals, StateChanges)) and case.state_fixture is None:
+                raise SuiteValidationError(f"{location}: state checks require state_fixture")
         for verifier in case.verifiers:
             if not isinstance(verifier, Verifier):
                 raise SuiteValidationError(f"{location}.verifiers must contain Verifier objects")
@@ -175,6 +223,26 @@ def _validate_assertion(assertion: object, location: str) -> None:
             raise SuiteValidationError(
                 f"{location}: keys must be a non-empty sequence of unique strings"
             )
+    elif isinstance(assertion, ConversationOutputEquals):
+        if not isinstance(assertion.turn_id, str) or not assertion.turn_id.strip():
+            raise SuiteValidationError(f"{location}: turn_id must be a non-empty string")
+        try:
+            validate_json(assertion.expected, f"{location}.expected")
+        except ValueError as error:
+            raise SuiteValidationError(str(error)) from error
+    elif isinstance(assertion, StateEquals):
+        try:
+            validate_json(assertion.expected, f"{location}.expected")
+        except ValueError as error:
+            raise SuiteValidationError(str(error)) from error
+    elif isinstance(assertion, StateChanges):
+        keys = assertion.allowed_keys
+        if (
+            not isinstance(keys, (list, tuple))
+            or any(not isinstance(key, str) or not key for key in keys)
+            or len(set(keys)) != len(keys)
+        ):
+            raise SuiteValidationError(f"{location}: allowed_keys must be unique non-empty strings")
     elif isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch, ToolCallCount)):
         if not isinstance(assertion.tool, str) or not assertion.tool.strip():
             raise SuiteValidationError(f"{location}: tool must be a non-empty string")
@@ -239,6 +307,17 @@ def parse_assertion(raw: object, location: str) -> Assertion:
         if not isinstance(raw["keys"], list):
             raise SuiteValidationError(f"{location}.keys must be an array")
         return OutputHasKeys(id=raw["id"], keys=tuple(raw["keys"]))
+    if raw.get("type") == "conversation_output_equals":
+        _require_fields(raw, {"id", "type", "turn_id", "expected"}, location)
+        return ConversationOutputEquals(raw["id"], raw["turn_id"], raw["expected"])
+    if raw.get("type") == "state_equals":
+        _require_fields(raw, {"id", "type", "expected"}, location)
+        return StateEquals(raw["id"], raw["expected"])
+    if raw.get("type") == "state_changes":
+        _require_fields(raw, {"id", "type", "allowed_keys"}, location)
+        if not isinstance(raw["allowed_keys"], list):
+            raise SuiteValidationError(f"{location}.allowed_keys must be an array")
+        return StateChanges(raw["id"], tuple(raw["allowed_keys"]))
     if raw.get("type") in {"tool_called", "tool_not_called"}:
         _require_fields(raw, {"id", "type", "tool"}, location)
         assertion_type = ToolCalled if raw["type"] == "tool_called" else ToolNotCalled
@@ -260,3 +339,19 @@ def _require_fields(value: object, fields: set[str], location: str) -> None:
         raise SuiteValidationError(
             f"{location}: missing fields {sorted(missing)}, unknown fields {sorted(extra)}"
         )
+
+
+def _parse_conversation(raw: object, location: str) -> tuple[ConversationTurn, ...]:
+    if not isinstance(raw, list):
+        raise SuiteValidationError(f"{location} must be an array")
+    turns = []
+    for index, turn in enumerate(raw):
+        item_location = f"{location}[{index}]"
+        _require_fields(turn, {"id", "message"}, item_location)
+        turns.append(ConversationTurn(turn["id"], turn["message"]))
+    return tuple(turns)
+
+
+def _parse_state_fixture(raw: object, location: str) -> StateFixture:
+    _require_fields(raw, {"initial"}, location)
+    return StateFixture(raw["initial"])

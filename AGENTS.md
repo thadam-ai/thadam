@@ -175,5 +175,16 @@ including unused steps. Missing/exhausted calls cannot be caught into a pass and
 never fall through to a real service. `ToolCallCount` counts all observed attempts
 after execution and requires complete explicit evidence; it does not stop retries.
 Use the optional LangGraph `fixture_tool` helper to avoid duplicate spans. Keep
-dashboard suite revision/stale-write and process interruption guards. Stateful
-environments, call-order checks and enforced deadlines remain planned.
+dashboard suite revision/stale-write and process interruption guards.
+
+Read `docs/milestones/05-simulations.md` for ordered conversations and observable
+JSON state. Simulation suites use schema 4, runs schema 6, and repeated simulation
+artifacts schema 3 with mode `simulations`. The same fresh fixture factory spans
+all turns in one case attempt; history contains completed user/assistant turns,
+and `tools.state` resets from its declared initial value for each attempt.
+`ConversationOutputEquals`, `StateEquals`, and `StateChanges` are strict declared
+checks. Reports retain the script, available turn responses, initial/final state
+and partial evidence after errors. Conversation and initial-state contracts
+participate in comparison and baseline review. The dashboard edits schema-4
+suites in JSON view and displays transcript/state evidence. External environment
+resets, call-order checks and enforced deadlines remain planned.

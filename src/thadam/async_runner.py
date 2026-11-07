@@ -66,7 +66,12 @@ async def run_suite_async(
             started = perf_counter()
             try:
                 output = (
-                    agent.ainvoke_case(case.tool_fixtures, deepcopy(case.input))
+                    agent.ainvoke_case(
+                        case.tool_fixtures,
+                        deepcopy(case.input),
+                        state_fixture=case.state_fixture,
+                        conversation=case.conversation,
+                    )
                     if isinstance(agent, FixtureAgent)
                     else agent(deepcopy(case.input))
                 )
@@ -151,7 +156,10 @@ async def run_repeated_async(
         )
     return RepeatedReport(
         tuple(runs),
-        "fixtures"
+        "simulations"
+        if isinstance(agent, FixtureAgent)
+        and any(case.conversation or case.state_fixture is not None for case in prepared)
+        else "fixtures"
         if isinstance(agent, FixtureAgent)
         else "factory"
         if agent_factory is not None
