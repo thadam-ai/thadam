@@ -841,6 +841,8 @@ def test_regression_from_simulation_preserves_turns_and_state_in_schema_four(cli
     ]
     assert draft_case["state_fixture"] == {"initial": {"refunds": []}}
     assert draft_case["tool_fixtures"] == {}
+    draft_case["conversation"][1]["message"] = "Correction: use the reviewed $25 amount."
+    draft_case["state_fixture"]["initial"]["reviewed_marker"] = True
     draft_case["assertions"] = [
         {
             "id": "refund-result",

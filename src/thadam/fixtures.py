@@ -514,6 +514,17 @@ def _sync_conversation(agent: Agent, value: JSONValue, turns, tools: FixtureTool
                 trace_warnings=tuple(warnings) + error.trace_warnings,
                 conversation_results=tuple(outputs),
             ) from error
+        except FixtureTraceError as error:
+            warning = (
+                f"Invalid trace evidence from conversation turn {turn.id!r} was discarded: {error}"
+            )
+            raise AgentExecutionError(
+                error,
+                events=tuple(events),
+                trace_complete=False,
+                trace_warnings=tuple(warnings) + (warning,),
+                conversation_results=tuple(outputs),
+            ) from error
         except (Exception, SystemExit) as error:
             raise AgentExecutionError(
                 error,
@@ -569,6 +580,17 @@ async def _async_conversation(agent, value, turns, tools: FixtureTools) -> Agent
                 events=tuple(events) + current_events,
                 trace_complete=complete and error.trace_complete,
                 trace_warnings=tuple(warnings) + error.trace_warnings,
+                conversation_results=tuple(outputs),
+            ) from error
+        except FixtureTraceError as error:
+            warning = (
+                f"Invalid trace evidence from conversation turn {turn.id!r} was discarded: {error}"
+            )
+            raise AgentExecutionError(
+                error,
+                events=tuple(events),
+                trace_complete=False,
+                trace_warnings=tuple(warnings) + (warning,),
                 conversation_results=tuple(outputs),
             ) from error
         except (Exception, SystemExit) as error:

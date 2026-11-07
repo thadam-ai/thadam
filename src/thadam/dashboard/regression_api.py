@@ -72,8 +72,8 @@ def register_regression(app, workspace):
             # saving cannot silently remove the original failure setup.
             case["tool_fixtures"] = deepcopy(original["tool_fixtures"])
         if simulation_case:
-            case["conversation"] = deepcopy(original["conversation"])
-            case["state_fixture"] = deepcopy(original["state_fixture"])
+            case.setdefault("conversation", deepcopy(original["conversation"]))
+            case.setdefault("state_fixture", deepcopy(original["state_fixture"]))
         destination = workspace.path(body["destination"])
         if destination.exists():
             target = workspace.read(body["destination"])

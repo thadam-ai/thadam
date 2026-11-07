@@ -230,6 +230,69 @@ def test_invalid_conversation_response_keeps_current_trace_as_output_error():
     assert report_from_dict(report_to_dict(report)) == report
 
 
+def test_invalid_later_turn_trace_marks_sync_conversation_incomplete():
+    event = ExecutionEvent("span", "model", "chat", "completed", 0, duration_ms=1)
+
+    def create(_tools):
+        def agent(request):
+            if request["turn_id"] == "one":
+                return AgentResult("first", (event,))
+            return AgentResult("second", (event, event))
+
+        return agent
+
+    case = Case(
+        "invalid-later-trace-sync",
+        None,
+        (OutputEquals("last", "unused"),),
+        conversation=(ConversationTurn("one", "first"), ConversationTurn("two", "second")),
+    )
+    report = run_suite(FixtureAgent(create), [case])
+    result = report.cases[0]
+
+    assert result.status == "error"
+    assert result.errors[0].source == "trace"
+    assert [event.id for event in result.events] == ["conversation-turn-0:span"]
+    assert result.trace_complete is False
+    assert any(
+        "turn 'two'" in warning and "discarded" in warning for warning in result.trace_warnings
+    )
+    assert report_from_dict(report_to_dict(report)) == report
+
+
+def test_invalid_later_turn_trace_marks_async_conversation_incomplete():
+    async def exercise():
+        event = ExecutionEvent("span", "model", "chat", "completed", 0, duration_ms=1)
+
+        async def create(_tools):
+            async def agent(request):
+                if request["turn_id"] == "one":
+                    return AgentResult("first", (event,))
+                return AgentResult("second", (event, event))
+
+            return agent
+
+        case = Case(
+            "invalid-later-trace-async",
+            None,
+            (OutputEquals("last", "unused"),),
+            conversation=(ConversationTurn("one", "first"), ConversationTurn("two", "second")),
+        )
+        report = await run_suite_async(FixtureAgent(create), [case])
+        result = report.cases[0]
+
+        assert result.status == "error"
+        assert result.errors[0].source == "trace"
+        assert [event.id for event in result.events] == ["conversation-turn-0:span"]
+        assert result.trace_complete is False
+        assert any(
+            "turn 'two'" in warning and "discarded" in warning for warning in result.trace_warnings
+        )
+        assert report_from_dict(report_to_dict(report)) == report
+
+    asyncio.run(exercise())
+
+
 def test_repeated_loader_uses_strict_json_types_for_turn_contracts():
     case = Case(
         "strict-turn-message",
