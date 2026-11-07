@@ -107,6 +107,10 @@ def create_app(root: str | Path, *, token: str | None = None) -> FastAPI:
 
     register_regression(app, workspace)
 
+    from thadam.dashboard.result_review_api import register_result_reviews
+
+    register_result_reviews(app, workspace)
+
     @app.get("/api/workspace")
     def catalog():
         return workspace.catalog()

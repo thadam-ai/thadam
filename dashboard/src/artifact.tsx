@@ -14,6 +14,7 @@ import { BaselineView } from "./baselines";
 import { ComparisonView } from "./comparisons";
 import { Badge, titlePath } from "./components";
 import { EvaluationView } from "./evaluations";
+import { ResultReviewEditor, ResultReviewsArtifact } from "./result_reviews";
 export function ArtifactView({
     artifact,
     catalog,
@@ -55,6 +56,14 @@ export function ArtifactView({
                 catalog={catalog}
                 onSaved={onSaved}
                 onDirty={onDirty}
+            />
+        );
+    if (artifact.kind === "result_reviews")
+        return (
+            <ResultReviewsArtifact
+                artifact={artifact}
+                catalog={catalog}
+                onOpen={onOpen}
             />
         );
     const data = artifact.data;
@@ -100,14 +109,23 @@ export function ArtifactView({
             ) : artifact.kind.includes("comparison") ? (
                 <ComparisonView data={data} catalog={catalog} onOpen={onOpen} />
             ) : (
-                <EvaluationView
-                    data={data}
-                    onRegression={
-                        ["run", "repeated_run"].includes(artifact.kind)
-                            ? create
-                            : undefined
-                    }
-                />
+                <>
+                    {["run", "repeated_run"].includes(artifact.kind) && (
+                        <ResultReviewEditor
+                            artifact={artifact}
+                            onSaved={() => onSaved(artifact)}
+                            onDirty={onDirty}
+                        />
+                    )}
+                    <EvaluationView
+                        data={data}
+                        onRegression={
+                            ["run", "repeated_run"].includes(artifact.kind)
+                                ? create
+                                : undefined
+                        }
+                    />
+                </>
             )}
         </>
     );

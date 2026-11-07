@@ -80,7 +80,10 @@ unsaved changes.
   and saved-agent naming are under **Execution & save settings**. **Run evaluation** is the only action that imports or
   executes application code. One attempt with a shared callable is a single run;
   two or more attempts produce a repeated evaluation. Factory mode requires at
-  least two attempts, matching the repeated-run SDK/CLI workflow.
+  least two attempts, matching the repeated-run SDK/CLI workflow. Use **Review
+  labels** on a saved result to add per-case (and per-attempt) good, bad, or
+  needs-review verdicts, notes, and failure tags. The dashboard stores these in
+  a separate `review-labels/` artifact and leaves run evidence unchanged.
 - **Comparisons:** choose baseline and candidate evidence and save a single-run
   regression or repeated reliability comparison. Equal attempts, lifecycle modes,
   suite labels and actual contracts still apply. A drop tolerance of `0.05` means
@@ -171,6 +174,11 @@ reports. Search/filtering uses the discovered catalog; Refresh rereads the files
 Large case lists paginate. Individual JSON artifacts are limited to 32 MiB in the
 browser workflow; larger artifacts remain usable through the SDK. No synthetic
 statistics fill empty states.
+
+Search in Overview and Evaluations also matches labeled case IDs and failure
+tags. **Filter by review label** finds unlabeled results or results with a good,
+bad, or needs-review label. Review labels are local annotations, not authenticated
+approvals; saved run outcomes remain authoritative for comparisons.
 
 New report/review destinations must be absent, preserving existing evidence.
 Suite saves use a fingerprint to reject stale browser edits. Baseline approval
