@@ -19,6 +19,11 @@ from thadam.repetition_loading import repeated_from_dict
 from thadam.repetition_reporting import repeated_to_dict
 from thadam.report_loading import report_from_dict
 from thadam.reporting import report_to_dict, write_json_artifact
+from thadam.result_reviews import (
+    result_reviews,
+    review_path,
+    validate_result_reviews,
+)
 from thadam.suites import load_suite
 
 SKIP = {".git", ".venv", "venv", "node_modules", "build", "dist", "__pycache__"}
@@ -71,6 +76,8 @@ class Workspace:
             from thadam.regression import validate_regression_draft
 
             data = validate_regression_draft(raw)
+        elif kind == "result_reviews":
+            data = validate_result_reviews(raw)
         elif kind == "scenario_draft":
             from thadam.generation import validate_draft
 
@@ -138,7 +145,7 @@ class Workspace:
                 runs = evaluation.get("runs", [])
                 suite = evaluation.get("suite") or (runs[0].get("suite") if runs else None)
                 artifact.update(
-                    id=evaluation.get("report_id") or evaluation.get("run_id"),
+                    id=evaluation.get("report_id") or evaluation.get("run_id") or data.get("id"),
                     suite=suite,
                     summary=evaluation.get("summary"),
                     exit_code=data.get("exit_code"),
@@ -152,11 +159,23 @@ class Workspace:
                         else None
                     ),
                     cases=(
-                        1
+                        len(data["reviews"])
+                        if artifact["kind"] == "result_reviews"
+                        else 1
                         if artifact["kind"] == "regression_draft"
                         else len(evaluation.get("candidates", evaluation.get("cases", [])))
                     ),
                 )
+                if artifact["kind"] == "result_reviews":
+                    reviews = data["reviews"]
+                    artifact.update(
+                        source=data["source"],
+                        review_state="reviewed" if reviews else "unreviewed",
+                        review_verdicts=sorted({item["verdict"] for item in reviews}),
+                        review_case_ids=sorted({item["case_id"] for item in reviews}),
+                        review_tags=sorted({tag for item in reviews for tag in item["tags"]}),
+                        review_labels=reviews,
+                    )
                 if artifact["kind"] == "suite":
                     artifact["suite"] = data.get("suite")
                 items.append(artifact)
@@ -172,7 +191,78 @@ class Workspace:
                 except (OSError, UnicodeError):
                     continue
         items.sort(key=lambda item: item["modified_ns"], reverse=True)
+        reviews_by_source = {
+            item["source"]["path"]: item for item in items if item["kind"] == "result_reviews"
+        }
+        for item in items:
+            review = reviews_by_source.get(item["path"])
+            if item["kind"] in ("run", "repeated_run"):
+                labels = review.get("review_labels", []) if review else []
+                total = (
+                    item.get("summary", {}).get("total_invocations", 0)
+                    if item["kind"] == "repeated_run"
+                    else item.get("cases", 0)
+                )
+                item.update(
+                    review_state=(
+                        "reviewed"
+                        if labels and len(labels) == total
+                        else "in progress"
+                        if labels
+                        else "unreviewed"
+                    ),
+                    review_verdicts=sorted({label["verdict"] for label in labels}),
+                    review_case_ids=sorted({label["case_id"] for label in labels}),
+                    review_tags=sorted({tag for label in labels for tag in label["tags"]}),
+                    review_artifact=review["path"] if review else None,
+                )
+        source_states = {
+            item["path"]: item.get("review_state", "unreviewed")
+            for item in items
+            if item["kind"] in ("run", "repeated_run")
+        }
+        for item in items:
+            if item["kind"] == "result_reviews":
+                item["review_state"] = source_states.get(
+                    item["source"]["path"], item["review_state"]
+                )
         return {"name": self.root.name, "root": str(self.root), "items": items, "invalid": invalid}
+
+    def save_result_reviews(
+        self,
+        source_reference: str,
+        source_fingerprint: str,
+        reviews: list[dict],
+        expected_fingerprint: str | None,
+    ) -> dict:
+        """Save labels separately while guarding both source and sidecar revisions."""
+        with self.lock:
+            source = self.read(source_reference)
+            if source["kind"] not in ("run", "repeated_run"):
+                raise ValueError("Choose a saved run or repeated run")
+            if source["fingerprint"] != source_fingerprint:
+                raise ValueError("Source result changed; reload before saving labels")
+            source_data = {"kind": source["kind"], **source["data"]}
+            artifact = result_reviews(
+                source_data,
+                path=source_reference,
+                fingerprint=source_fingerprint,
+                reviews=reviews,
+            )
+            artifact = validate_result_reviews(artifact, source=source_data)
+            reference = review_path(source_reference)
+            destination = self.path(reference)
+            current_fingerprint = fingerprint(destination)
+            if current_fingerprint != expected_fingerprint:
+                raise ValueError("Review labels changed; reload before saving")
+            if destination.exists():
+                current = self.read(reference)
+                if current["kind"] != "result_reviews":
+                    raise ValueError("Review path is occupied by another artifact")
+                if current["data"]["source"] != artifact["source"]:
+                    raise ValueError("Review labels belong to a different source result")
+            write_json_artifact(artifact, destination)
+            return self.read(reference)
 
     def save_suite(self, reference: str, data: dict, expected: str | None) -> dict:
         with self.lock:

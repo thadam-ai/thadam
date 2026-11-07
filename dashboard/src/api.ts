@@ -12,6 +12,11 @@ export type Item = {
     fingerprint: string;
     attempts?: number;
     agent_revision?: string;
+    review_state?: string;
+    review_verdicts?: string[];
+    review_case_ids?: string[];
+    review_tags?: string[];
+    review_artifact?: string | null;
 };
 export type Artifact = Item & { data: Data; review_digest?: string };
 export type Catalog = {
@@ -70,7 +75,11 @@ export function outcome(
     item: Pick<Item, "kind" | "summary" | "exit_code">,
 ): string {
     if (item.kind === "suite") return "ready";
-    if (["scenario_draft", "regression_draft"].includes(item.kind))
+    if (
+        ["scenario_draft", "regression_draft", "result_reviews"].includes(
+            item.kind,
+        )
+    )
         return "review required";
     if (item.kind === "approved_baseline") return "approved";
     if (item.kind === "baseline_review")
@@ -95,6 +104,7 @@ export const kindName: Record<string, string> = {
     suite: "Test suite",
     scenario_draft: "Scenario draft",
     regression_draft: "Regression draft",
+    result_reviews: "Review labels",
     baseline_review: "Baseline review",
     approved_baseline: "Approved baseline",
 };

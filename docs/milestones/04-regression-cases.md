@@ -1,7 +1,8 @@
 # Create regression cases from saved results
 
-**Status:** the first workflow of milestone 4.5 is implemented in the checkout.
-Review labels/imports and guided before/after verification remain planned.
+**Status:** workflow 1 and saved-result review labels are implemented in the
+checkout. Recorded-example imports and guided before/after verification remain
+planned.
 
 Open a saved single run, or choose an individual attempt in a repeated run. Expand
 its case and select **Create regression case**. Thadam saves a new draft under
@@ -64,3 +65,20 @@ workflow; review the draft before sharing it.
 Creating/reviewing a draft and saving a suite make no provider requests, run no
 agents or verifiers, and never approve baselines. A saved suite is a future test;
 its expected behavior is not evidence that the original run satisfied that check.
+
+## Review labels on saved results
+
+Open a single or repeated run and expand **Review labels**. Each single-run case,
+or each case in each repeated attempt, can receive a **good**, **bad**, or
+**needs review** verdict, notes, and comma-separated failure tags. Save the labels
+to a separate `kind: "result_reviews"`, schema-1 artifact under
+`review-labels/`. The artifact links the source path, source ID, and exact-byte
+fingerprint. Each review identifies a case and optional one-based attempt, then
+stores its verdict, notes, and tags. Editing labels never rewrites a run, changes
+a check result, or changes a comparison/reliability gate.
+
+Repeated attempts are labeled independently. Dashboard search matches case IDs
+and failure tags; the review filter finds unlabeled results and results with a
+selected verdict. The artifact is local review evidence, not an authenticated
+reviewer identity or proof that the label is correct. If the source file changes,
+reload before saving labels against the new result.
