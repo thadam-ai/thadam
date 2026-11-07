@@ -238,6 +238,22 @@ def case_evidence(view: ReportView, case: CaseResult, *, verbose: bool = False) 
                 + json.dumps(fixtures_to_dict(case.tool_fixtures), ensure_ascii=False),
                 indent=4,
             )
+        if case.conversation:
+            view.add("conversation evidence:", indent=4)
+            results = {turn.id: turn for turn in case.conversation_results}
+            for turn in case.conversation:
+                view.add("user: " + json.dumps(turn.message, ensure_ascii=False), indent=6)
+                result = results.get(turn.id)
+                view.add(
+                    "agent: "
+                    + (json.dumps(result.output, ensure_ascii=False) if result else "unavailable"),
+                    indent=6,
+                )
+        if case.state_fixture is not None:
+            view.add(
+                "initial state: " + json.dumps(case.state_initial, ensure_ascii=False), indent=4
+            )
+            view.add("final state: " + json.dumps(case.state_final, ensure_ascii=False), indent=4)
     for result in case.assertions:
         if verbose or not result.passed:
             view.section(

@@ -56,8 +56,33 @@ def validate_regression_draft(value: dict) -> dict:
     }:
         raise ValueError("Source case is absent from the recorded run")
     case = data["case"]
-    if not isinstance(case, dict) or case.keys() != {"id", "input", "assertions"}:
-        raise ValueError("A draft case needs id, input, and assertions")
+    allowed_case_fields = {
+        "id",
+        "input",
+        "assertions",
+        "tool_fixtures",
+        "conversation",
+        "state_fixture",
+    }
+    if (
+        not isinstance(case, dict)
+        or not {"id", "input", "assertions"} <= case.keys()
+        or case.keys() - allowed_case_fields
+    ):
+        raise ValueError("A draft case needs id, input, assertions, and supported setup fields")
+    has_simulation_fields = bool({"conversation", "state_fixture"} & case.keys())
+    if (
+        has_simulation_fields
+        and not {
+            "tool_fixtures",
+            "conversation",
+            "state_fixture",
+        }
+        <= case.keys()
+    ):
+        raise ValueError(
+            "Simulation draft cases need tool_fixtures, conversation, and state_fixture"
+        )
     if (
         not isinstance(case["id"], str)
         or not case["id"].strip()
@@ -67,7 +92,11 @@ def validate_regression_draft(value: dict) -> dict:
     if type(data["reviewed"]) is not bool:
         raise ValueError("Review status must be boolean")
     if case["assertions"] or data["reviewed"]:
-        suite_from_dict({"schema_version": 1, "cases": [case]})
+        schema_version = 4 if has_simulation_fields else 3 if "tool_fixtures" in case else 1
+        suite = {"schema_version": schema_version, "cases": [case]}
+        if schema_version >= 2:
+            suite["suite"] = {"id": "regression-draft", "revision": "draft"}
+        suite_from_dict(suite)
     return data
 
 
@@ -79,6 +108,15 @@ def regression_draft(
     case = next((case for case in run["cases"] if case["id"] == case_id), None)
     if case is None:
         raise ValueError("Choose a case in the source run")
+    draft_case = {"id": case_id + "-regression", "input": case["input"], "assertions": []}
+    if "tool_fixtures" in case:
+        draft_case["tool_fixtures"] = deepcopy(case["tool_fixtures"])
+    if run["schema_version"] == 6:
+        draft_case.update(
+            tool_fixtures=deepcopy(case["tool_fixtures"]),
+            conversation=deepcopy(case["conversation"]),
+            state_fixture=deepcopy(case["state_fixture"]),
+        )
     return validate_regression_draft(
         {
             "schema_version": 1,
@@ -91,7 +129,7 @@ def regression_draft(
                 "attempt": attempt,
                 "run": run,
             },
-            "case": {"id": case_id + "-regression", "input": case["input"], "assertions": []},
+            "case": draft_case,
             "reviewed": False,
         }
     )

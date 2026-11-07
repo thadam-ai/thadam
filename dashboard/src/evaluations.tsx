@@ -686,6 +686,64 @@ export function CaseEvidence({ test }: { test: Data }) {
                     )}
                 </div>
             </details>
+            {test.conversation?.length > 0 && (
+                <details className="raw-detail conversation-evidence" open>
+                    <summary>
+                        Conversation · {test.conversation_results?.length || 0}/
+                        {test.conversation.length} responses
+                    </summary>
+                    {(test.conversation || []).map(
+                        (turn: Data, index: number) => {
+                            const result = (
+                                test.conversation_results || []
+                            ).find((item: Data) => item.id === turn.id);
+                            return (
+                                <section
+                                    key={turn.id}
+                                    className="conversation-turn"
+                                >
+                                    <h4>
+                                        Turn {index + 1} · {turn.id}
+                                    </h4>
+                                    <div className="evidence-pair">
+                                        <Json
+                                            label="User message"
+                                            value={turn.message}
+                                        />
+                                        {result?.output_available ? (
+                                            <Json
+                                                label="Agent response"
+                                                value={result.output}
+                                            />
+                                        ) : (
+                                            <div className="unavailable">
+                                                Response unavailable. See
+                                                recorded errors.
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+                            );
+                        },
+                    )}
+                </details>
+            )}
+            {test.state_fixture !== undefined &&
+                test.state_fixture !== null && (
+                    <details className="raw-detail state-evidence" open>
+                        <summary>Observable state</summary>
+                        <div className="evidence-pair">
+                            <Json
+                                label="Initial state"
+                                value={test.state_initial}
+                            />
+                            <Json
+                                label="Final state"
+                                value={test.state_final}
+                            />
+                        </div>
+                    </details>
+                )}
             {test.tool_fixtures !== undefined && (
                 <details className="raw-detail">
                     <summary>Configured tool fixtures</summary>

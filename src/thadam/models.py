@@ -62,6 +62,31 @@ class ToolCallCount:
 
 
 @dataclass(frozen=True)
+class ConversationOutputEquals:
+    """Require an exact response for one named conversation turn."""
+
+    id: str
+    turn_id: str
+    expected: JSONValue
+
+
+@dataclass(frozen=True)
+class StateEquals:
+    """Require the final observable fixture state to equal a JSON value."""
+
+    id: str
+    expected: JSONValue
+
+
+@dataclass(frozen=True)
+class StateChanges:
+    """Require every changed top-level state key to be explicitly allowed."""
+
+    id: str
+    allowed_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ToolReturn:
     """Return an independent JSON value from a scripted tool invocation."""
 
@@ -85,7 +110,15 @@ class ToolScript:
 
 
 Assertion: TypeAlias = (
-    OutputEquals | OutputHasKeys | ToolCalled | ToolNotCalled | ToolArgumentsMatch | ToolCallCount
+    OutputEquals
+    | OutputHasKeys
+    | ToolCalled
+    | ToolNotCalled
+    | ToolArgumentsMatch
+    | ToolCallCount
+    | ConversationOutputEquals
+    | StateEquals
+    | StateChanges
 )
 
 
@@ -133,6 +166,34 @@ class AgentResult:
     events: tuple[ExecutionEvent, ...] = ()
     trace_complete: bool = True
     trace_warnings: tuple[str, ...] = ()
+    conversation_results: tuple["ConversationTurnResult", ...] = ()
+    state_initial: JSONValue = None
+    state_final: JSONValue = None
+
+
+@dataclass(frozen=True)
+class ConversationTurn:
+    """One scripted user message in a sequential conversation case."""
+
+    id: str
+    message: JSONValue
+
+
+@dataclass(frozen=True)
+class StateFixture:
+    """Initial JSON state for one isolated case attempt."""
+
+    initial: JSONValue
+
+
+@dataclass(frozen=True)
+class ConversationTurnResult:
+    """A user message and the corresponding available agent response."""
+
+    id: str
+    message: JSONValue
+    output: JSONValue
+    output_available: bool = True
 
 
 Agent: TypeAlias = Callable[[JSONValue], JSONValue | AgentResult]
@@ -180,6 +241,8 @@ class TestCase:
     assertions: tuple[Assertion, ...] = ()
     verifiers: tuple[Verifier, ...] = ()
     tool_fixtures: dict[str, ToolScript] | None = None
+    conversation: tuple[ConversationTurn, ...] = ()
+    state_fixture: StateFixture | None = None
 
 
 @dataclass(frozen=True)
@@ -229,6 +292,11 @@ class CaseResult:
     trace_warnings: tuple[str, ...] = ()
     check_definitions: tuple[CheckDefinition, ...] = ()
     tool_fixtures: dict[str, ToolScript] | None = None
+    conversation: tuple[ConversationTurn, ...] = ()
+    conversation_results: tuple[ConversationTurnResult, ...] = ()
+    state_fixture: StateFixture | None = None
+    state_initial: JSONValue = None
+    state_final: JSONValue = None
 
 
 @dataclass(frozen=True)
@@ -253,7 +321,9 @@ class RunReport:
     schema_version: int = field(default=3, init=False)
 
     def __post_init__(self) -> None:
-        if any(case.tool_fixtures is not None for case in self.cases):
+        if any(case.conversation or case.state_fixture is not None for case in self.cases):
+            object.__setattr__(self, "schema_version", 6)
+        elif any(case.tool_fixtures is not None for case in self.cases):
             object.__setattr__(self, "schema_version", 5)
         elif self.suite is not None:
             object.__setattr__(self, "schema_version", 4)

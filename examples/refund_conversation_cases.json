@@ -1,0 +1,87 @@
+{
+  "schema_version": 4,
+  "suite": {
+    "id": "refund-correction-conversation",
+    "revision": "v1"
+  },
+  "cases": [
+    {
+      "id": "corrected-refund-is-applied-once",
+      "input": {
+        "order_id": "ord-42",
+        "currency": "USD"
+      },
+      "tool_fixtures": {},
+      "conversation": [
+        {
+          "id": "initial-request",
+          "message": "Please refund $30 for order ord-42."
+        },
+        {
+          "id": "correction",
+          "message": "Correction: refund $25, not $30."
+        },
+        {
+          "id": "confirmation",
+          "message": "Please go ahead with the corrected refund."
+        },
+        {
+          "id": "repeat-request",
+          "message": "Please refund $25 for order ord-42."
+        }
+      ],
+      "state_fixture": {
+        "initial": {
+          "refunds": []
+        }
+      },
+      "assertions": [
+        {
+          "id": "acknowledges-correction",
+          "type": "conversation_output_equals",
+          "turn_id": "correction",
+          "expected": {
+            "amount_cents": 2500,
+            "corrected": true
+          }
+        },
+        {
+          "id": "refund-result",
+          "type": "output_equals",
+          "expected": {
+            "refund_id": "refund-ord-42",
+            "order_id": "ord-42",
+            "amount_cents": 2500
+          }
+        },
+        {
+          "id": "repeated-request-is-idempotent",
+          "type": "conversation_output_equals",
+          "turn_id": "repeat-request",
+          "expected": {
+            "refund_id": "refund-ord-42",
+            "order_id": "ord-42",
+            "amount_cents": 2500
+          }
+        },
+        {
+          "id": "only-refunds-changed",
+          "type": "state_changes",
+          "allowed_keys": ["refunds"]
+        },
+        {
+          "id": "one-correct-refund",
+          "type": "state_equals",
+          "expected": {
+            "refunds": [
+              {
+                "order_id": "ord-42",
+                "amount_cents": 2500
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

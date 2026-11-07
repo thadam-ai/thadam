@@ -113,6 +113,16 @@ def _declaration(case: CaseResult | None) -> JSONValue:
             if case.tool_fixtures is not None
             else {}
         ),
+        **(
+            {
+                "conversation": [asdict(turn) for turn in case.conversation],
+                "state_fixture": (
+                    None if case.state_fixture is None else asdict(case.state_fixture)
+                ),
+            }
+            if case.conversation or case.state_fixture is not None
+            else {}
+        ),
     }
 
 
@@ -154,6 +164,20 @@ def review_baseline(candidate: Evaluation, baseline: Evaluation | None = None) -
             continue
         if not json_equal(left.input, right.input):
             changes.append(ContractChange("input_changed", case_id, None, left.input, right.input))
+        before_conversation = [asdict(turn) for turn in left.conversation]
+        after_conversation = [asdict(turn) for turn in right.conversation]
+        if not json_equal(before_conversation, after_conversation):
+            changes.append(
+                ContractChange(
+                    "conversation_changed", case_id, None, before_conversation, after_conversation
+                )
+            )
+        before_state = None if left.state_fixture is None else asdict(left.state_fixture)
+        after_state = None if right.state_fixture is None else asdict(right.state_fixture)
+        if not json_equal(before_state, after_state):
+            changes.append(
+                ContractChange("state_fixture_changed", case_id, None, before_state, after_state)
+            )
         before_fixtures = (
             None if left.tool_fixtures is None else fixtures_to_dict(left.tool_fixtures)
         )

@@ -9,8 +9,13 @@ from thadam.models import (
     Assertion,
     CaseResult,
     CheckDefinition,
+    ConversationOutputEquals,
+    ConversationTurn,
     OutputEquals,
     OutputHasKeys,
+    StateChanges,
+    StateEquals,
+    StateFixture,
     SuiteIdentity,
     TestCase,
     ToolArgumentsMatch,
@@ -43,6 +48,9 @@ def snapshot_definitions(case: TestCase) -> tuple[CheckDefinition, ...]:
         ToolNotCalled: "tool_not_called",
         ToolArgumentsMatch: "tool_arguments_match",
         ToolCallCount: "tool_call_count",
+        ConversationOutputEquals: "conversation_output_equals",
+        StateEquals: "state_equals",
+        StateChanges: "state_changes",
     }
     definitions = []
     for assertion in case.assertions:
@@ -50,6 +58,8 @@ def snapshot_definitions(case: TestCase) -> tuple[CheckDefinition, ...]:
         parameters.pop("id")
         if isinstance(assertion, OutputHasKeys):
             parameters["keys"] = list(assertion.keys)
+        if isinstance(assertion, StateChanges):
+            parameters["allowed_keys"] = list(assertion.allowed_keys)
         definitions.append(CheckDefinition(assertion.id, names[type(assertion)], parameters))
     definitions.extend(
         CheckDefinition(verifier.id, "verifier", {"revision": verifier.revision})
@@ -66,7 +76,15 @@ def definition_assertion(definition: CheckDefinition) -> Assertion:
         {**definition.parameters, "id": definition.id, "type": definition.type},
         f"check {definition.id!r}",
     )
-    validate_suite([TestCase("contract", None, (assertion,))])
+    turns = (
+        (ConversationTurn(assertion.turn_id, None),)
+        if isinstance(assertion, ConversationOutputEquals)
+        else ()
+    )
+    state = StateFixture(None) if isinstance(assertion, (StateEquals, StateChanges)) else None
+    validate_suite(
+        [TestCase("contract", None, (assertion,), conversation=turns, state_fixture=state)]
+    )
     return assertion
 
 
@@ -95,6 +113,16 @@ def case_contract_issues(baseline: CaseResult | None, candidate: CaseResult | No
         issues.append("Tool fixture contract changed")
     if not json_equal(baseline.input, candidate.input):
         issues.append("Case input changed")
+    if not json_equal(
+        [asdict(turn) for turn in baseline.conversation],
+        [asdict(turn) for turn in candidate.conversation],
+    ):
+        issues.append("Conversation script changed")
+    if not json_equal(
+        None if baseline.state_fixture is None else asdict(baseline.state_fixture),
+        None if candidate.state_fixture is None else asdict(candidate.state_fixture),
+    ):
+        issues.append("Initial state fixture changed")
     old = {check.id: check for check in baseline.check_definitions}
     new = {check.id: check for check in candidate.check_definitions}
     for check_id, definition in old.items():

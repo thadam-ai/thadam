@@ -16,15 +16,23 @@ from uuid import uuid4
 
 from thadam._json import json_equal, validate_json
 from thadam.adapters.python import validate_agent
-from thadam.errors import AgentConfigurationError, AgentExecutionError, SuiteValidationError
+from thadam.errors import (
+    AgentConfigurationError,
+    AgentExecutionError,
+    ConversationOutputError,
+    SuiteValidationError,
+)
 from thadam.events import snapshot_trace
 from thadam.models import (
     Agent,
     AgentResult,
     AsyncAgent,
+    ConversationTurn,
+    ConversationTurnResult,
     EventError,
     ExecutionEvent,
     JSONValue,
+    StateFixture,
     ToolRaise,
     ToolReturn,
     ToolScript,
@@ -146,6 +154,27 @@ class FixtureTool:
         return self.invoke(arguments)
 
 
+class FixtureState:
+    """Read or replace the JSON state owned by one fixture invocation."""
+
+    def __init__(self, owner: "FixtureTools") -> None:
+        self._owner = owner
+
+    def read(self) -> JSONValue:
+        """Return a copy of the current state."""
+        return self._owner._read_state()
+
+    def write(self, value: JSONValue) -> None:
+        """Replace the state with an independent JSON snapshot."""
+        self._owner._write_state(value)
+
+    async def aread(self) -> JSONValue:
+        return self.read()
+
+    async def awrite(self, value: JSONValue) -> None:
+        self.write(value)
+
+
 class FixtureTools:
     """Per-invocation tool handles supplied to an explicit fresh-agent factory.
 
@@ -154,15 +183,53 @@ class FixtureTools:
     invocation. The runner owns creation, evidence and closure.
     """
 
-    def __init__(self, scripts: dict[str, ToolScript]) -> None:
+    def __init__(
+        self, scripts: dict[str, ToolScript], state_fixture: StateFixture | None = None
+    ) -> None:
         validate_fixtures(scripts)
         self._scripts = deepcopy(scripts)
+        self._state_fixture = deepcopy(state_fixture)
+        self._state_initial = deepcopy(state_fixture.initial) if state_fixture is not None else None
+        self._state = deepcopy(self._state_initial)
         self._counts: dict[str, int] = {}
         self._events: list[ExecutionEvent] = []
         self._violations: list[str] = []
         self._lock = RLock()
         self._started = perf_counter()
         self._closed = False
+
+    @property
+    def state(self) -> "FixtureState":
+        """Return this attempt's state handle, recording misuse as a sticky error."""
+        with self._lock:
+            if self._closed:
+                raise FixtureConfigurationError("State fixture used after its invocation ended")
+            if self._state_fixture is None:
+                message = "No state fixture is configured for this case"
+                self._violations.append(message)
+                raise FixtureConfigurationError(message)
+        return FixtureState(self)
+
+    def _read_state(self) -> JSONValue:
+        with self._lock:
+            if self._closed:
+                raise FixtureConfigurationError("State fixture used after its invocation ended")
+            return deepcopy(self._state)
+
+    def _write_state(self, value: JSONValue) -> None:
+        with self._lock:
+            if self._closed:
+                raise FixtureConfigurationError("State fixture used after its invocation ended")
+            try:
+                validate_json(value, "fixture state")
+            except ValueError as error:
+                self._violations.append(str(error))
+                raise FixtureConfigurationError(str(error)) from error
+            self._state = deepcopy(value)
+
+    def state_snapshot(self) -> tuple[JSONValue, JSONValue]:
+        """Return independent initial and final state snapshots for the report."""
+        return deepcopy(self._state_initial), deepcopy(self._state)
 
     def __getitem__(self, name: str) -> FixtureTool:
         if not isinstance(name, str) or not name.strip():
@@ -226,6 +293,12 @@ class FixtureTools:
         with self._lock:
             self._closed = True
             events = tuple(self._events)
+            conversation_results = (
+                output.conversation_results if isinstance(output, AgentResult) else ()
+            )
+            if isinstance(error, AgentExecutionError):
+                conversation_results = error.conversation_results
+            state_initial, state_final = self.state_snapshot()
             complete, warnings = True, ()
             if isinstance(output, AgentResult) or isinstance(error, AgentExecutionError):
                 source = output if isinstance(output, AgentResult) else error
@@ -259,9 +332,23 @@ class FixtureTools:
                 error = FixtureConfigurationError("; ".join(self._violations))
             if error is not None:
                 raise AgentExecutionError(
-                    error, events=events, trace_complete=complete, trace_warnings=warnings
+                    error,
+                    events=events,
+                    trace_complete=complete,
+                    trace_warnings=warnings,
+                    conversation_results=conversation_results,
+                    state_initial=state_initial,
+                    state_final=state_final,
                 ) from error
-            return AgentResult(output, events, complete, warnings)
+            return AgentResult(
+                output,
+                events,
+                complete,
+                warnings,
+                conversation_results,
+                state_initial,
+                state_final,
+            )
 
 
 FixtureFactory: TypeAlias = Callable[
@@ -288,8 +375,15 @@ class FixtureAgent:
     def validate(self, *, allow_async: bool = False) -> None:
         validate_agent(self.factory, allow_async=allow_async)
 
-    def invoke_case(self, scripts: dict[str, ToolScript], value: JSONValue) -> AgentResult:
-        tools = FixtureTools(scripts)
+    def invoke_case(
+        self,
+        scripts: dict[str, ToolScript],
+        value: JSONValue,
+        *,
+        state_fixture: StateFixture | None = None,
+        conversation: tuple[ConversationTurn, ...] = (),
+    ) -> AgentResult:
+        tools = FixtureTools(scripts, state_fixture)
         offset = 0.0
         try:
             agent = self.factory(tools)
@@ -297,15 +391,27 @@ class FixtureAgent:
                 agent.close()
             validate_agent(agent)
             offset = (perf_counter() - tools._started) * 1000
-            output = agent(value)
+            tools._agent_started = perf_counter()
+            output = (
+                _sync_conversation(agent, value, conversation, tools)
+                if conversation
+                else agent(value)
+            )
         except (Exception, SystemExit) as error:
             return tools._finish(None, error, offset)
         finally:
             tools._closed = True
         return tools._finish(output, None, offset)
 
-    async def ainvoke_case(self, scripts: dict[str, ToolScript], value: JSONValue) -> AgentResult:
-        tools = FixtureTools(scripts)
+    async def ainvoke_case(
+        self,
+        scripts: dict[str, ToolScript],
+        value: JSONValue,
+        *,
+        state_fixture: StateFixture | None = None,
+        conversation: tuple[ConversationTurn, ...] = (),
+    ) -> AgentResult:
+        tools = FixtureTools(scripts, state_fixture)
         offset = 0.0
         try:
             agent = self.factory(tools)
@@ -313,9 +419,13 @@ class FixtureAgent:
                 agent = await agent
             validate_agent(agent, allow_async=True)
             offset = (perf_counter() - tools._started) * 1000
-            output = agent(value)
-            if inspect.isawaitable(output):
-                output = await output
+            tools._agent_started = perf_counter()
+            if conversation:
+                output = await _async_conversation(agent, value, conversation, tools)
+            else:
+                output = agent(value)
+                if inspect.isawaitable(output):
+                    output = await output
         except (Exception, SystemExit) as error:
             return tools._finish(None, error, offset)
         finally:
@@ -366,3 +476,179 @@ def validate_fixture_evidence(
             raise ValueError("Fixture error contradicts its scripted response")
     if violation and not fixture_error:
         raise ValueError("Fixture violations and case errors disagree")
+
+
+def _conversation_input(value: JSONValue, turn: ConversationTurn, history: list) -> dict:
+    return {
+        "case_input": deepcopy(value),
+        "turn_id": turn.id,
+        "message": deepcopy(turn.message),
+        "history": deepcopy(history),
+    }
+
+
+def _sync_conversation(agent: Agent, value: JSONValue, turns, tools: FixtureTools) -> AgentResult:
+    outputs = []
+    events = []
+    warnings = []
+    complete = True
+    history = []
+    for turn_index, turn in enumerate(turns):
+        turn_started = perf_counter()
+        try:
+            output = agent(_conversation_input(value, turn, history))
+            if inspect.isawaitable(output):
+                if inspect.iscoroutine(output):
+                    output.close()
+                raise AgentConfigurationError("Async conversation agents require run_suite_async")
+            output, child, child_complete, child_warnings = _conversation_output(
+                output, turn_started, tools, turn_index
+            )
+        except AgentExecutionError as error:
+            offset = (turn_started - getattr(tools, "_agent_started", tools._started)) * 1000
+            current_events = _namespace_events(error.events, turn_index, offset)
+            raise AgentExecutionError(
+                error.original,
+                events=tuple(events) + current_events,
+                trace_complete=complete and error.trace_complete,
+                trace_warnings=tuple(warnings) + error.trace_warnings,
+                conversation_results=tuple(outputs),
+            ) from error
+        except FixtureTraceError as error:
+            warning = (
+                f"Invalid trace evidence from conversation turn {turn.id!r} was discarded: {error}"
+            )
+            raise AgentExecutionError(
+                error,
+                events=tuple(events),
+                trace_complete=False,
+                trace_warnings=tuple(warnings) + (warning,),
+                conversation_results=tuple(outputs),
+            ) from error
+        except (Exception, SystemExit) as error:
+            raise AgentExecutionError(
+                error,
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            ) from error
+        events.extend(child)
+        complete = complete and child_complete
+        warnings.extend(child_warnings)
+        try:
+            validate_json(output, "conversation response")
+            output = deepcopy(output)
+        except Exception as error:
+            raise AgentExecutionError(
+                ConversationOutputError(str(error)),
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            ) from error
+        outputs.append(ConversationTurnResult(turn.id, deepcopy(turn.message), deepcopy(output)))
+        history.extend(
+            (
+                {"role": "user", "content": deepcopy(turn.message)},
+                {"role": "assistant", "content": deepcopy(output)},
+            )
+        )
+    return AgentResult(outputs[-1].output, tuple(events), complete, tuple(warnings), tuple(outputs))
+
+
+async def _async_conversation(agent, value, turns, tools: FixtureTools) -> AgentResult:
+    outputs = []
+    events = []
+    warnings = []
+    complete = True
+    history = []
+    for turn_index, turn in enumerate(turns):
+        turn_started = perf_counter()
+        try:
+            output = agent(_conversation_input(value, turn, history))
+            if inspect.isawaitable(output):
+                output = await output
+            output, child, child_complete, child_warnings = _conversation_output(
+                output, turn_started, tools, turn_index
+            )
+        except AgentExecutionError as error:
+            offset = (turn_started - getattr(tools, "_agent_started", tools._started)) * 1000
+            current_events = _namespace_events(error.events, turn_index, offset)
+            raise AgentExecutionError(
+                error.original,
+                events=tuple(events) + current_events,
+                trace_complete=complete and error.trace_complete,
+                trace_warnings=tuple(warnings) + error.trace_warnings,
+                conversation_results=tuple(outputs),
+            ) from error
+        except FixtureTraceError as error:
+            warning = (
+                f"Invalid trace evidence from conversation turn {turn.id!r} was discarded: {error}"
+            )
+            raise AgentExecutionError(
+                error,
+                events=tuple(events),
+                trace_complete=False,
+                trace_warnings=tuple(warnings) + (warning,),
+                conversation_results=tuple(outputs),
+            ) from error
+        except (Exception, SystemExit) as error:
+            raise AgentExecutionError(
+                error,
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            ) from error
+        events.extend(child)
+        complete = complete and child_complete
+        warnings.extend(child_warnings)
+        try:
+            validate_json(output, "conversation response")
+            output = deepcopy(output)
+        except Exception as error:
+            raise AgentExecutionError(
+                ConversationOutputError(str(error)),
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            ) from error
+        outputs.append(ConversationTurnResult(turn.id, deepcopy(turn.message), deepcopy(output)))
+        history.extend(
+            (
+                {"role": "user", "content": deepcopy(turn.message)},
+                {"role": "assistant", "content": deepcopy(output)},
+            )
+        )
+    return AgentResult(outputs[-1].output, tuple(events), complete, tuple(warnings), tuple(outputs))
+
+
+def _conversation_output(output, turn_started: float, tools: FixtureTools, turn_index: int):
+    events = ()
+    complete = True
+    warnings = ()
+    if isinstance(output, AgentResult):
+        try:
+            events = snapshot_trace(output.events, output.trace_complete, output.trace_warnings)
+        except ValueError as error:
+            raise FixtureTraceError(str(error)) from error
+        offset = (turn_started - getattr(tools, "_agent_started", tools._started)) * 1000
+        events = _namespace_events(events, turn_index, offset)
+        complete, warnings = output.trace_complete, output.trace_warnings
+        output = output.output
+    return output, events, complete, warnings
+
+
+def _namespace_events(events: tuple[ExecutionEvent, ...], turn_index: int, offset: float):
+    prefix = f"conversation-turn-{turn_index}:"
+    return tuple(
+        replace(
+            event,
+            id=prefix + event.id,
+            parent_id=None if event.parent_id is None else prefix + event.parent_id,
+            started_at_ms=event.started_at_ms + offset,
+        )
+        for event in events
+    )

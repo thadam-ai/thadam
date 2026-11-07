@@ -7,11 +7,11 @@ behavior, run your agent locally, inspect failures, and catch regressions before
 accepting a change.
 
 **Status:** early development. The Python SDK, CLI, local dashboard, optional
-LangGraph tracing, regression/reliability comparisons, baseline review, and scenario
-suggestions work from this checkout. [PyPI v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/)
+LangGraph tracing, regression/reliability comparisons, baseline review, scenario
+suggestions, and conversation simulations work from this checkout. [PyPI v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/)
 is published; this guide covers newer features on `main`, so use the checkout
-below for the dashboard, reliability gates, baseline review, async execution, and
-scenario suggestions. The distribution name is `thadam-ai`; Python imports and
+below for the dashboard, reliability gates, baseline review, async execution,
+scenario suggestions, and conversation simulations. The distribution name is `thadam-ai`; Python imports and
 the CLI use `thadam`.
 
 ## Get started
@@ -55,6 +55,7 @@ Controlled demo data. [Explore the dashboard →](docs/dashboard-tour.md)
 | --- | --- |
 | Connect an agent, write cases, or use the SDK | [Local runner and assertions](docs/milestones/01-local-runner.md) |
 | Suggest cases with ChatGPT or your OpenAI API key | [Reviewable scenario suggestions](docs/milestones/04-scenario-suggestions.md) |
+| Simulate conversations and check state | [Conversation and state simulations](docs/milestones/05-simulations.md) |
 | Run async agents or overlap cases | [Async execution and concurrency](docs/milestones/03-async-execution.md) |
 | Trace a LangGraph agent and check tool calls | [LangGraph integration](docs/milestones/02-langgraph.md) |
 | Test tool failures, recovery, and retry bounds | [Controlled tool failures](docs/milestones/05-tool-failures.md) |
