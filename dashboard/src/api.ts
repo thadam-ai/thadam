@@ -12,8 +12,11 @@ export type Item = {
     cases: number;
     fingerprint: string;
     attempts?: number;
+    execution_mode?: string;
     agent_revision?: string;
     review_state?: string;
+    case_id?: string;
+    source_id?: string;
     review_verdicts?: string[];
     review_case_ids?: string[];
     review_tags?: string[];

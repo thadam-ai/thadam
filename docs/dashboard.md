@@ -242,6 +242,24 @@ Open a saved run case, or select an individual repeated attempt, and choose
 save the reviewed draft, and preview a new or existing suite before saving.
 See the [workflow and draft contract](milestones/04-regression-cases.md).
 
+## Import recorded examples
+
+Open **Suites → Import examples** to preview and import a project-local JSONL or
+CSV file as regression drafts. Map source columns/paths and configure masking
+before preview; duplicate rows require an explicit acknowledgement. Imported
+examples remain unreviewed, and supplied expected answers are only proposed
+checks until a developer reviews them. See the [workflow guide](milestones/04-regression-cases.md)
+for format details and redaction limits.
+
+## Verify a fix
+
+Open **Suites → Verify fix**, choose a saved suite and enter the candidate
+`module:callable`. Optionally choose a compatible baseline to save and open a
+before/after comparison when the candidate run completes. Changed contracts are
+reported as incompatible; without a baseline, the candidate report is available
+on its own. See the [workflow guide](milestones/04-regression-cases.md) for
+baseline requirements, revision handling, and exports.
+
 ## Run a conversation simulation
 
 Open a suite schema 4 artifact in **Suites** and edit its JSON to define ordered

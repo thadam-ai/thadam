@@ -4,6 +4,7 @@ import {
     ArrowLeft,
     ChevronRight,
     CircleAlert,
+    CheckCheck,
     PanelLeftClose,
     PanelLeftOpen,
     FileJson,
@@ -19,6 +20,7 @@ import {
     Search,
     ShieldCheck,
     Sun,
+    Upload,
     X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -46,6 +48,8 @@ import {
 import { JobList, RunPanel } from "./evaluations";
 import { SuiteEditor } from "./suites";
 import { SuggestPanel, DraftReview } from "./generation";
+import { RecordedExampleImport } from "./recorded_import";
+import { VerificationPanel } from "./verification";
 const pages = [
     "Overview",
     "Suites",
@@ -92,7 +96,7 @@ export function App() {
         [reviewFilter, setReviewFilter] = useState("all"),
         [jobs, setJobs] = useState<Data[]>([]);
     const [action, setAction] = useState<
-        "run" | "compare" | "review" | "suggest" | null
+        "run" | "compare" | "review" | "suggest" | "import" | "verify" | null
     >(null);
     const [newSuite, setNewSuite] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(true);
@@ -258,6 +262,12 @@ export function App() {
                 " " +
                 (item.suite?.revision || "") +
                 " " +
+                (item.case_id || "") +
+                " " +
+                (item.source_id || "") +
+                " " +
+                (item.review_state || "") +
+                " " +
                 (item.review_case_ids || []).join(" ") +
                 " " +
                 (item.review_tags || []).join(" ")
@@ -265,10 +275,16 @@ export function App() {
                 .toLowerCase()
                 .includes(search.toLowerCase()) &&
             (status === "all" || outcome(item) === status) &&
-            (!["run", "repeated_run", "result_reviews"].includes(item.kind) ||
+            (![
+                "run",
+                "repeated_run",
+                "result_reviews",
+                "regression_draft",
+            ].includes(item.kind) ||
                 reviewFilter === "all" ||
                 (reviewFilter === "unreviewed"
-                    ? !item.review_verdicts?.length
+                    ? item.review_state === "unreviewed" ||
+                      (!item.review_state && !item.review_verdicts?.length)
                     : ["in progress", "reviewed"].includes(reviewFilter)
                       ? item.review_state === reviewFilter
                       : item.review_verdicts?.includes(reviewFilter))),
@@ -295,12 +311,14 @@ export function App() {
         )
             setSelected(filtered[0].path);
     }, [page, catalog, selected, action, newSuite]);
-    function startAction(next: "run" | "compare" | "review" | "suggest") {
+    function startAction(
+        next: "run" | "compare" | "review" | "suggest" | "import" | "verify",
+    ) {
         if (!canLeave()) return;
         setPage(
-            next === "suggest"
+            next === "suggest" || next === "import"
                 ? "Suites"
-                : next === "run"
+                : next === "run" || next === "verify"
                   ? "Evaluations"
                   : next === "compare"
                     ? "Comparisons"
@@ -501,6 +519,24 @@ export function App() {
                                 {page === "Suites" && (
                                     <Button
                                         quiet
+                                        onClick={() => startAction("import")}
+                                    >
+                                        <Upload size={13} />
+                                        Import examples
+                                    </Button>
+                                )}
+                                {page === "Suites" && (
+                                    <Button
+                                        quiet
+                                        onClick={() => startAction("verify")}
+                                    >
+                                        <CheckCheck size={13} />
+                                        Verify fix
+                                    </Button>
+                                )}
+                                {page === "Suites" && (
+                                    <Button
+                                        quiet
                                         disabled={!!active}
                                         onClick={() => startAction("suggest")}
                                     >
@@ -548,7 +584,7 @@ export function App() {
                                     <Search size={13} />
                                     <input
                                         aria-label="Search saved files"
-                                        placeholder="Search files, suites, revisions…"
+                                        placeholder="Search files, cases, IDs, tags…"
                                         value={search}
                                         onChange={(event) =>
                                             setSearch(event.target.value)
@@ -589,23 +625,31 @@ export function App() {
                                     ))}
                                 </select>
                                 {(page === "Evaluations" ||
-                                    page === "Overview") && (
+                                    page === "Overview" ||
+                                    page === "Suites") && (
                                     <select
-                                        aria-label="Filter by review label"
+                                        aria-label={
+                                            page === "Suites"
+                                                ? "Filter by review state"
+                                                : "Filter by review label"
+                                        }
                                         value={reviewFilter}
                                         onChange={(event) =>
                                             setReviewFilter(event.target.value)
                                         }
                                     >
-                                        {[
-                                            "all",
-                                            "unreviewed",
-                                            "in progress",
-                                            "reviewed",
-                                            "good",
-                                            "bad",
-                                            "needs_review",
-                                        ].map((value) => (
+                                        {(page === "Suites"
+                                            ? ["all", "unreviewed", "reviewed"]
+                                            : [
+                                                  "all",
+                                                  "unreviewed",
+                                                  "in progress",
+                                                  "reviewed",
+                                                  "good",
+                                                  "bad",
+                                                  "needs_review",
+                                              ]
+                                        ).map((value) => (
                                             <option key={value} value={value}>
                                                 {value === "all"
                                                     ? "All reviews"
@@ -773,9 +817,13 @@ export function App() {
                                                   ? "Compare evaluations"
                                                   : action === "review"
                                                     ? "Review baseline"
-                                                    : newSuite
-                                                      ? "New suite"
-                                                      : "Details"}
+                                                    : action === "import"
+                                                      ? "Import recorded examples"
+                                                      : action === "verify"
+                                                        ? "Verify a fix"
+                                                        : newSuite
+                                                          ? "New suite"
+                                                          : "Details"}
                                     </span>
                                 </div>
                                 {artifact && !action && !newSuite && (
@@ -800,7 +848,34 @@ export function App() {
                                 className="inspector-content"
                                 ref={inspector}
                             >
-                                {action === "suggest" ? (
+                                {action === "import" ? (
+                                    <RecordedExampleImport onImported={saved} />
+                                ) : action === "verify" ? (
+                                    <VerificationPanel
+                                        catalog={catalog!}
+                                        active={!!active}
+                                        onStarted={(job) =>
+                                            setJobs([job, ...jobs])
+                                        }
+                                        onOpen={async (path) => {
+                                            try {
+                                                const next =
+                                                    await api<Artifact>(
+                                                        "artifact?path=" +
+                                                            encodeURIComponent(
+                                                                path,
+                                                            ),
+                                                    );
+                                                open(next);
+                                                await refresh();
+                                            } catch (reason) {
+                                                setError(
+                                                    (reason as Error).message,
+                                                );
+                                            }
+                                        }}
+                                    />
+                                ) : action === "suggest" ? (
                                     <>
                                         <SuggestPanel
                                             catalog={catalog!}

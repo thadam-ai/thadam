@@ -343,6 +343,124 @@ def test_job_cannot_overwrite_suite_or_evidence(client, project):
     assert Workspace(project).read("cases.json")["kind"] == "suite"
 
 
+def test_guided_fix_verification_saves_candidate_and_before_after_comparison(client, project):
+    suite = {
+        "schema_version": 2,
+        "suite": {"id": "refund-fix", "revision": "v1"},
+        "cases": [
+            {
+                "id": "refund",
+                "input": {"order": "42"},
+                "assertions": [{"id": "amount", "type": "output_equals", "expected": 25}],
+            }
+        ],
+    }
+    (project / "reviewed.json").write_text(json.dumps(suite))
+    (project / "before.py").write_text("def run(value):\n    return 30\n")
+    (project / "after.py").write_text("def run(value):\n    return 25\n")
+
+    def start(reference, report):
+        response = client.post(
+            "/api/jobs",
+            json={
+                "suite": "reviewed.json",
+                "reference": reference,
+                "mode": "shared",
+                "attempts": 1,
+                "agent_revision": None,
+                "report": report,
+            },
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    baseline_job = start("before:run", "baseline.json")
+    assert completed(client)["id"] == baseline_job["id"]
+    candidate_job = start("after:run", "candidate.json")
+    assert completed(client)["id"] == candidate_job["id"]
+
+    baseline = client.get("/api/artifact", params={"path": "baseline.json"}).json()
+    candidate = client.get("/api/artifact", params={"path": "candidate.json"}).json()
+    assert baseline["data"]["summary"]["failed"] == 1
+    assert candidate["data"]["summary"]["passed"] == 1
+    comparison = client.post(
+        "/api/compare",
+        json={
+            "baseline": "baseline.json",
+            "candidate": "candidate.json",
+            "report": "verification.json",
+        },
+    )
+    assert comparison.status_code == 200, comparison.text
+    saved = client.get("/api/artifact", params={"path": "verification.json"}).json()
+    assert saved["kind"] == "comparison"
+    assert saved["data"]["exit_code"] == 0
+    assert saved["data"]["cases"][0]["change"] == "fixed"
+    assert saved["data"]["cases"][0]["checks"][0]["change"] == "fixed"
+
+
+def test_guided_verification_keeps_changed_suite_contract_incompatible(client, project):
+    original = {
+        "schema_version": 2,
+        "suite": {"id": "contracts", "revision": "v1"},
+        "cases": [
+            {
+                "id": "first",
+                "input": 1,
+                "assertions": [{"id": "one", "type": "output_equals", "expected": 1}],
+            }
+        ],
+    }
+    (project / "contracts.json").write_text(json.dumps(original))
+    (project / "agent.py").write_text("def run(value):\n    return value\n")
+
+    def start(path):
+        response = client.post(
+            "/api/jobs",
+            json={
+                "suite": "contracts.json",
+                "reference": "agent:run",
+                "mode": "shared",
+                "attempts": 1,
+                "agent_revision": None,
+                "report": path,
+            },
+        )
+        assert response.status_code == 200, response.text
+        completed(client)
+
+    start("old-contract.json")
+    current = client.get("/api/artifact", params={"path": "contracts.json"}).json()
+    revised = deepcopy(original)
+    revised["suite"]["revision"] = "v2"
+    revised["cases"].append(
+        {
+            "id": "added",
+            "input": 2,
+            "assertions": [{"id": "two", "type": "output_equals", "expected": 2}],
+        }
+    )
+    saved_suite = client.put(
+        "/api/suite",
+        json={"path": "contracts.json", "data": revised, "fingerprint": current["fingerprint"]},
+    )
+    assert saved_suite.status_code == 200, saved_suite.text
+    start("new-contract.json")
+    comparison = client.post(
+        "/api/compare",
+        json={
+            "baseline": "old-contract.json",
+            "candidate": "new-contract.json",
+            "report": "incompatible-contract.json",
+        },
+    )
+    assert comparison.status_code == 200, comparison.text
+    result = client.get("/api/artifact", params={"path": "incompatible-contract.json"}).json()
+    assert result["data"]["exit_code"] == 2
+    assert result["data"]["cases"][0]["change"] == "incompatible"
+    assert any("revision" in message.lower() for message in result["data"]["cases"][0]["issues"])
+
+
 def test_progress_callback_snapshots_and_failures():
     cases = Suite(SuiteIdentity("suite", "1"), (Case("case", {}, (OutputEquals("out", {}),)),))
 
@@ -639,6 +757,177 @@ def test_regression_creation_rejects_stale_source_and_bad_attempt(client, projec
     ]:
         assert client.post("/api/regression/create", json={**body, **changes}).status_code == 400
     assert not (project / "regression-drafts").exists()
+
+
+def test_recorded_example_preview_import_review_and_search(client, project):
+    examples = [
+        {
+            "id": "example-1",
+            "input": {"email": "person@example.com"},
+            "expected": {"ok": True},
+            "context": {"phone": "555-0100"},
+            "tags": ["refund", "reviewed-source"],
+        },
+        {
+            "id": "example-2",
+            "input": {"email": "missing expectation"},
+            "tags": ["needs-check"],
+        },
+        {
+            "id": "example-3",
+            "input": {"email": "person@example.com"},
+            "expected": {"ok": True},
+        },
+    ]
+    content = "\n".join(json.dumps(item) for item in examples) + "\n"
+    (project / "examples.jsonl").write_text(content)
+    mapping = {
+        "source_id": "id",
+        "input": "input",
+        "expected": "expected",
+        "context": "context",
+        "tags": "tags",
+    }
+    preview_response = client.post(
+        "/api/recorded-examples/preview",
+        json={
+            "path": "examples.jsonl",
+            "format": "jsonl",
+            "mapping": mapping,
+            "mask_fields": ["input.email", "context.phone"],
+        },
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["summary"] == {
+        "total": 3,
+        "valid": 3,
+        "invalid": 0,
+        "duplicates": 1,
+        "already_imported": 0,
+    }
+    assert "person@example.com" not in preview_response.text
+    assert "555-0100" not in preview_response.text
+    assert preview["rows"][0]["record"]["context"]["phone"] == "[REDACTED]"
+    assert preview["rows"][2]["duplicate_of"] == 1
+
+    duplicate_without_ack = client.post(
+        "/api/recorded-examples/import",
+        json={
+            "path": "examples.jsonl",
+            "format": "jsonl",
+            "mapping": mapping,
+            "mask_fields": ["input.email", "context.phone"],
+            "fingerprint": preview["fingerprint"],
+            "selected_rows": [3],
+            "acknowledged_duplicates": [],
+        },
+    )
+    assert duplicate_without_ack.status_code == 400
+    assert "acknowledge duplicate" in duplicate_without_ack.json()["error"]
+    assert not (project / "regression-drafts").exists()
+
+    imported_response = client.post(
+        "/api/recorded-examples/import",
+        json={
+            "path": "examples.jsonl",
+            "format": "jsonl",
+            "mapping": mapping,
+            "mask_fields": ["input.email", "context.phone"],
+            "fingerprint": preview["fingerprint"],
+            "selected_rows": [1, 2, 3],
+            "acknowledged_duplicates": [3],
+        },
+    )
+    assert imported_response.status_code == 200, imported_response.text
+    drafts = imported_response.json()["drafts"]
+    assert len(drafts) == 3
+    by_source = {draft["data"]["source"]["source_id"]: draft for draft in drafts}
+    reviewed_example = by_source["example-1"]["data"]
+    assert reviewed_example["schema_version"] == 2
+    assert reviewed_example["source"]["record"]["input"]["email"] == "[REDACTED]"
+    assert reviewed_example["source"]["record"]["context"]["phone"] == "[REDACTED]"
+    assert reviewed_example["case"]["assertions"] == [
+        {"id": "recorded-expected-output", "type": "output_equals", "expected": {"ok": True}}
+    ]
+    assert reviewed_example["reviewed"] is False
+    incomplete = by_source["example-2"]["data"]
+    assert incomplete["case"]["assertions"] == []
+    assert incomplete["source"]["record"]["tags"] == ["needs-check"]
+    assert by_source["example-3"]["data"]["source"]["duplicate_reasons"] == ["input"]
+    rejected = client.post(
+        "/api/regression/review",
+        json={
+            "path": by_source["example-2"]["path"],
+            "fingerprint": by_source["example-2"]["fingerprint"],
+            "case": incomplete["case"],
+            "reviewed": True,
+        },
+    )
+    assert rejected.status_code == 400
+    assert "at least one check" in rejected.json()["error"]
+
+    catalog = client.get("/api/workspace").json()
+    imported_item = next(item for item in catalog["items"] if item["source_id"] == "example-1")
+    assert imported_item["review_state"] == "unreviewed"
+    assert imported_item["review_tags"] == ["refund", "reviewed-source"]
+    assert imported_item["case_id"] == reviewed_example["case"]["id"]
+
+    refreshed = client.post(
+        "/api/recorded-examples/preview",
+        json={
+            "path": "examples.jsonl",
+            "format": "jsonl",
+            "mapping": mapping,
+            "mask_fields": ["input.email", "context.phone"],
+        },
+    )
+    assert [row["already_imported"] for row in refreshed.json()["rows"]] == [True, True, True]
+    refused_reimport = client.post(
+        "/api/recorded-examples/import",
+        json={
+            "path": "examples.jsonl",
+            "format": "jsonl",
+            "mapping": mapping,
+            "mask_fields": ["input.email", "context.phone"],
+            "fingerprint": refreshed.json()["fingerprint"],
+            "selected_rows": [1],
+            "acknowledged_duplicates": [],
+        },
+    )
+    assert refused_reimport.status_code == 400
+    assert "already imported" in refused_reimport.json()["error"]
+
+
+def test_recorded_example_import_rejects_stale_source_and_outside_paths(client, project):
+    (project / "examples.csv").write_text("id,prompt\na,hello\n")
+    body = {
+        "path": "examples.csv",
+        "format": "csv",
+        "mapping": {"source_id": "id", "input": "prompt"},
+        "mask_fields": [],
+    }
+    preview = client.post("/api/recorded-examples/preview", json=body)
+    assert preview.status_code == 200, preview.text
+    changed = project / "examples.csv"
+    changed.write_text("id,prompt\na,changed\n")
+    result = client.post(
+        "/api/recorded-examples/import",
+        json={
+            **body,
+            "fingerprint": preview.json()["fingerprint"],
+            "selected_rows": [2],
+            "acknowledged_duplicates": [],
+        },
+    )
+    assert result.status_code == 400
+    assert "changed" in result.json()["error"]
+    assert not (project / "regression-drafts").exists()
+    for path in ("../outside.csv", ".hidden.csv"):
+        assert (
+            client.post("/api/recorded-examples/preview", json={**body, "path": path}).status_code
+            == 400
+        )
 
 
 @pytest.mark.parametrize("attempt", [None, 2])

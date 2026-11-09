@@ -1,0 +1,3 @@
+{"id":"refund-corrected-01","input":{"order_id":"ord-42","message":"Refund $25, not $30."},"output":{"refunded_cents":2500},"expected":{"refunded_cents":2500},"context":{"conversation_id":"support-105","customer":"example"},"events":[{"tool":"refund","status":"completed"}],"tags":["correction","refund"]}
+{"id":"refund-missing-expectation-02","input":{"order_id":"ord-43","message":"Check whether this order is refundable."},"output":{"eligible":true},"context":{"conversation_id":"support-106"},"tags":["eligibility"]}
+{"id":"refund-corrected-03","input":{"order_id":"ord-42","message":"Refund $25, not $30."},"output":{"refunded_cents":2500},"expected":{"refunded_cents":2500},"context":{"conversation_id":"support-107"},"tags":["correction"]}

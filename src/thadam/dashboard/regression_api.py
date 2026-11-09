@@ -63,17 +63,24 @@ def register_regression(app, workspace):
         if not draft["reviewed"]:
             raise ValueError("Review the input and expectations before saving a suite")
         source = draft["source"]
-        original = next(case for case in source["run"]["cases"] if case["id"] == source["case_id"])
-        fixture_case = "tool_fixtures" in original
-        simulation_case = source["run"]["schema_version"] == 6
         case = deepcopy(draft["case"])
-        if fixture_case:
-            # Include the retained scripts in the explicit suite preview so
-            # saving cannot silently remove the original failure setup.
-            case["tool_fixtures"] = deepcopy(original["tool_fixtures"])
-        if simulation_case:
-            case.setdefault("conversation", deepcopy(original["conversation"]))
-            case.setdefault("state_fixture", deepcopy(original["state_fixture"]))
+        imported_case = source.get("kind") == "recorded_example"
+        original = None
+        fixture_case = False
+        simulation_case = False
+        if not imported_case:
+            original = next(
+                case for case in source["run"]["cases"] if case["id"] == source["case_id"]
+            )
+            fixture_case = "tool_fixtures" in original
+            simulation_case = source["run"]["schema_version"] == 6
+            if fixture_case:
+                # Include the retained scripts in the explicit suite preview so
+                # saving cannot silently remove the original failure setup.
+                case["tool_fixtures"] = deepcopy(original["tool_fixtures"])
+            if simulation_case:
+                case.setdefault("conversation", deepcopy(original["conversation"]))
+                case.setdefault("state_fixture", deepcopy(original["state_fixture"]))
         destination = workspace.path(body["destination"])
         if destination.exists():
             target = workspace.read(body["destination"])
