@@ -851,30 +851,58 @@ export function App() {
                                 {action === "import" ? (
                                     <RecordedExampleImport onImported={saved} />
                                 ) : action === "verify" ? (
-                                    <VerificationPanel
-                                        catalog={catalog!}
-                                        active={!!active}
-                                        onStarted={(job) =>
-                                            setJobs([job, ...jobs])
-                                        }
-                                        onOpen={async (path) => {
-                                            try {
-                                                const next =
-                                                    await api<Artifact>(
-                                                        "artifact?path=" +
-                                                            encodeURIComponent(
-                                                                path,
-                                                            ),
-                                                    );
-                                                open(next);
-                                                await refresh();
-                                            } catch (reason) {
-                                                setError(
-                                                    (reason as Error).message,
-                                                );
+                                    <>
+                                        <VerificationPanel
+                                            catalog={catalog!}
+                                            active={!!active}
+                                            onStarted={(job) =>
+                                                setJobs([job, ...jobs])
                                             }
-                                        }}
-                                    />
+                                            onOpen={async (path) => {
+                                                try {
+                                                    const next =
+                                                        await api<Artifact>(
+                                                            "artifact?path=" +
+                                                                encodeURIComponent(
+                                                                    path,
+                                                                ),
+                                                        );
+                                                    open(next);
+                                                    await refresh();
+                                                } catch (reason) {
+                                                    setError(
+                                                        (reason as Error)
+                                                            .message,
+                                                    );
+                                                }
+                                            }}
+                                        />
+                                        <JobList
+                                            jobs={jobs.filter(
+                                                (job) =>
+                                                    job.settings.verification,
+                                            )}
+                                            onRefresh={refresh}
+                                            onOpen={async (path) => {
+                                                try {
+                                                    const next =
+                                                        await api<Artifact>(
+                                                            "artifact?path=" +
+                                                                encodeURIComponent(
+                                                                    path,
+                                                                ),
+                                                        );
+                                                    open(next);
+                                                    await refresh();
+                                                } catch (reason) {
+                                                    setError(
+                                                        (reason as Error)
+                                                            .message,
+                                                    );
+                                                }
+                                            }}
+                                        />
+                                    </>
                                 ) : action === "suggest" ? (
                                     <>
                                         <SuggestPanel

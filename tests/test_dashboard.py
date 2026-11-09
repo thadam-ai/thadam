@@ -343,7 +343,9 @@ def test_job_cannot_overwrite_suite_or_evidence(client, project):
     assert Workspace(project).read("cases.json")["kind"] == "suite"
 
 
-def test_guided_fix_verification_saves_candidate_and_before_after_comparison(client, project):
+def test_guided_fix_verification_saves_candidate_and_comparison_from_approved_baseline(
+    client, project
+):
     suite = {
         "schema_version": 2,
         "suite": {"id": "refund-fix", "revision": "v1"},
@@ -359,39 +361,60 @@ def test_guided_fix_verification_saves_candidate_and_before_after_comparison(cli
     (project / "before.py").write_text("def run(value):\n    return 30\n")
     (project / "after.py").write_text("def run(value):\n    return 25\n")
 
-    def start(reference, report):
+    def start(reference, report, verification=None):
+        settings = {
+            "suite": "reviewed.json",
+            "reference": reference,
+            "mode": "shared",
+            "attempts": 1,
+            "agent_revision": None,
+            "report": report,
+        }
+        if verification:
+            settings["verification"] = verification
         response = client.post(
             "/api/jobs",
-            json={
-                "suite": "reviewed.json",
-                "reference": reference,
-                "mode": "shared",
-                "attempts": 1,
-                "agent_revision": None,
-                "report": report,
-            },
+            json=settings,
         )
         assert response.status_code == 200, response.text
         return response.json()
 
     baseline_job = start("before:run", "baseline.json")
     assert completed(client)["id"] == baseline_job["id"]
-    candidate_job = start("after:run", "candidate.json")
-    assert completed(client)["id"] == candidate_job["id"]
+    review = client.post(
+        "/api/review", json={"candidate": "baseline.json", "report": "review.json"}
+    ).json()
+    approved = client.post(
+        "/api/approve",
+        json={
+            "review": "review.json",
+            "baseline": "approved.json",
+            "review_digest": review["review_digest"],
+            "reviewer": "Maintainer",
+            "reason": "Verified baseline",
+            "accept_failures": True,
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    candidate_job = start(
+        "after:run",
+        "candidate.json",
+        {
+            "baseline": "approved.json",
+            "baseline_fingerprint": approved.json()["fingerprint"],
+            "report": "verification.json",
+            "max_pass_rate_drop": 0,
+        },
+    )
+    finished = completed(client)
+    assert finished["id"] == candidate_job["id"]
+    assert finished["state"] == "completed"
+    assert "verification_error" not in finished
 
     baseline = client.get("/api/artifact", params={"path": "baseline.json"}).json()
     candidate = client.get("/api/artifact", params={"path": "candidate.json"}).json()
     assert baseline["data"]["summary"]["failed"] == 1
     assert candidate["data"]["summary"]["passed"] == 1
-    comparison = client.post(
-        "/api/compare",
-        json={
-            "baseline": "baseline.json",
-            "candidate": "candidate.json",
-            "report": "verification.json",
-        },
-    )
-    assert comparison.status_code == 200, comparison.text
     saved = client.get("/api/artifact", params={"path": "verification.json"}).json()
     assert saved["kind"] == "comparison"
     assert saved["data"]["exit_code"] == 0

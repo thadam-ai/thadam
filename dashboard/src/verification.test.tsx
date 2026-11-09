@@ -10,6 +10,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { api, type Catalog, type Data, type Item } from "./api";
 import {
     matchingVerificationBaselines,
+    verificationBaselineLabel,
     VerificationPanel,
 } from "./verification";
 vi.mock("./api", async (original) => ({
@@ -24,11 +25,24 @@ afterEach(() => {
 it("offers only baselines with a comparable attempt count and execution mode", () => {
     const items = [
         { kind: "run", path: "one.json" },
+        { kind: "approved_baseline", path: "approved-one.json" },
         {
             kind: "repeated_run",
             path: "two.json",
             attempts: 2,
             execution_mode: "shared",
+        },
+        {
+            kind: "approved_baseline",
+            path: "approved-two.json",
+            attempts: 2,
+            execution_mode: "shared",
+        },
+        {
+            kind: "approved_baseline",
+            path: "approved-other-mode.json",
+            attempts: 2,
+            execution_mode: "factory",
         },
         {
             kind: "repeated_run",
@@ -47,12 +61,15 @@ it("offers only baselines with a comparable attempt count and execution mode", (
         matchingVerificationBaselines(items, 1, "shared").map(
             (item) => item.path,
         ),
-    ).toEqual(["one.json"]);
+    ).toEqual(["one.json", "approved-one.json"]);
     expect(
         matchingVerificationBaselines(items, 2, "shared").map(
             (item) => item.path,
         ),
-    ).toEqual(["two.json"]);
+    ).toEqual(["two.json", "approved-two.json"]);
+    expect(verificationBaselineLabel(items[1])).toBe(
+        "Approved baseline · approved-one.json",
+    );
 });
 
 it("starts a selected candidate run and keeps its explicitly selected baseline", async () => {
@@ -62,7 +79,11 @@ it("starts a selected candidate run and keeps its explicitly selected baseline",
         invalid: [],
         items: [
             { path: "suites/reviewed.json", kind: "suite" },
-            { path: "reports/baseline.json", kind: "run", attempts: 1 },
+            {
+                path: "reports/baseline.json",
+                kind: "approved_baseline",
+                fingerprint: "baseline-fingerprint",
+            },
         ],
     } as unknown as Catalog;
     const job = {
@@ -106,7 +127,9 @@ it("starts a selected candidate run and keeps its explicitly selected baseline",
             onOpen={onOpen}
         />,
     );
-    await screen.findByRole("option", { name: "reports/baseline.json" });
+    await screen.findByRole("option", {
+        name: "Approved baseline · reports/baseline.json",
+    });
     fireEvent.change(screen.getByLabelText(/Candidate agent/), {
         target: { value: "candidate:run" },
     });
@@ -123,6 +146,11 @@ it("starts a selected candidate run and keeps its explicitly selected baseline",
             mode: "shared",
             attempts: 1,
             agent_revision: null,
+            verification: expect.objectContaining({
+                baseline: "reports/baseline.json",
+                baseline_fingerprint: "baseline-fingerprint",
+                max_pass_rate_drop: 0,
+            }),
         }),
     );
 });

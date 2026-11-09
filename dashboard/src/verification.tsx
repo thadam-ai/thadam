@@ -37,7 +37,6 @@ export function VerificationPanel({
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
     const handledJob = useRef("");
-    const jobOptions = useRef({ baseline: "", comparison: "", tolerance: 0 });
     const onOpenRef = useRef(onOpen);
     onOpenRef.current = onOpen;
 
@@ -86,8 +85,10 @@ export function VerificationPanel({
         setError("");
         setCompletedPath("");
         handledJob.current = "";
-        jobOptions.current = { baseline, comparison, tolerance };
         try {
+            const selectedBaseline = baselineOptions.find(
+                (item) => item.path === baseline,
+            );
             const started = await api<Data>("jobs", {
                 suite,
                 reference,
@@ -97,6 +98,17 @@ export function VerificationPanel({
                 report,
                 ...(asyncExecution
                     ? { async_execution: true, max_concurrency: concurrency }
+                    : {}),
+                ...(selectedBaseline
+                    ? {
+                          verification: {
+                              baseline: selectedBaseline.path,
+                              baseline_fingerprint:
+                                  selectedBaseline.fingerprint,
+                              report: comparison,
+                              max_pass_rate_drop: tolerance,
+                          },
+                      }
                     : {}),
             });
             setJob(started);
@@ -122,26 +134,20 @@ export function VerificationPanel({
                 )
                     return;
                 handledJob.current = latest.id;
-                const selectedBaseline = jobOptions.current.baseline;
-                if (!selectedBaseline) {
+                const verification = latest.settings.verification;
+                if (!verification) {
                     setCompletedPath(latest.settings.report);
                     return;
                 }
-                setBusy(true);
-                try {
-                    await api("compare", {
-                        baseline: selectedBaseline,
-                        candidate: latest.settings.report,
-                        max_pass_rate_drop: jobOptions.current.tolerance,
-                        report: jobOptions.current.comparison,
-                    });
-                    onOpenRef.current(jobOptions.current.comparison);
-                } catch (reason) {
-                    setError((reason as Error).message);
+                if (latest.verification_error) {
+                    setError(
+                        `Candidate saved, but comparison failed: ${latest.verification_error}`,
+                    );
                     setCompletedPath(latest.settings.report);
-                } finally {
-                    setBusy(false);
+                    return;
                 }
+                setCompletedPath(verification.report);
+                onOpenRef.current(verification.report);
             } catch (reason) {
                 if (alive) setError((reason as Error).message);
             }
@@ -229,8 +235,8 @@ export function VerificationPanel({
                     label="Baseline report (optional)"
                     hint={
                         attempts === 1
-                            ? "Choose a single run to compare with this candidate."
-                            : `Choose a repeated run with ${attempts} attempts in ${executionMode} mode.`
+                            ? "Choose a single run or approved baseline to compare with this candidate."
+                            : `Choose a repeated run or approved baseline with ${attempts} attempts in ${executionMode} mode.`
                     }
                 >
                     <select
@@ -242,7 +248,7 @@ export function VerificationPanel({
                         </option>
                         {baselineOptions.map((item) => (
                             <option key={item.path} value={item.path}>
-                                {item.path}
+                                {verificationBaselineLabel(item)}
                             </option>
                         ))}
                     </select>
@@ -359,19 +365,18 @@ export function VerificationPanel({
                     {job.error || "No candidate report was saved."}
                 </div>
             )}
-            {busy && job?.state === "completed" && (
-                <p role="status">Comparing saved reports…</p>
-            )}
             {completedPath && job?.state === "completed" && (
                 <div className="evidence-note">
                     <p>
-                        Candidate evidence is saved. No comparison was made
-                        because you did not select a baseline. Choose one in a
-                        later comparison, or select a baseline and run this
-                        workflow again.
+                        {job.settings.verification
+                            ? "Candidate evidence and its comparison are saved."
+                            : "Candidate evidence is saved. No comparison was made because you did not select a baseline."}
                     </p>
                     <Button onClick={() => onOpen(completedPath)}>
-                        <Check size={14} /> Open candidate report
+                        <Check size={14} />
+                        {job.settings.verification && !job.verification_error
+                            ? "Open comparison"
+                            : "Open candidate report"}
                     </Button>
                 </div>
             )}
@@ -423,9 +428,18 @@ export function matchingVerificationBaselines(
 ): Item[] {
     return items.filter((item) =>
         attempts === 1
-            ? item.kind === "run"
-            : item.kind === "repeated_run" &&
+            ? item.kind === "run" ||
+              (item.kind === "approved_baseline" &&
+                  (item.attempts === undefined || item.attempts === null))
+            : (item.kind === "repeated_run" ||
+                  item.kind === "approved_baseline") &&
               item.attempts === attempts &&
               item.execution_mode === executionMode,
     );
+}
+
+export function verificationBaselineLabel(item: Item): string {
+    return item.kind === "approved_baseline"
+        ? `Approved baseline · ${item.path}`
+        : item.path;
 }

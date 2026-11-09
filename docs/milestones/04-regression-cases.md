@@ -140,14 +140,16 @@ imported only when the run starts. The workflow uses the existing dashboard job
 runner, progress, stop behavior, and report writing. Async execution, attempts,
 fixture mode, and application revision are available under run settings.
 
-Optionally choose a single baseline report for a single candidate run, or a
-repeated report with the same attempt count and execution mode for repeated
-verification. When the candidate finishes, Thadam saves a separate comparison
-and opens its existing per-case and per-check before/after view. A changed suite
-contract or otherwise incompatible report remains visible as incompatible; run
-the intended baseline implementation against the exact reviewed suite to create
-fresh comparable evidence. A baseline is optional; without one, the saved
-candidate report shows the current check outcomes but no before/after decision.
+Optionally choose a single run or approved baseline for a single candidate run,
+or a repeated run or approved baseline with the same attempt count and execution
+mode for repeated verification. The dashboard job saves the candidate and its
+comparison, so the comparison finishes even if you navigate away while the job
+runs. When the candidate finishes, the dashboard opens its existing per-case
+and per-check before/after view. A changed suite contract or otherwise
+incompatible report remains visible as incompatible; run the intended baseline
+implementation against the exact reviewed suite to create fresh comparable
+evidence. A baseline is optional; without one, the saved candidate report shows
+the current check outcomes but no before/after decision.
 
 Suite, candidate report, and comparison JSON can be downloaded from their saved
 artifact views for the existing CLI/pytest/CI workflow. Comparison does not run

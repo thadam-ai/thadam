@@ -83,10 +83,72 @@ it("previews a masked file and imports the selected draft with its source finger
         expect.objectContaining({
             path: "data/examples.jsonl",
             format: "jsonl",
+            mapping: { input: "prompt" },
             mask_fields: ["input.email"],
             fingerprint: "source-fingerprint",
             selected_rows: [1],
             acknowledged_duplicates: [],
         }),
     );
+});
+
+it("discards a preview response that arrives after its configuration changed", async () => {
+    const pending: {
+        body: unknown;
+        resolve: (value: unknown) => void;
+    }[] = [];
+    vi.mocked(api).mockImplementation((path, body) => {
+        if (path !== "recorded-examples/preview") throw Error(String(path));
+        return new Promise((resolve) => pending.push({ body, resolve }));
+    });
+    const row = (sourceId: string) => ({
+        line: 1,
+        source_id: sourceId,
+        record: { source_id: sourceId, input: sourceId },
+        has_expected: false,
+        valid: true,
+        errors: [],
+        warnings: [],
+        duplicate_of: null,
+        duplicate_reasons: [],
+        already_imported: false,
+    });
+    const preview = (path: string, sourceId: string) => ({
+        path,
+        fingerprint: `${sourceId}-fingerprint`,
+        format: "jsonl",
+        mapping: { input: "prompt" },
+        mask_fields: [],
+        summary: {
+            total: 1,
+            valid: 1,
+            invalid: 0,
+            duplicates: 0,
+            already_imported: 0,
+        },
+        rows: [row(sourceId)],
+    });
+
+    render(<RecordedExampleImport onImported={vi.fn()} />);
+    const pathField = screen.getByLabelText(/Examples file/);
+    fireEvent.change(pathField, {
+        target: { value: "data/first.jsonl" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview rows" }));
+    await waitFor(() => expect(pending).toHaveLength(1));
+
+    fireEvent.change(pathField, {
+        target: { value: "data/second.jsonl" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview rows" }));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    expect(pending[1].body).toMatchObject({ path: "data/second.jsonl" });
+    pending[1].resolve(preview("data/second.jsonl", "second"));
+    await screen.findByText("Row 1 · second");
+
+    pending[0].resolve(preview("data/first.jsonl", "first"));
+    await waitFor(() =>
+        expect(screen.getByText("Row 1 · second")).toBeTruthy(),
+    );
+    expect(screen.queryByText("Row 1 · first")).toBeNull();
 });

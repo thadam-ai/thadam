@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, json, parseJSON, type Artifact, type Data } from "./api";
 import { Button, ErrorBox, Field, Json } from "./components";
 
@@ -55,6 +55,8 @@ export function RecordedExampleImport({
     const [acknowledged, setAcknowledged] = useState<Set<number>>(new Set());
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
+    const previewRequest = useRef(0);
+    const importing = useRef(false);
 
     function requestBody() {
         const mapping = parseJSON(mappingText);
@@ -66,14 +68,17 @@ export function RecordedExampleImport({
     }
 
     async function showPreview() {
+        const requestId = ++previewRequest.current;
         setBusy(true);
         setError("");
         setPreview(null);
         try {
+            const body = requestBody();
             const result = await api<ImportPreview>(
                 "recorded-examples/preview",
-                requestBody(),
+                body,
             );
+            if (requestId !== previewRequest.current) return;
             setPreview(result);
             setAcknowledged(new Set());
             setSelected(
@@ -89,9 +94,10 @@ export function RecordedExampleImport({
                 ),
             );
         } catch (e) {
-            setError((e as Error).message);
+            if (requestId === previewRequest.current)
+                setError((e as Error).message);
         } finally {
-            setBusy(false);
+            if (requestId === previewRequest.current) setBusy(false);
         }
     }
 
@@ -122,6 +128,8 @@ export function RecordedExampleImport({
     }
 
     function clearPreview() {
+        previewRequest.current += 1;
+        if (!importing.current) setBusy(false);
         setPreview(null);
         setSelected(new Set());
         setAcknowledged(new Set());
@@ -129,13 +137,17 @@ export function RecordedExampleImport({
 
     async function importSelected() {
         if (!preview) return;
+        importing.current = true;
         setBusy(true);
         setError("");
         try {
             const result = await api<{ drafts: Artifact[] }>(
                 "recorded-examples/import",
                 {
-                    ...requestBody(),
+                    path: preview.path,
+                    format: preview.format,
+                    mapping: preview.mapping,
+                    mask_fields: preview.mask_fields,
                     fingerprint: preview.fingerprint,
                     selected_rows: Array.from(selected).sort((a, b) => a - b),
                     acknowledged_duplicates: Array.from(acknowledged)
@@ -149,6 +161,7 @@ export function RecordedExampleImport({
         } catch (e) {
             setError((e as Error).message);
         } finally {
+            importing.current = false;
             setBusy(false);
         }
     }
