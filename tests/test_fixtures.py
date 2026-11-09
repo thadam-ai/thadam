@@ -21,6 +21,7 @@ from thadam import (
     SuiteIdentity,
     SuiteValidationError,
     ToolCallCount,
+    ToolCallSequence,
     ToolRaise,
     ToolReturn,
     ToolScript,
@@ -123,6 +124,33 @@ def test_recovered_errors_pass_and_failed_attempts_count_with_evidence_roundtrip
     assert case.events[0].error.type == "ConnectionError"
     write_report(report, tmp_path / "run.json")
     assert load_report(tmp_path / "run.json") == report
+
+
+def test_fixture_calls_can_assert_exact_recovery_order():
+    def create(tools):
+        def agent(value):
+            try:
+                tools["primary"](value)
+            except ConnectionError:
+                return tools["fallback"](value)
+            return {"unexpected": True}
+
+        return agent
+
+    case = Case(
+        "ordered-recovery",
+        {"order": "one"},
+        (OutputEquals("result", {"amount": 25}), ToolCallSequence("path", ("primary", "fallback"))),
+        tool_fixtures={
+            "primary": ToolScript((ToolRaise("ConnectionError", "offline"),)),
+            "fallback": ToolScript((ToolReturn({"amount": 25}),)),
+        },
+    )
+
+    report = run_suite(FixtureAgent(create), [case])
+
+    assert report.summary.passed == 1
+    assert [event.name for event in report.cases[0].events] == ["primary", "fallback"]
 
 
 @pytest.mark.parametrize(

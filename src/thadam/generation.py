@@ -34,6 +34,8 @@ an existing Thadam type: output_equals {id,type,expected}, output_has_keys
 {id,type,keys}, tool_called or tool_not_called {id,type,tool}, or
 tool_arguments_match {id,type,tool,expected}, or tool_call_count
 {id,type,tool,min_calls,max_calls} (inclusive integer bounds; max_calls may be null).
+Use tool_call_sequence {id,type,tools} to require the exact start order of every
+observed tool call, including failed attempts.
 Do not invent assertion types
 or Python verifiers. Tool checks require explicit runtime tracing. Never substitute
 mere output shape for semantic correctness. If correctness is underspecified,

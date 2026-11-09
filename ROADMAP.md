@@ -2,7 +2,7 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, reviewed regression cases, result review labels, and controlled tool-failure testing are implemented.
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, reviewed regression cases, result review labels, controlled tool-failure testing, and exact tool-call order assertions are implemented.
 **Next build:** import recorded examples and make fix verification easier (milestone 4.5, workflow 2/3). Creating reviewed regression cases and labeling saved results are implemented; recorded-example imports, guided fix verification, and the remaining milestone 5 workflows are planned.
 
 **Published release:** [`thadam-ai` v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/),
@@ -213,7 +213,7 @@ Include an import with incomplete evidence and an incompatible comparison path.
 
 ## 5. Exercise failures and conversation simulations
 
-**Status:** partially implemented. Controlled tool failures, retry-count checks, scripted conversations, and resettable JSON state fixtures are available; enforced deadlines and external environment resets remain planned.
+**Status:** partially implemented. Controlled tool failures, retry-count and call-order checks, scripted conversations, and resettable JSON state fixtures are available; enforced deadlines and external environment resets remain planned.
 
 **Outcome:** a developer checks whether an agent completes a conversation and
 recovers from controlled failures while preserving the expected state.
@@ -222,6 +222,7 @@ recovers from controlled failures while preserving the expected state.
 - [x] Define a conversation scenario with ordered user/agent turns, per-turn checks, final outcome checks, and explicit state lifecycle/reset rules.
 - [x] Support scripted follow-up turns and session evidence for context retention, repeated questions, and behavior after a correction.
 - [x] Assert inclusive tool-call/retry bounds and recovery through explicit output/tool checks.
+- [x] Assert the exact start-order sequence of every observed tool call, including failed attempts.
 - [x] Assert allowed observable state changes and exact final JSON state.
 - [x] Specify scripted timeout errors, cooperative async cancellation and existing dashboard interruption for current execution modes; no enforced execution deadline.
 - [ ] Specify conversation turn limits, enforced deadlines and additional cleanup behavior before offering enforcement guarantees.
@@ -242,8 +243,8 @@ State checks bound changed top-level keys and can require an exact final state.
 Scripts and initial state participate in compatibility and baseline review.
 See [conversation and state simulations](docs/milestones/05-simulations.md).
 
-External environment resets, call-order assertions and enforced deadlines remain
-planned. Any later model-driven user simulator needs explicit budgets, stopping
+External environment resets and enforced deadlines remain planned. Any later
+model-driven user simulator needs explicit budgets, stopping
 rules, recorded configuration, and a supplied success criterion. Scenario
 execution does not imply sandboxing or hidden-reasoning access.
 

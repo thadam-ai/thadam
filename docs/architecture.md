@@ -214,7 +214,9 @@ No agent/verifier execution or provider call occurs in this workflow. See the
 per case attempt. The runner snapshots case scripts before application code;
 `fixtures.py` validates/serializes them and owns independent synchronous/async tool
 handles, script consumption, sticky configuration errors, closure and evidence.
-`ToolCallCount` shares the existing pure assertion/definition/loading path.
+`ToolCallCount` and `ToolCallSequence` share the existing pure
+assertion/definition/loading path. Call-sequence checks compare every tool event
+in recorded start order and require complete explicit trace evidence.
 Fixture runs use schema 5, identified fixture suites schema 3, and repeated fixture
 evaluations schema 2 with mode `fixtures`. Older formats remain unchanged.
 

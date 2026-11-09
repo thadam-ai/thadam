@@ -23,6 +23,7 @@ from thadam.models import (
     ToolArgumentsMatch,
     ToolCallCount,
     ToolCalled,
+    ToolCallSequence,
     ToolNotCalled,
     Verifier,
 )
@@ -243,7 +244,25 @@ def _validate_assertion(assertion: object, location: str) -> None:
             or len(set(keys)) != len(keys)
         ):
             raise SuiteValidationError(f"{location}: allowed_keys must be unique non-empty strings")
-    elif isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch, ToolCallCount)):
+    elif isinstance(
+        assertion,
+        (ToolCalled, ToolNotCalled, ToolArgumentsMatch, ToolCallCount, ToolCallSequence),
+    ):
+        if isinstance(assertion, ToolCallSequence):
+            tools = assertion.tools
+            if (
+                not isinstance(tools, (list, tuple))
+                or not tools
+                or any(not isinstance(tool, str) or not tool.strip() for tool in tools)
+            ):
+                raise SuiteValidationError(
+                    f"{location}: tools must be a non-empty sequence of tool names"
+                )
+            try:
+                validate_json(list(tools), f"{location}.tools")
+            except ValueError as error:
+                raise SuiteValidationError(str(error)) from error
+            return
         if not isinstance(assertion.tool, str) or not assertion.tool.strip():
             raise SuiteValidationError(f"{location}: tool must be a non-empty string")
         try:
@@ -328,6 +347,11 @@ def parse_assertion(raw: object, location: str) -> Assertion:
     if raw.get("type") == "tool_call_count":
         _require_fields(raw, {"id", "type", "tool", "min_calls", "max_calls"}, location)
         return ToolCallCount(raw["id"], raw["tool"], raw["min_calls"], raw["max_calls"])
+    if raw.get("type") == "tool_call_sequence":
+        _require_fields(raw, {"id", "type", "tools"}, location)
+        if not isinstance(raw["tools"], list):
+            raise SuiteValidationError(f"{location}.tools must be an array")
+        return ToolCallSequence(raw["id"], tuple(raw["tools"]))
     raise SuiteValidationError(f"{location}: unknown assertion type {raw.get('type')!r}")
 
 

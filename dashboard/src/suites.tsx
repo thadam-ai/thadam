@@ -29,6 +29,7 @@ const types = [
     "tool_not_called",
     "tool_arguments_match",
     "tool_call_count",
+    "tool_call_sequence",
 ];
 export function SuiteEditor({
     artifact,
@@ -569,26 +570,33 @@ export function SuiteEditor({
                                                                                 "field",
                                                                             ],
                                                                         }
-                                                                      : {
-                                                                            tool: "tool_name",
-                                                                            ...(type ===
-                                                                            "tool_call_count"
-                                                                                ? {
-                                                                                      min_calls: 0,
-                                                                                      max_calls: 3,
-                                                                                  }
-                                                                                : {}),
-                                                                            ...(type ===
-                                                                            "tool_arguments_match"
-                                                                                ? {
-                                                                                      expected:
-                                                                                          {
-                                                                                              argument:
-                                                                                                  "value",
-                                                                                          },
-                                                                                  }
-                                                                                : {}),
-                                                                        }),
+                                                                      : type ===
+                                                                          "tool_call_sequence"
+                                                                        ? {
+                                                                              tools: [
+                                                                                  "tool_name",
+                                                                              ],
+                                                                          }
+                                                                        : {
+                                                                              tool: "tool_name",
+                                                                              ...(type ===
+                                                                              "tool_call_count"
+                                                                                  ? {
+                                                                                        min_calls: 0,
+                                                                                        max_calls: 3,
+                                                                                    }
+                                                                                  : {}),
+                                                                              ...(type ===
+                                                                              "tool_arguments_match"
+                                                                                  ? {
+                                                                                        expected:
+                                                                                            {
+                                                                                                argument:
+                                                                                                    "value",
+                                                                                            },
+                                                                                    }
+                                                                                  : {}),
+                                                                          }),
                                                             };
                                                             validity(
                                                                 checkKey(
@@ -644,28 +652,76 @@ export function SuiteEditor({
                                                     <X size={16} />
                                                 </button>
                                             </div>
-                                            {check.type.startsWith("tool_") && (
-                                                <Field label="Tool name">
+                                            {check.type.startsWith("tool_") &&
+                                                check.type !==
+                                                    "tool_call_sequence" && (
+                                                    <Field label="Tool name">
+                                                        <input
+                                                            value={
+                                                                check.tool || ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                caseChange(
+                                                                    index,
+                                                                    {
+                                                                        ...test,
+                                                                        assertions:
+                                                                            test.assertions.map(
+                                                                                (
+                                                                                    a: Data,
+                                                                                    i: number,
+                                                                                ) =>
+                                                                                    i ===
+                                                                                    ci
+                                                                                        ? {
+                                                                                              ...a,
+                                                                                              tool: e
+                                                                                                  .target
+                                                                                                  .value,
+                                                                                          }
+                                                                                        : a,
+                                                                            ),
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                    </Field>
+                                                )}
+                                            {check.type ===
+                                                "tool_call_sequence" && (
+                                                <Field
+                                                    label="Expected tool-call order"
+                                                    hint="Enter every tool name in exact start order, separated by commas. Failed attempts count."
+                                                >
                                                     <input
-                                                        value={check.tool || ""}
-                                                        onChange={(e) =>
+                                                        value={(
+                                                            check.tools || []
+                                                        ).join(", ")}
+                                                        onChange={(event) =>
                                                             caseChange(index, {
                                                                 ...test,
                                                                 assertions:
                                                                     test.assertions.map(
                                                                         (
-                                                                            a: Data,
+                                                                            assertion: Data,
                                                                             i: number,
                                                                         ) =>
                                                                             i ===
                                                                             ci
                                                                                 ? {
-                                                                                      ...a,
-                                                                                      tool: e
-                                                                                          .target
-                                                                                          .value,
+                                                                                      ...assertion,
+                                                                                      tools: event.target.value
+                                                                                          .split(
+                                                                                              ",",
+                                                                                          )
+                                                                                          .map(
+                                                                                              (
+                                                                                                  tool,
+                                                                                              ) =>
+                                                                                                  tool.trim(),
+                                                                                          ),
                                                                                   }
-                                                                                : a,
+                                                                                : assertion,
                                                                     ),
                                                             })
                                                         }

@@ -103,7 +103,8 @@ reports containing SDK verifier outcomes remain fully inspectable.
 
 For controlled failures, use **Configure tool failures** in a case editor. Add
 named scripts with JSON returns or simulated errors, optionally repeat the final
-response, and add `tool_call_count` checks for inclusive attempt bounds. Scripts
+response, and add `tool_call_count` checks for inclusive attempt bounds or
+`tool_call_sequence` checks for exact tool start order. Scripts
 are saved case contracts and require a suite revision change when edited.
 Choose **Tool fixture factory** in execution settings and supply a factory that
 accepts `FixtureTools`; one attempt is supported. Scripts reset per invocation,

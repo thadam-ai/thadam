@@ -61,6 +61,52 @@ function editor() {
 }
 
 describe("suite editor state", () => {
+    it("edits an exact tool-call order check", async () => {
+        vi.mocked(api).mockResolvedValue(artifact);
+        editor();
+        fireEvent.change(
+            screen.getAllByRole("combobox", { name: "Check type" })[0],
+            {
+                target: { value: "tool_call_sequence" },
+            },
+        );
+        fireEvent.change(
+            screen.getByRole("textbox", { name: /Expected tool-call order/ }),
+            { target: { value: "lookup, retry, fallback" } },
+        );
+        fireEvent.click(screen.getByText("Suite settings"));
+        fireEvent.change(
+            screen.getByRole("textbox", { name: /Suite revision/ }),
+            {
+                target: { value: "2" },
+            },
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+        await waitFor(() =>
+            expect(api).toHaveBeenCalledWith(
+                "suite",
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        cases: expect.arrayContaining([
+                            expect.objectContaining({
+                                id: "first",
+                                assertions: [
+                                    {
+                                        id: "out",
+                                        type: "tool_call_sequence",
+                                        tools: ["lookup", "retry", "fallback"],
+                                    },
+                                ],
+                            }),
+                        ]),
+                    }),
+                }),
+                "PUT",
+            ),
+        );
+    });
+
     it("saves tool scripts and call bounds in an identified schema-3 suite", async () => {
         vi.mocked(api).mockResolvedValue(artifact);
         editor();

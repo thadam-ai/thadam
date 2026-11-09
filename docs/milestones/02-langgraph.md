@@ -63,6 +63,7 @@ These work in SDK `TestCase.assertions` and schema-version-1 JSON case files:
 | `tool_called` | `ToolCalled(id, tool)` | At least one observed invocation of the tool |
 | `tool_not_called` | `ToolNotCalled(id, tool)` | No observed invocation within the instrumented scope |
 | `tool_arguments_match` | `ToolArgumentsMatch(id, tool, expected)` | At least one invocation; every invocation matches the selected top-level arguments |
+| `tool_call_sequence` | `ToolCallSequence(id, tools)` | Every observed tool event matches the exact expected start-order sequence, including failed attempts |
 
 Example suite:
 
@@ -83,7 +84,7 @@ Example suite:
 }
 ```
 
-An errored tool attempt still counts as a call; a forbidden attempt fails even if the tool throws. A recovered tool error does not independently fail an otherwise satisfied case. Tool success or call ordering is not asserted by these checks.
+An errored tool attempt still counts as a call; a forbidden attempt fails even if the tool throws. A recovered tool error does not independently fail an otherwise satisfied case. `ToolCallSequence` checks tool ordering from the complete explicit event stream; it does not assert model-call order.
 
 Argument checks require a non-empty expected object. Extra argument fields are allowed; each selected value uses the same strict JSON comparison as `output_equals`, including boolean/number distinctions. A missing selected field or a mismatched value fails. No call fails the check. Missing structured argument evidence produces an evaluation error instead of guessing.
 
