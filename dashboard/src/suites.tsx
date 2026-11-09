@@ -49,6 +49,7 @@ export function SuiteEditor({
     const [error, setError] = useState(""),
         [busy, setBusy] = useState(false),
         [invalid, setInvalid] = useState<Record<string, boolean>>({}),
+        [sequenceText, setSequenceText] = useState<Record<string, string>>({}),
         [saved, setSaved] = useState(false);
     const stable = useRef<{
         cases: string[];
@@ -66,6 +67,13 @@ export function SuiteEditor({
         const key = caseKey(index);
         stable.current.cases.splice(index, 1);
         delete stable.current.checks[key];
+        setSequenceText((current) =>
+            Object.fromEntries(
+                Object.entries(current).filter(
+                    ([name]) => !name.startsWith(key + ":"),
+                ),
+            ),
+        );
         setInvalid((current) =>
             Object.fromEntries(
                 Object.entries(current).filter(
@@ -77,6 +85,12 @@ export function SuiteEditor({
     function clearCheck(index: number, check: number) {
         const key = checkKey(index, check);
         stable.current.checks[caseKey(index)].splice(check, 1);
+        setSequenceText((current) => {
+            if (!(key in current)) return current;
+            const next = { ...current };
+            delete next[key];
+            return next;
+        });
         setInvalid((current) =>
             Object.fromEntries(
                 Object.entries(current).filter(([name]) => name !== key),
@@ -97,6 +111,7 @@ export function SuiteEditor({
     const changed =
         text !== json(original || emptySuite) ||
         path !== (artifact?.path || "cases.json") ||
+        Object.keys(sequenceText).length > 0 ||
         Object.values(invalid).some(Boolean);
     useEffect(() => {
         onDirty(changed);
@@ -134,11 +149,32 @@ export function SuiteEditor({
         setError("");
         try {
             if (!data) throw new Error("Fix the JSON before saving.");
+            const saveData = {
+                ...data,
+                cases: data.cases.map((test: Data, index: number) => ({
+                    ...test,
+                    assertions: test.assertions.map(
+                        (check: Data, checkIndex: number) => {
+                            const draft =
+                                sequenceText[checkKey(index, checkIndex)];
+                            return check.type === "tool_call_sequence" &&
+                                draft !== undefined
+                                ? {
+                                      ...check,
+                                      tools: draft
+                                          .split(",")
+                                          .map((tool: string) => tool.trim()),
+                                  }
+                                : check;
+                        },
+                    ),
+                })),
+            };
             const result = await api<Artifact>(
                 "suite",
                 {
                     path,
-                    data,
+                    data: saveData,
                     fingerprint:
                         artifact && path === artifact.path
                             ? artifact.fingerprint
@@ -288,6 +324,7 @@ export function SuiteEditor({
                         value={text}
                         onChange={(e) => {
                             setText(e.target.value);
+                            setSequenceText({});
                             setInvalid({});
                             setSaved(false);
                         }}
@@ -605,6 +642,30 @@ export function SuiteEditor({
                                                                 ),
                                                                 true,
                                                             );
+                                                            setSequenceText(
+                                                                (current) => {
+                                                                    const key =
+                                                                        checkKey(
+                                                                            index,
+                                                                            ci,
+                                                                        );
+                                                                    if (
+                                                                        !(
+                                                                            key in
+                                                                            current
+                                                                        )
+                                                                    )
+                                                                        return current;
+                                                                    const next =
+                                                                        {
+                                                                            ...current,
+                                                                        };
+                                                                    delete next[
+                                                                        key
+                                                                    ];
+                                                                    return next;
+                                                                },
+                                                            );
                                                             caseChange(index, {
                                                                 ...test,
                                                                 assertions:
@@ -694,10 +755,49 @@ export function SuiteEditor({
                                                     hint="Enter every tool name in exact start order, separated by commas. Failed attempts count."
                                                 >
                                                     <input
-                                                        value={(
-                                                            check.tools || []
-                                                        ).join(", ")}
-                                                        onChange={(event) =>
+                                                        value={
+                                                            sequenceText[
+                                                                checkKey(
+                                                                    index,
+                                                                    ci,
+                                                                )
+                                                            ] ??
+                                                            (
+                                                                check.tools ||
+                                                                []
+                                                            ).join(", ")
+                                                        }
+                                                        onChange={(event) => {
+                                                            setSequenceText(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    [checkKey(
+                                                                        index,
+                                                                        ci,
+                                                                    )]:
+                                                                        event
+                                                                            .target
+                                                                            .value,
+                                                                }),
+                                                            );
+                                                            setSaved(false);
+                                                            setError("");
+                                                        }}
+                                                        onBlur={(event) => {
+                                                            const key =
+                                                                checkKey(
+                                                                    index,
+                                                                    ci,
+                                                                );
+                                                            const tools =
+                                                                event.currentTarget.value
+                                                                    .split(",")
+                                                                    .map(
+                                                                        (
+                                                                            tool,
+                                                                        ) =>
+                                                                            tool.trim(),
+                                                                    );
                                                             caseChange(index, {
                                                                 ...test,
                                                                 assertions:
@@ -710,21 +810,31 @@ export function SuiteEditor({
                                                                             ci
                                                                                 ? {
                                                                                       ...assertion,
-                                                                                      tools: event.target.value
-                                                                                          .split(
-                                                                                              ",",
-                                                                                          )
-                                                                                          .map(
-                                                                                              (
-                                                                                                  tool,
-                                                                                              ) =>
-                                                                                                  tool.trim(),
-                                                                                          ),
+                                                                                      tools,
                                                                                   }
                                                                                 : assertion,
                                                                     ),
-                                                            })
-                                                        }
+                                                            });
+                                                            setSequenceText(
+                                                                (current) => {
+                                                                    if (
+                                                                        !(
+                                                                            key in
+                                                                            current
+                                                                        )
+                                                                    )
+                                                                        return current;
+                                                                    const next =
+                                                                        {
+                                                                            ...current,
+                                                                        };
+                                                                    delete next[
+                                                                        key
+                                                                    ];
+                                                                    return next;
+                                                                },
+                                                            );
+                                                        }}
                                                     />
                                                 </Field>
                                             )}
