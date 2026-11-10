@@ -19,6 +19,7 @@ from thadam.models import (
     ToolArgumentsMatch,
     ToolCallCount,
     ToolCalled,
+    ToolCallSequence,
     ToolNotCalled,
     Verifier,
 )
@@ -35,7 +36,10 @@ def evaluate_assertion(
     state_final: JSONValue = None,
 ) -> AssertionResult:
     """Evaluate a validated built-in assertion without executing an agent."""
-    if isinstance(assertion, (ToolCalled, ToolNotCalled, ToolArgumentsMatch, ToolCallCount)):
+    if isinstance(
+        assertion,
+        (ToolCalled, ToolNotCalled, ToolArgumentsMatch, ToolCallCount, ToolCallSequence),
+    ):
         return _evaluate_tool(assertion, events, trace_complete)
     if isinstance(assertion, ConversationOutputEquals):
         turn = next((item for item in conversation_results if item.id == assertion.turn_id), None)
@@ -114,7 +118,7 @@ def _changed_top_level_keys(initial: JSONValue, final: JSONValue) -> list[str]:
 
 
 def _evaluate_tool(
-    assertion: ToolCalled | ToolNotCalled | ToolArgumentsMatch | ToolCallCount,
+    assertion: ToolCalled | ToolNotCalled | ToolArgumentsMatch | ToolCallCount | ToolCallSequence,
     events: tuple[ExecutionEvent, ...] | None,
     trace_complete: bool | None,
 ) -> AssertionResult:
@@ -122,7 +126,26 @@ def _evaluate_tool(
         raise TraceUnavailableError(
             "Tool assertions require a complete, explicitly instrumented trace"
         )
-    calls = [event for event in events if event.kind == "tool" and event.name == assertion.tool]
+    calls = [event for event in events if event.kind == "tool"]
+    if isinstance(assertion, ToolCallSequence):
+        actual_tools = [call.name for call in calls]
+        passed = actual_tools == list(assertion.tools)
+        expected = {"tools": list(assertion.tools)}
+        actual = {"tools": actual_tools}
+        message = (
+            "Observed tool calls match the expected sequence"
+            if passed
+            else "Observed tool-call sequence differs from the expected sequence"
+        )
+        return AssertionResult(
+            id=assertion.id,
+            passed=passed,
+            message=message,
+            expected=expected,
+            actual=actual,
+            event_ids=tuple(call.id for call in calls),
+        )
+    calls = [event for event in calls if event.name == assertion.tool]
     if isinstance(assertion, ToolArgumentsMatch):
         if any(not call.input_available or not isinstance(call.input, dict) for call in calls):
             raise TraceUnavailableError(

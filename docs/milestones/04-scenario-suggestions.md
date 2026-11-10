@@ -119,8 +119,9 @@ thadam save-draft drafts/refund.json --destination suites/refunds.json \
 
 Case numbers start at one. An edited case has exactly `id`, `input`, and
 `assertions`. Supported checks are `output_equals`, `output_has_keys`,
-`tool_called`, `tool_not_called`, and `tool_arguments_match`, with their existing
-contracts. Tool checks require explicit, complete runtime trace evidence.
+`tool_called`, `tool_not_called`, `tool_arguments_match`, `tool_call_count`, and
+`tool_call_sequence`, with their existing contracts. Tool checks require explicit,
+complete runtime trace evidence.
 Unsupported assertions, missing checks, duplicate proposed/existing IDs, or invalid
 inputs block acceptance. Missing correctness rules remain incomplete proposals;
 the reviewer must supply meaningful expectations. Structural validation does not

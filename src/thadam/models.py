@@ -62,6 +62,14 @@ class ToolCallCount:
 
 
 @dataclass(frozen=True)
+class ToolCallSequence:
+    """Require every observed tool call to follow this exact start order."""
+
+    id: str
+    tools: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ConversationOutputEquals:
     """Require an exact response for one named conversation turn."""
 
@@ -116,6 +124,7 @@ Assertion: TypeAlias = (
     | ToolNotCalled
     | ToolArgumentsMatch
     | ToolCallCount
+    | ToolCallSequence
     | ConversationOutputEquals
     | StateEquals
     | StateChanges

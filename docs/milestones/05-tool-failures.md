@@ -1,10 +1,11 @@
 # Controlled tool failures
 
-**Status:** implemented. This is the first slice of milestone 5: scripted tool
-responses and recovery checks through the SDK, CLI and local dashboard. The
-second slice adds scripted conversations and resettable JSON state; see
+**Status:** implemented. The first slice adds scripted tool responses and
+recovery checks through the SDK, CLI and local dashboard. The second adds scripted
+conversations and resettable JSON state; see
 [conversation and state simulations](05-simulations.md). External environment
-resets and enforced execution timeouts remain planned.
+resets and enforced execution timeouts remain planned. Exact call-order checks are
+supported by `ToolCallSequence`.
 
 ## Run the controlled example
 
@@ -39,6 +40,7 @@ from thadam import (
     OutputEquals,
     TestCase,
     ToolCallCount,
+    ToolCallSequence,
     ToolRaise,
     ToolReturn,
     ToolScript,
@@ -64,6 +66,7 @@ case = TestCase(
     assertions=(
         OutputEquals("order", {"amount_cents": 2500}),
         ToolCallCount("bounded-retry", "get_order", min_calls=2, max_calls=2),
+        ToolCallSequence("recovery-path", ("get_order", "get_order")),
     ),
     tool_fixtures={
         "get_order": ToolScript(
@@ -125,6 +128,10 @@ never invokes a real-service fallback.
   Sync execution has no enforced timeout; async cancellation is cooperative and
   drains owned workers. Dashboard Stop retains its existing process controls and
   never publishes an interrupted evaluation as completed.
+- `ToolCallSequence(id, tools)` checks the exact start-order sequence of every
+  observed tool event. Failed attempts count; extra, missing, or reordered calls
+  fail. It requires a complete explicit trace and is evaluated after execution,
+  so it does not stop or constrain the agent.
 
 ## Saved suites and evidence
 
@@ -149,7 +156,8 @@ Fixture suites use **suite schema 3**, with required identity/revision and a
     },
     "assertions": [
       {"id": "order", "type": "output_equals", "expected": {"amount_cents": 2500}},
-      {"id": "attempts", "type": "tool_call_count", "tool": "get_order", "min_calls": 2, "max_calls": 2}
+      {"id": "attempts", "type": "tool_call_count", "tool": "get_order", "min_calls": 2, "max_calls": 2},
+      {"id": "recovery-path", "type": "tool_call_sequence", "tools": ["get_order", "get_order"]}
     ]
   }]
 }
@@ -242,6 +250,5 @@ excessive retries, sticky unscripted/exhausted calls, unused steps, repetition,
 fresh factories, independent snapshots, async overlap/cancellation, strict saved
 evidence, changed unused contracts, revision guards, CLI imports from a temporary
 project, dashboard APIs/forms, and real sync/async graph callbacks. Default checks
-need no model credentials or hosted service. This slice does not implement call
-ordering assertions, resettable external systems, real-time delay simulation,
-or enforced deadlines.
+need no model credentials or hosted service. Milestone 5 does not implement
+resettable external systems, real-time delay simulation, or enforced deadlines.

@@ -174,6 +174,8 @@ Legacy formats remain unchanged. Full scripts participate in compatibility/revie
 including unused steps. Missing/exhausted calls cannot be caught into a pass and
 never fall through to a real service. `ToolCallCount` counts all observed attempts
 after execution and requires complete explicit evidence; it does not stop retries.
+`ToolCallSequence` checks the exact start-order sequence of all observed tool calls,
+including failures, and also requires complete explicit evidence.
 Use the optional LangGraph `fixture_tool` helper to avoid duplicate spans. Keep
 dashboard suite revision/stale-write and process interruption guards.
 
@@ -187,4 +189,4 @@ checks. Reports retain the script, available turn responses, initial/final state
 and partial evidence after errors. Conversation and initial-state contracts
 participate in comparison and baseline review. The dashboard edits schema-4
 suites in JSON view and displays transcript/state evidence. External environment
-resets, call-order checks and enforced deadlines remain planned.
+external environment resets and enforced deadlines remain planned.
