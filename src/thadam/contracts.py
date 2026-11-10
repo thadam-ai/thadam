@@ -21,6 +21,7 @@ from thadam.models import (
     ToolArgumentsMatch,
     ToolCallCount,
     ToolCalled,
+    ToolCallSequence,
     ToolNotCalled,
 )
 from thadam.suites import parse_assertion, validate_suite
@@ -48,6 +49,7 @@ def snapshot_definitions(case: TestCase) -> tuple[CheckDefinition, ...]:
         ToolNotCalled: "tool_not_called",
         ToolArgumentsMatch: "tool_arguments_match",
         ToolCallCount: "tool_call_count",
+        ToolCallSequence: "tool_call_sequence",
         ConversationOutputEquals: "conversation_output_equals",
         StateEquals: "state_equals",
         StateChanges: "state_changes",
@@ -60,6 +62,8 @@ def snapshot_definitions(case: TestCase) -> tuple[CheckDefinition, ...]:
             parameters["keys"] = list(assertion.keys)
         if isinstance(assertion, StateChanges):
             parameters["allowed_keys"] = list(assertion.allowed_keys)
+        if isinstance(assertion, ToolCallSequence):
+            parameters["tools"] = list(assertion.tools)
         definitions.append(CheckDefinition(assertion.id, names[type(assertion)], parameters))
     definitions.extend(
         CheckDefinition(verifier.id, "verifier", {"revision": verifier.revision})

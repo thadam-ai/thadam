@@ -29,6 +29,7 @@ const types = [
     "tool_not_called",
     "tool_arguments_match",
     "tool_call_count",
+    "tool_call_sequence",
 ];
 export function SuiteEditor({
     artifact,
@@ -48,6 +49,7 @@ export function SuiteEditor({
     const [error, setError] = useState(""),
         [busy, setBusy] = useState(false),
         [invalid, setInvalid] = useState<Record<string, boolean>>({}),
+        [sequenceText, setSequenceText] = useState<Record<string, string>>({}),
         [saved, setSaved] = useState(false);
     const stable = useRef<{
         cases: string[];
@@ -65,6 +67,13 @@ export function SuiteEditor({
         const key = caseKey(index);
         stable.current.cases.splice(index, 1);
         delete stable.current.checks[key];
+        setSequenceText((current) =>
+            Object.fromEntries(
+                Object.entries(current).filter(
+                    ([name]) => !name.startsWith(key + ":"),
+                ),
+            ),
+        );
         setInvalid((current) =>
             Object.fromEntries(
                 Object.entries(current).filter(
@@ -76,6 +85,12 @@ export function SuiteEditor({
     function clearCheck(index: number, check: number) {
         const key = checkKey(index, check);
         stable.current.checks[caseKey(index)].splice(check, 1);
+        setSequenceText((current) => {
+            if (!(key in current)) return current;
+            const next = { ...current };
+            delete next[key];
+            return next;
+        });
         setInvalid((current) =>
             Object.fromEntries(
                 Object.entries(current).filter(([name]) => name !== key),
@@ -96,6 +111,7 @@ export function SuiteEditor({
     const changed =
         text !== json(original || emptySuite) ||
         path !== (artifact?.path || "cases.json") ||
+        Object.keys(sequenceText).length > 0 ||
         Object.values(invalid).some(Boolean);
     useEffect(() => {
         onDirty(changed);
@@ -134,11 +150,32 @@ export function SuiteEditor({
         setError("");
         try {
             if (!data) throw new Error("Fix the JSON before saving.");
+            const saveData = {
+                ...data,
+                cases: data.cases.map((test: Data, index: number) => ({
+                    ...test,
+                    assertions: test.assertions.map(
+                        (check: Data, checkIndex: number) => {
+                            const draft =
+                                sequenceText[checkKey(index, checkIndex)];
+                            return check.type === "tool_call_sequence" &&
+                                draft !== undefined
+                                ? {
+                                      ...check,
+                                      tools: draft
+                                          .split(",")
+                                          .map((tool: string) => tool.trim()),
+                                  }
+                                : check;
+                        },
+                    ),
+                })),
+            };
             const result = await api<Artifact>(
                 "suite",
                 {
                     path,
-                    data,
+                    data: saveData,
                     fingerprint:
                         artifact && path === artifact.path
                             ? artifact.fingerprint
@@ -292,6 +329,7 @@ export function SuiteEditor({
                         onChange={(e) => {
                             onDirty(true);
                             setText(e.target.value);
+                            setSequenceText({});
                             setInvalid({});
                             setSaved(false);
                         }}
@@ -574,26 +612,33 @@ export function SuiteEditor({
                                                                                 "field",
                                                                             ],
                                                                         }
-                                                                      : {
-                                                                            tool: "tool_name",
-                                                                            ...(type ===
-                                                                            "tool_call_count"
-                                                                                ? {
-                                                                                      min_calls: 0,
-                                                                                      max_calls: 3,
-                                                                                  }
-                                                                                : {}),
-                                                                            ...(type ===
-                                                                            "tool_arguments_match"
-                                                                                ? {
-                                                                                      expected:
-                                                                                          {
-                                                                                              argument:
-                                                                                                  "value",
-                                                                                          },
-                                                                                  }
-                                                                                : {}),
-                                                                        }),
+                                                                      : type ===
+                                                                          "tool_call_sequence"
+                                                                        ? {
+                                                                              tools: [
+                                                                                  "tool_name",
+                                                                              ],
+                                                                          }
+                                                                        : {
+                                                                              tool: "tool_name",
+                                                                              ...(type ===
+                                                                              "tool_call_count"
+                                                                                  ? {
+                                                                                        min_calls: 0,
+                                                                                        max_calls: 3,
+                                                                                    }
+                                                                                  : {}),
+                                                                              ...(type ===
+                                                                              "tool_arguments_match"
+                                                                                  ? {
+                                                                                        expected:
+                                                                                            {
+                                                                                                argument:
+                                                                                                    "value",
+                                                                                            },
+                                                                                    }
+                                                                                  : {}),
+                                                                          }),
                                                             };
                                                             validity(
                                                                 checkKey(
@@ -601,6 +646,30 @@ export function SuiteEditor({
                                                                     ci,
                                                                 ),
                                                                 true,
+                                                            );
+                                                            setSequenceText(
+                                                                (current) => {
+                                                                    const key =
+                                                                        checkKey(
+                                                                            index,
+                                                                            ci,
+                                                                        );
+                                                                    if (
+                                                                        !(
+                                                                            key in
+                                                                            current
+                                                                        )
+                                                                    )
+                                                                        return current;
+                                                                    const next =
+                                                                        {
+                                                                            ...current,
+                                                                        };
+                                                                    delete next[
+                                                                        key
+                                                                    ];
+                                                                    return next;
+                                                                },
                                                             );
                                                             caseChange(index, {
                                                                 ...test,
@@ -649,31 +718,128 @@ export function SuiteEditor({
                                                     <X size={16} />
                                                 </button>
                                             </div>
-                                            {check.type.startsWith("tool_") && (
-                                                <Field label="Tool name">
+                                            {check.type.startsWith("tool_") &&
+                                                check.type !==
+                                                    "tool_call_sequence" && (
+                                                    <Field label="Tool name">
+                                                        <input
+                                                            value={
+                                                                check.tool || ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                caseChange(
+                                                                    index,
+                                                                    {
+                                                                        ...test,
+                                                                        assertions:
+                                                                            test.assertions.map(
+                                                                                (
+                                                                                    a: Data,
+                                                                                    i: number,
+                                                                                ) =>
+                                                                                    i ===
+                                                                                    ci
+                                                                                        ? {
+                                                                                              ...a,
+                                                                                              tool: e
+                                                                                                  .target
+                                                                                                  .value,
+                                                                                          }
+                                                                                        : a,
+                                                                            ),
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                    </Field>
+                                                )}
+                                            {check.type ===
+                                                "tool_call_sequence" && (
+                                                <Field
+                                                    label="Expected tool-call order"
+                                                    hint="Enter every tool name in exact start order, separated by commas. Failed attempts count."
+                                                >
                                                     <input
-                                                        value={check.tool || ""}
-                                                        onChange={(e) =>
+                                                        value={
+                                                            sequenceText[
+                                                                checkKey(
+                                                                    index,
+                                                                    ci,
+                                                                )
+                                                            ] ??
+                                                            (
+                                                                check.tools ||
+                                                                []
+                                                            ).join(", ")
+                                                        }
+                                                        onChange={(event) => {
+                                                            setSequenceText(
+                                                                (current) => ({
+                                                                    ...current,
+                                                                    [checkKey(
+                                                                        index,
+                                                                        ci,
+                                                                    )]:
+                                                                        event
+                                                                            .target
+                                                                            .value,
+                                                                }),
+                                                            );
+                                                            setSaved(false);
+                                                            setError("");
+                                                        }}
+                                                        onBlur={(event) => {
+                                                            const key =
+                                                                checkKey(
+                                                                    index,
+                                                                    ci,
+                                                                );
+                                                            const tools =
+                                                                event.currentTarget.value
+                                                                    .split(",")
+                                                                    .map(
+                                                                        (
+                                                                            tool,
+                                                                        ) =>
+                                                                            tool.trim(),
+                                                                    );
                                                             caseChange(index, {
                                                                 ...test,
                                                                 assertions:
                                                                     test.assertions.map(
                                                                         (
-                                                                            a: Data,
+                                                                            assertion: Data,
                                                                             i: number,
                                                                         ) =>
                                                                             i ===
                                                                             ci
                                                                                 ? {
-                                                                                      ...a,
-                                                                                      tool: e
-                                                                                          .target
-                                                                                          .value,
+                                                                                      ...assertion,
+                                                                                      tools,
                                                                                   }
-                                                                                : a,
+                                                                                : assertion,
                                                                     ),
-                                                            })
-                                                        }
+                                                            });
+                                                            setSequenceText(
+                                                                (current) => {
+                                                                    if (
+                                                                        !(
+                                                                            key in
+                                                                            current
+                                                                        )
+                                                                    )
+                                                                        return current;
+                                                                    const next =
+                                                                        {
+                                                                            ...current,
+                                                                        };
+                                                                    delete next[
+                                                                        key
+                                                                    ];
+                                                                    return next;
+                                                                },
+                                                            );
+                                                        }}
                                                     />
                                                 </Field>
                                             )}

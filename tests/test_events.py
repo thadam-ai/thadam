@@ -16,7 +16,9 @@ from thadam import (
     TokenUsage,
     ToolArgumentsMatch,
     ToolCalled,
+    ToolCallSequence,
     ToolNotCalled,
+    compare_reports,
     load_suite,
     report_to_dict,
     run_suite,
@@ -24,6 +26,7 @@ from thadam import (
 from thadam import (
     TestCase as AgentTestCase,
 )
+from thadam.report_loading import report_from_dict
 
 
 def event(event_id="call", **changes):
@@ -96,6 +99,81 @@ def test_argument_subset_must_match_every_call_with_strict_json_types():
     assert result(assertion, ()).status == "failed"
 
 
+def test_tool_call_sequence_matches_every_tool_event_in_recorded_order():
+    calls = (
+        event("first", name="lookup"),
+        event(
+            "retry",
+            name="lookup",
+            status="error",
+            error=EventError("ConnectionError", "offline"),
+        ),
+        event("fallback", name="cached_lookup"),
+    )
+    assertion = ToolCallSequence("recovery-path", ("lookup", "lookup", "cached_lookup"))
+
+    case = result(assertion, calls)
+
+    assert case.status == "passed"
+    assert case.assertions[0].expected == {"tools": ["lookup", "lookup", "cached_lookup"]}
+    assert case.assertions[0].actual == {"tools": ["lookup", "lookup", "cached_lookup"]}
+    assert case.assertions[0].event_ids == ("first", "retry", "fallback")
+    report = run_suite(
+        lambda _value: AgentResult("ok", calls),
+        [AgentTestCase("sequence", None, (assertion,))],
+    )
+    assert report_from_dict(report_to_dict(report)) == report
+
+
+def test_tool_call_sequence_fails_for_extra_missing_or_reordered_calls():
+    assertion = ToolCallSequence("exact-path", ("lookup", "fallback"))
+    calls = (event("first", name="lookup"), event("last", name="fallback"))
+
+    assert result(assertion, calls).status == "passed"
+    assert result(assertion, (calls[1], calls[0])).status == "failed"
+    assert result(assertion, calls[:1]).status == "failed"
+    assert result(assertion, (*calls, event("extra", name="audit"))).status == "failed"
+
+
+def test_tool_call_sequence_requires_complete_explicit_trace():
+    assertion = ToolCallSequence("sequence", ("lookup",))
+
+    assert result(assertion).errors[0].source == "assertion"
+    assert result(assertion, (event(),), complete=False).errors[0].source == "assertion"
+
+
+def test_json_sequence_checks_load_and_changed_order_contracts_are_incompatible(tmp_path):
+    path = tmp_path / "suite.json"
+    base = {
+        "schema_version": 1,
+        "cases": [
+            {
+                "id": "recovery",
+                "input": None,
+                "assertions": [
+                    {
+                        "id": "path",
+                        "type": "tool_call_sequence",
+                        "tools": ["lookup", "fallback"],
+                    }
+                ],
+            }
+        ],
+    }
+    trace = (event("lookup", name="lookup"), event("fallback", name="fallback"))
+    path.write_text(json.dumps(base))
+    baseline = run_suite(lambda _value: AgentResult("ok", trace), load_suite(path))
+
+    base["cases"][0]["assertions"][0]["tools"] = ["lookup", "cache", "fallback"]
+    path.write_text(json.dumps(base))
+    candidate = run_suite(lambda _value: AgentResult("ok", trace), load_suite(path))
+
+    comparison = compare_reports(baseline, candidate)
+    assert not comparison.compatible
+    assert comparison.cases[0].change == "incompatible"
+    assert any("definition" in issue for issue in comparison.cases[0].issues)
+
+
 def test_missing_argument_evidence_is_error_not_a_verdict():
     for call in [event(input=None, input_available=False), event(input="raw input")]:
         case = result(ToolArgumentsMatch("args", "get_order", {"order_id": "one"}), (call,))
@@ -154,6 +232,8 @@ def test_agent_failure_preserves_events_and_later_cases_run():
         ToolNotCalled("wrong", None),
         ToolArgumentsMatch("args", "tool", {}),
         ToolArgumentsMatch("args", "tool", {"bad": {1}}),
+        ToolCallSequence("sequence", ()),
+        ToolCallSequence("sequence", ("lookup", "")),
     ],
 )
 def test_invalid_tool_checks_rejected_before_agent_execution(assertion):
@@ -172,6 +252,8 @@ def test_invalid_tool_checks_rejected_before_agent_execution(assertion):
         {"id": "check", "type": "tool_arguments_match", "tool": "tool", "expected": None},
         {"id": "check", "type": "tool_arguments_match", "tool": "tool", "expected": {}},
         {"id": "check", "type": "tool_called", "tool": "tool", "typo": True},
+        {"id": "sequence", "type": "tool_call_sequence", "tools": "lookup, fallback"},
+        {"id": "sequence", "type": "tool_call_sequence", "tools": ["lookup", ""]},
     ],
 )
 def test_invalid_json_tool_assertions_are_configuration_errors(tmp_path, assertion):
