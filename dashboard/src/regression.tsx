@@ -53,9 +53,10 @@ export function RegressionDraft({
         }
     }
     const source = draft.data.source;
-    const original = source.run.cases.find(
-        (test: Data) => test.id === source.case_id,
-    );
+    const imported = source.kind === "recorded_example";
+    const original = imported
+        ? source.record
+        : source.run.cases.find((test: Data) => test.id === source.case_id);
     const body = {
         path: draft.path,
         fingerprint: draft.fingerprint,
@@ -70,18 +71,24 @@ export function RegressionDraft({
                 <div>
                     <h1>Create regression case</h1>
                     <p>
-                        {source.path} · {source.case_id}
-                        {source.attempt ? ` · attempt ${source.attempt}` : ""}
+                        {imported
+                            ? `${source.path} · row ${source.row} · ${source.source_id}`
+                            : `${source.path} · ${source.case_id}${source.attempt ? ` · attempt ${source.attempt}` : ""}`}
                     </p>
                 </div>
             </div>
             <p>
-                Define what the agent should do. The recorded answer is
-                reference evidence; expectations start empty.
+                {imported
+                    ? "Mapped expected output can seed a proposed check. Confirm its correctness before reviewing the draft."
+                    : "Define what the agent should do. The recorded answer is reference evidence; expectations start empty."}
             </p>
             {error && <ErrorBox error={error} />}
             <details>
-                <summary>Original failure evidence</summary>
+                <summary>
+                    {imported
+                        ? "Imported source fields"
+                        : "Original failure evidence"}
+                </summary>
                 <Json value={original} />
             </details>
             <Field
@@ -245,8 +252,10 @@ export function RegressionDraft({
                 )}
             </section>
             <p className="evidence-note">
-                The draft retains the original run and review separately. Saving
-                a suite does not run an agent or approve a baseline.
+                {imported
+                    ? "The draft retains the mapped, masked source fields."
+                    : "The draft retains the original run and review separately."}{" "}
+                Saving a suite does not run an agent or approve a baseline.
             </p>
         </section>
     );

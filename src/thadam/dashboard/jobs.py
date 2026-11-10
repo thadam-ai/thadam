@@ -14,7 +14,13 @@ from uuid import uuid4
 
 from thadam._json import validate_json
 from thadam.baseline_review import evaluation_to_dict, load_evaluation
+from thadam.comparison import compare_reports
+from thadam.comparison_reporting import comparison_to_dict
 from thadam.dashboard.workspace import Workspace
+from thadam.models import RunReport
+from thadam.reliability import compare_repeated, validate_tolerance
+from thadam.reliability_reporting import reliability_to_dict
+from thadam.repetition import RepeatedReport
 from thadam.reporting import write_json_artifact
 
 
@@ -75,6 +81,7 @@ class Jobs:
             if not allowed <= specification.keys() or specification.keys() - allowed - {
                 "async_execution",
                 "max_concurrency",
+                "verification",
             }:
                 raise ValueError("Evaluation settings have missing or unknown fields")
             validate_json(specification, "evaluation settings")
@@ -110,10 +117,95 @@ class Jobs:
             revision = specification["agent_revision"]
             if revision is not None and (not isinstance(revision, str) or not revision.strip()):
                 raise ValueError("Application revision must be non-empty or omitted")
-            self.workspace.output(specification["report"])
+            report_path = self.workspace.output(specification["report"])
+            verification = specification.get("verification")
+            if verification is not None:
+                self._validate_verification(
+                    verification,
+                    artifact["data"],
+                    attempts=attempts,
+                    mode=specification["mode"],
+                    report_path=report_path,
+                )
             return self._spawn(
                 specification, len(artifact["data"]["cases"]) * attempts, artifact["data"]
             )
+
+    def _validate_verification(
+        self,
+        verification: object,
+        suite: dict,
+        *,
+        attempts: int,
+        mode: str,
+        report_path: Path,
+    ) -> None:
+        if not isinstance(verification, dict) or verification.keys() != {
+            "baseline",
+            "baseline_fingerprint",
+            "report",
+            "max_pass_rate_drop",
+        }:
+            raise ValueError(
+                "Verification needs a baseline, fingerprint, comparison path, and policy"
+            )
+        baseline_path = verification["baseline"]
+        fingerprint = verification["baseline_fingerprint"]
+        comparison_path = verification["report"]
+        if not all(isinstance(value, str) and value for value in (baseline_path, fingerprint)):
+            raise ValueError("Choose a baseline and its current fingerprint")
+        if not isinstance(comparison_path, str) or not comparison_path:
+            raise ValueError("Choose a new comparison report path")
+        comparison_output = self.workspace.output(comparison_path)
+        if comparison_output == report_path:
+            raise ValueError("Candidate and comparison reports need different paths")
+        tolerance = validate_tolerance(verification["max_pass_rate_drop"])
+        baseline_artifact = self.workspace.read(baseline_path)
+        if baseline_artifact["fingerprint"] != fingerprint:
+            raise ValueError("Baseline changed; reload it before verifying a fix")
+        baseline = load_evaluation(self.workspace.path(baseline_path))
+        if self.workspace.read(baseline_path)["fingerprint"] != fingerprint:
+            raise ValueError("Baseline changed while it was being loaded")
+        repeated_candidate = attempts > 1 or mode == "factory"
+        if repeated_candidate:
+            if not isinstance(baseline, RepeatedReport):
+                raise ValueError("Choose a repeated baseline with matching attempts and mode")
+            expected_mode = mode
+            if mode == "fixtures":
+                simulated = any(
+                    case.get("conversation") or case.get("state_fixture") is not None
+                    for case in suite["cases"]
+                )
+                expected_mode = "simulations" if simulated else "fixtures"
+            if baseline.attempts != attempts or baseline.execution_mode != expected_mode:
+                raise ValueError("Choose a repeated baseline with matching attempts and mode")
+        elif not isinstance(baseline, RunReport):
+            raise ValueError("Choose a single-run baseline for a single candidate run")
+        verification.update(
+            baseline=baseline_path,
+            baseline_fingerprint=fingerprint,
+            report=comparison_path,
+            max_pass_rate_drop=tolerance,
+        )
+
+    def _save_verification(self, candidate, verification: dict) -> None:
+        baseline_artifact = self.workspace.read(verification["baseline"])
+        if baseline_artifact["fingerprint"] != verification["baseline_fingerprint"]:
+            raise ValueError("Baseline changed while the candidate was running")
+        baseline = load_evaluation(self.workspace.path(verification["baseline"]))
+        if isinstance(baseline, RepeatedReport) and isinstance(candidate, RepeatedReport):
+            artifact = reliability_to_dict(
+                compare_repeated(
+                    baseline,
+                    candidate,
+                    max_pass_rate_drop=verification["max_pass_rate_drop"],
+                )
+            )
+        elif isinstance(baseline, RunReport) and isinstance(candidate, RunReport):
+            artifact = comparison_to_dict(compare_reports(baseline, candidate))
+        else:
+            raise ValueError("Baseline and candidate evaluation kinds do not match")
+        self.workspace.write_new(verification["report"], artifact)
 
     def start_generation(self, specification: dict) -> dict:
         from thadam.generation import validate_request
@@ -224,6 +316,12 @@ class Jobs:
                 self.active.update(
                     state="completed", exit_code=code, completed=self.active["total"]
                 )
+                verification = self.active["settings"].get("verification")
+                if verification is not None:
+                    try:
+                        self._save_verification(evaluation, verification)
+                    except (ValueError, OSError) as error:
+                        self.active["verification_error"] = str(error)
             except (ValueError, OSError) as error:
                 self.active.update(state="error", error=str(error))
         else:

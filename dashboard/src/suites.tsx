@@ -112,6 +112,7 @@ export function SuiteEditor({
         };
     }, [changed]);
     function change(next: Data) {
+        onDirty(true);
         setText(json(next));
         setSaved(false);
         setError("");
@@ -220,7 +221,10 @@ export function SuiteEditor({
                     >
                         <input
                             value={path}
-                            onChange={(e) => setPath(e.target.value)}
+                            onChange={(e) => {
+                                onDirty(true);
+                                setPath(e.target.value);
+                            }}
                         />
                     </Field>
                     {data?.suite ? (
@@ -286,6 +290,7 @@ export function SuiteEditor({
                         spellCheck={false}
                         value={text}
                         onChange={(e) => {
+                            onDirty(true);
                             setText(e.target.value);
                             setInvalid({});
                             setSaved(false);

@@ -8,10 +8,12 @@ accepting a change.
 
 **Status:** early development. The Python SDK, CLI, local dashboard, optional
 LangGraph tracing, regression/reliability comparisons, baseline review, scenario
-suggestions, and conversation simulations work from this checkout. [PyPI v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/)
+suggestions, reviewed regression drafts, recorded-example imports, guided fix
+verification, and conversation simulations work from this checkout. [PyPI v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/)
 is published; this guide covers newer features on `main`, so use the checkout
 below for the dashboard, reliability gates, baseline review, async execution,
-scenario suggestions, and conversation simulations. The distribution name is `thadam-ai`; Python imports and
+scenario suggestions, regression review/import/verification, and conversation
+simulations. The distribution name is `thadam-ai`; Python imports and
 the CLI use `thadam`.
 
 ## Get started
@@ -62,6 +64,7 @@ Controlled demo data. [Explore the dashboard →](docs/dashboard-tour.md)
 | Compare a baseline with a candidate | [Regression comparison](docs/milestones/03-regression-comparison.md) |
 | Measure repeated-run reliability | [Reliability gates](docs/milestones/03-reliability.md) |
 | Review and approve an intentional baseline change | [Baseline review](docs/milestones/03-baseline-review.md) |
+| Create, import, and verify regression cases | [Regression case workflow](docs/milestones/04-regression-cases.md) |
 | Browse detailed examples and CLI behavior | [Detailed usage](docs/usage.md) |
 | Contribute or understand the project | [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) · [Roadmap](ROADMAP.md) |
 
