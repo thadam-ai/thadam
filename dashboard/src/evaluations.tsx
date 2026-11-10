@@ -383,8 +383,20 @@ export function JobList({
                                 Stop
                             </Button>
                         ) : job.state === "completed" ? (
-                            <Button onClick={() => onOpen(job.settings.report)}>
-                                Open result
+                            <Button
+                                onClick={() =>
+                                    onOpen(
+                                        job.settings.verification &&
+                                            !job.verification_error
+                                            ? job.settings.verification.report
+                                            : job.settings.report,
+                                    )
+                                }
+                            >
+                                {job.settings.verification &&
+                                !job.verification_error
+                                    ? "Open comparison"
+                                    : "Open result"}
                                 <ArrowRight size={13} />
                             </Button>
                         ) : null}
@@ -401,6 +413,12 @@ export function JobList({
                         />
                     )}{" "}
                     {job.error && <p className="job-error">{job.error}</p>}
+                    {job.verification_error && (
+                        <p className="job-error">
+                            Candidate saved, but its comparison failed:{" "}
+                            {job.verification_error}
+                        </p>
+                    )}
                     {expanded === job.id && (
                         <pre className="logs">
                             {detail?.logs || "No log output yet."}

@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, reviewed regression cases, result review labels, controlled tool-failure testing, and exact tool-call order assertions are implemented.
-**Next build:** import recorded examples and make fix verification easier (milestone 4.5, workflow 2/3). Creating reviewed regression cases and labeling saved results are implemented; recorded-example imports, guided fix verification, and the remaining milestone 5 workflows are planned.
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, all milestone 4.5 review/import/verification workflows, controlled tool-failure testing, and exact tool-call order assertions are implemented.
+**Next build:** complete the remaining milestone 5 boundaries for enforced deadlines and explicit external environment resets. Later milestones remain subject to validation with real projects.
 
 **Published release:** [`thadam-ai` v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/),
 released on 2026-10-30. Completed features below describe `main`; reliability
@@ -29,7 +29,7 @@ These workflows inform our priorities; the milestones below define Thadam's scop
 
 | Priority | Milestones | User benefit |
 | --- | --- | --- |
-| Next | 4.5 | Turn an observed failure into a reviewed test and verify a fix |
+| Next | 5 | Exercise failures and conversation simulations with explicit boundaries |
 | Core testing expansion | 5–7 | Test conversations and recovery, evaluate semantic behavior, and compare configurations |
 | Connect and investigate | 8–9 | Reuse existing telemetry and coding tools, and track recurring failures |
 | Longer term, after user validation | 10–11 | Delegate reliability work to an always-on AI teammate and collaborate through optional shared services |
@@ -174,7 +174,7 @@ Generated expectations are proposals. Coverage and correctness still need a deve
 
 ## 4.5. Turn real failures into reviewed regression tests
 
-**Status:** in progress. Workflow 1 and result review labels are implemented in the checkout; recorded-example imports and guided verification remain planned. [Workflow and draft contract](docs/milestones/04-regression-cases.md).
+**Status:** implemented in the checkout. [Workflow and draft contract](docs/milestones/04-regression-cases.md).
 
 **Outcome:** a developer starts with an observed failure, saves an independently
 reviewed regression case, and sees whether a candidate fix meets the same checks.
@@ -189,17 +189,17 @@ reviewed regression case, and sees whether a candidate fix meets the same checks
 ### 2. Review and import recorded examples
 
 - [x] Attach good, bad, or needs-review verdicts, notes, and failure tags to saved results without modifying the original execution evidence or gate outcome.
-- [ ] Import recorded examples through a documented JSONL/CSV format with explicit field mapping, structural validation, and duplicate review.
-- [ ] Preserve source IDs and supplied context; examples lacking trusted expectations remain reviewable drafts and cannot count as passing tests.
-- [ ] Provide configurable field masking and a data preview before importing, exporting, or sending selected examples to a provider; document redaction limits.
-- [ ] Search and filter drafts and reviewed examples by case, review state, and failure tags.
+- [x] Import recorded examples through a documented JSONL/CSV format with explicit field mapping, structural validation, and duplicate review.
+- [x] Preserve source IDs and supplied context; examples lacking expectations remain unreviewed drafts and cannot count as passing tests.
+- [x] Provide configurable field masking and a data preview before importing; document redaction limits.
+- [x] Search and filter regression drafts by case, review state, and failure tags.
 
 ### 3. Make verifying the fix easier
 
-- [ ] Run the saved reviewed suite against a deliberately selected candidate using the existing runner and progress/interruption behavior.
-- [ ] Show original and candidate evidence together, with per-check changes and existing single/repeated comparison decisions when contracts are compatible.
-- [ ] Make changed contracts or missing comparable baseline evidence explicit; require a fresh reviewed baseline when necessary.
-- [ ] Export the reviewed suite and resulting reports for the existing pytest/CI workflow; keep baseline approval a separate explicit action.
+- [x] Run a saved suite against a deliberately selected candidate using the existing runner and progress/interruption behavior.
+- [x] Show baseline and candidate evidence together, with per-check changes and existing single/repeated comparison decisions when contracts are compatible.
+- [x] Make changed contracts or missing comparable baseline evidence explicit and explain when a fresh baseline is needed.
+- [x] Export the reviewed suite and resulting reports for the existing pytest/CI workflow; keep baseline approval a separate explicit action.
 
 The observed answer is evidence, not an automatically correct expectation. Human
 labels do not overwrite recorded assertion results. Importing or reviewing an

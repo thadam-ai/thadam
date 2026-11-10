@@ -151,6 +151,7 @@ class Workspace:
                     summary=evaluation.get("summary"),
                     exit_code=data.get("exit_code"),
                     attempts=evaluation.get("attempts"),
+                    execution_mode=evaluation.get("execution_mode"),
                     agent_revision=evaluation.get("agent_revision"),
                     duration_ms=(
                         evaluation.get("summary", {}).get("duration_ms")
@@ -167,6 +168,15 @@ class Workspace:
                         else len(evaluation.get("candidates", evaluation.get("cases", [])))
                     ),
                 )
+                if artifact["kind"] == "regression_draft":
+                    source = data["source"]
+                    record = source.get("record", {})
+                    artifact.update(
+                        case_id=data["case"]["id"],
+                        source_id=source.get("source_id"),
+                        review_state="reviewed" if data["reviewed"] else "unreviewed",
+                        review_tags=record.get("tags", []),
+                    )
                 if artifact["kind"] == "result_reviews":
                     reviews = data["reviews"]
                     artifact.update(
