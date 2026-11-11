@@ -1,4 +1,9 @@
 import {
+    boundaryRequest,
+    emptyBoundary,
+    ExecutionBoundaryFields,
+} from "./execution_limits";
+import {
     Activity,
     ArrowRight,
     Check,
@@ -27,6 +32,7 @@ export function RunPanel({
     active: boolean;
     onStarted: (job: Data) => void;
 }) {
+    const [boundary, setBoundary] = useState(emptyBoundary);
     const [agents, setAgents] = useState<Data[]>([]),
         [name, setName] = useState("My agent"),
         [reference, setReference] = useState(""),
@@ -61,6 +67,7 @@ export function RunPanel({
                     attempts,
                     agent_revision: revision || null,
                     report,
+                    ...boundaryRequest(boundary, mode === "fixtures"),
                     ...(asyncExecution
                         ? {
                               async_execution: true,
@@ -180,6 +187,11 @@ export function RunPanel({
                             Execution & save settings <ChevronRight size={14} />
                         </summary>
                         <div className="form-grid">
+                            <ExecutionBoundaryFields
+                                value={boundary}
+                                onChange={setBoundary}
+                                fixtures={mode === "fixtures"}
+                            />
                             <Field label="Execution engine">
                                 <select
                                     value={asyncExecution ? "async" : "sync"}
@@ -746,6 +758,12 @@ export function CaseEvidence({ test }: { test: Data }) {
                     )}
                 </details>
             )}
+            {test.execution_limits && (
+                <details className="raw-detail">
+                    <summary>Execution limits</summary>
+                    <Json value={test.execution_limits} />
+                </details>
+            )}
             {test.state_fixture !== undefined &&
                 test.state_fixture !== null && (
                     <details className="raw-detail state-evidence" open>
@@ -755,10 +773,19 @@ export function CaseEvidence({ test }: { test: Data }) {
                                 label="Initial state"
                                 value={test.state_initial}
                             />
-                            <Json
-                                label="Final state"
-                                value={test.state_final}
-                            />
+                            {test.execution_limits &&
+                            test.events === null &&
+                            test.status === "error" ? (
+                                <p className="unavailable">
+                                    Final state unavailable. No worker evidence
+                                    was received.
+                                </p>
+                            ) : (
+                                <Json
+                                    label="Final state"
+                                    value={test.state_final}
+                                />
+                            )}
                         </div>
                     </details>
                 )}

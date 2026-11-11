@@ -31,7 +31,7 @@ Ordinary report writes cannot replace approved baseline artifacts. Approval is a
 local review workflow, not identity authentication, an automatic CI update, or a
 GitHub merge.
 
-Synchronous engine APIs are sequential and execute trusted code in the current process; explicit async APIs bound cooperative case overlap. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. There is no enforced agent timeout, sandbox, or hidden-reasoning capture. Reviewable scenario suggestions are optional and do not execute agents. Re-read the code before assuming an API exists.
+By default synchronous engine APIs are sequential and execute trusted code in the current process; explicit async APIs bound cooperative case overlap. LangGraph tracing covers public callbacks in the propagated runnable configuration; ordinary Python functions do not automatically emit events. The adapter uses fresh checkpoint thread IDs. Defaults have no enforced timeout. Explicit ExecutionLimits deadlines use fresh spawned case processes; there is no sandbox or hidden-reasoning capture. Reviewable scenario suggestions are optional and do not execute agents. Re-read the code before assuming an API exists.
 
 ## Repository map
 
@@ -116,8 +116,7 @@ with `npm ci` and `npm run build` from `dashboard/`. End users need no Node tool
 Keep project confinement, ephemeral local sessions, explicit actions, file/revision
 and stale-review guards, one active process, bounded logs and interruption behavior
 intact. SDK progress observers receive independent completed-case snapshots;
-interrupted jobs never publish completed reports. No hidden-reasoning, sandbox or
-new timeout guarantees. Run `pytest` with `'.[dev,dashboard]'` plus `httpx` for API
+interrupted jobs never publish completed reports. Preserve explicit deadline worker shutdown; no hidden-reasoning or sandbox guarantees. Run `pytest` with `'.[dev,dashboard]'` plus `httpx` for API
 checks and npm tests/type/build/format checks. Core-only environments skip optional
 API tests and must retain dependency-free imports. CI has separate Dashboard jobs
 on Python 3.10/3.14; actionlint validates workflow edits. Baseline/report schemas
@@ -188,5 +187,4 @@ and `tools.state` resets from its declared initial value for each attempt.
 checks. Reports retain the script, available turn responses, initial/final state
 and partial evidence after errors. Conversation and initial-state contracts
 participate in comparison and baseline review. The dashboard edits schema-4
-suites in JSON view and displays transcript/state evidence. External environment
-external environment resets and enforced deadlines remain planned.
+suites in JSON view and displays transcript/state evidence. See `docs/milestones/05-execution-boundaries.md`: ExecutionLimits supplies turn caps and opt-in per-case spawned deadlines; EnvironmentHooks supplies setup/reset/cleanup. Runs with limits use schema 7; repeated deadline/turn-limited evaluations use schema 4. Limits participate in comparison and baseline review. Force termination may prevent cleanup; never claim successful remote rollback. Preserve prior schemas when limits are absent.

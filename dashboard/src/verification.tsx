@@ -1,3 +1,8 @@
+import {
+    boundaryRequest,
+    emptyBoundary,
+    ExecutionBoundaryFields,
+} from "./execution_limits";
 import { Activity, Check, Play, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, type Catalog, type Data, type Item } from "./api";
@@ -14,6 +19,7 @@ export function VerificationPanel({
     onStarted: (job: Data) => void;
     onOpen: (path: string) => void;
 }) {
+    const [boundary, setBoundary] = useState(emptyBoundary);
     const [suite, setSuite] = useState(
         catalog.items.find((item) => item.kind === "suite")?.path || "",
     );
@@ -96,6 +102,10 @@ export function VerificationPanel({
                 attempts,
                 agent_revision: revision || null,
                 report,
+                ...boundaryRequest(
+                    boundary,
+                    requiresFixtures || mode === "fixtures",
+                ),
                 ...(asyncExecution
                     ? { async_execution: true, max_concurrency: concurrency }
                     : {}),
@@ -264,6 +274,11 @@ export function VerificationPanel({
             <details className="advanced-settings">
                 <summary>Run and report settings</summary>
                 <div className="form-grid">
+                    <ExecutionBoundaryFields
+                        value={boundary}
+                        onChange={setBoundary}
+                        fixtures={requiresFixtures || mode === "fixtures"}
+                    />
                     <Field label="Execution engine">
                         <select
                             value={asyncExecution ? "async" : "sync"}

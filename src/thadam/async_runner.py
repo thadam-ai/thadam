@@ -7,10 +7,17 @@ from copy import deepcopy
 from dataclasses import replace
 from time import perf_counter
 
-from thadam.adapters.python import validate_agent
 from thadam.errors import AgentConfigurationError, SuiteValidationError
 from thadam.fixtures import FixtureAgent
-from thadam.models import Agent, AsyncAgent, CaseResult, RunReport, SuiteIdentity, TestCase
+from thadam.models import (
+    Agent,
+    AsyncAgent,
+    CaseResult,
+    ExecutionLimits,
+    RunReport,
+    SuiteIdentity,
+    TestCase,
+)
 from thadam.repetition import RepeatedReport, validate_factory
 from thadam.runner import _agent_error, _finish_case, _prepare_run
 
@@ -31,6 +38,7 @@ async def run_suite_async(
     agent_revision: str | None = None,
     suite: SuiteIdentity | None = None,
     on_case_complete: Callable[[CaseResult], None] | None = None,
+    limits: ExecutionLimits | None = None,
 ) -> RunReport:
     """Await an agent with at most max_concurrency in-flight case invocations.
 
@@ -38,8 +46,8 @@ async def run_suite_async(
     retain suite order; synchronous observers receive independent snapshots in
     completion order. Agent/output/verifier errors retain the synchronous runner's
     semantics. Cancellation and observer failures cancel and await all workers and
-    propagate without returning a completed report. No retries, timeout, threads,
-    or automatic resource cleanup are introduced. Sync callables may participate
+    propagate without returning a completed report. Explicit limits select a fresh
+    spawned case process for deadlines; otherwise execution remains in-process. Sync callables may participate
     but block the event loop until they return; verifiers remain synchronous.
 
     Shared agents and external resources must support the requested overlap.
@@ -58,30 +66,46 @@ async def run_suite_async(
     identity, prepared, definitions = _prepare_run(
         agent, cases, agent_revision, suite, on_case_complete, allow_async=True
     )
+    from thadam.limits import validate_limits
+    from thadam.process_execution import execute_case_async, validate_process_inputs
+
+    validate_limits(limits)
+    if limits is not None and limits.timeout_seconds is not None:
+        validate_process_inputs(agent, prepared)
     results: dict[int, CaseResult] = {}
     pending = iter(enumerate(prepared))
 
     async def worker():
         for index, case in pending:
-            started = perf_counter()
-            try:
-                output = (
-                    agent.ainvoke_case(
-                        case.tool_fixtures,
-                        deepcopy(case.input),
-                        state_fixture=case.state_fixture,
-                        conversation=case.conversation,
-                    )
-                    if isinstance(agent, FixtureAgent)
-                    else agent(deepcopy(case.input))
+            if limits is not None and limits.timeout_seconds is not None:
+                result = await execute_case_async(
+                    agent,
+                    case,
+                    limits.timeout_seconds,
+                    limits.cleanup_timeout_seconds,
+                    max_turns=limits.max_turns,
                 )
-                if inspect.isawaitable(output):
-                    output = await output
-            except (Exception, SystemExit) as error:
-                result = _agent_error(case, started, error)
             else:
-                result = _finish_case(output, case, started)
-            result = replace(result, check_definitions=definitions[index])
+                started = perf_counter()
+                try:
+                    output = (
+                        agent.ainvoke_case(
+                            case.tool_fixtures,
+                            deepcopy(case.input),
+                            state_fixture=case.state_fixture,
+                            conversation=case.conversation,
+                            max_turns=None if limits is None else limits.max_turns,
+                        )
+                        if isinstance(agent, FixtureAgent)
+                        else agent(deepcopy(case.input))
+                    )
+                    if inspect.isawaitable(output):
+                        output = await output
+                except (Exception, SystemExit) as error:
+                    result = _agent_error(case, started, error)
+                else:
+                    result = _finish_case(output, case, started)
+            result = replace(result, check_definitions=definitions[index], execution_limits=limits)
             results[index] = result
             if on_case_complete is not None:
                 on_case_complete(deepcopy(result))
@@ -111,6 +135,7 @@ async def run_repeated_async(
     agent_revision: str | None = None,
     suite: SuiteIdentity | None = None,
     on_case_complete: Callable[[CaseResult], None] | None = None,
+    limits: ExecutionLimits | None = None,
 ) -> RepeatedReport:
     """Run ordered async suite attempts, bounding overlap within each attempt.
 
@@ -119,7 +144,8 @@ async def run_repeated_async(
     boundary. Attempts never overlap. Errors continue; cancellation/observer
     failure propagates with no completed evaluation. The caller owns agent and
     verifier state, external resources, scheduling consistency and cleanup.
-    Existing shared/factory report modes and schemas are preserved.
+    Without limits, existing modes and schemas are preserved. Explicit limits use
+    schema-7 runs inside a schema-4 repeated envelope.
     """
     validate_concurrency(max_concurrency)
     if type(attempts) is not int or attempts < 2:
@@ -129,13 +155,9 @@ async def run_repeated_async(
     if agent_factory is not None:
         validate_factory(agent_factory, allow_async=True)
 
-        async def selected(value):
-            fresh = agent_factory()
-            if inspect.isawaitable(fresh):
-                fresh = await fresh
-            validate_agent(fresh, allow_async=True)
-            output = fresh(value)
-            return await output if inspect.isawaitable(output) else output
+        from thadam.factory_agents import AsyncFactoryAgent
+
+        selected = AsyncFactoryAgent(agent_factory)
     else:
         selected = agent
     # Snapshot once before the first invocation/factory, including later attempts.
@@ -152,6 +174,7 @@ async def run_repeated_async(
                 agent_revision=agent_revision,
                 suite=identity,
                 on_case_complete=on_case_complete,
+                limits=limits,
             )
         )
     return RepeatedReport(

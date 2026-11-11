@@ -42,7 +42,7 @@ These modules implement the first local execution flow. Add new modules when the
 | `src/thadam/adapters/python.py` | Validate the synchronous Python callable contract | Require one positional input; runner owns invocation |
 | `src/thadam/adapters/langgraph.py` | Execute compiled graphs with public model/tool callbacks | Optional imports, per-invocation collectors, JSON state mapping, fresh checkpoint threads |
 | `src/thadam/events.py` | Validate and snapshot execution evidence | Reject invalid traces; preserve unknown-versus-empty semantics |
-| `src/thadam/fixtures.py` | Strict tool scripts, observable JSON state, controlled handles and fresh-agent factories | Fresh state per case attempt, shared session across scripted turns, sticky unplanned calls; no real-service fallback or enforced timeout |
+| `src/thadam/fixtures.py` | Strict tool scripts, observable JSON state, controlled handles and fresh-agent factories | Fresh state per case attempt, shared session across scripted turns, sticky unplanned calls; no real-service fallback; deadlines are owned by process_execution |
 | `src/thadam/assertions.py` | Built-in assertions and Python verifier contract | Return evidence; do not invoke the agent |
 | `src/thadam/contracts.py` | Snapshot and compare declared check definitions | Keep declared expectations separate from observed results |
 | `src/thadam/report_loading.py` | Strict run-report parsing and evidence validation | Reject missing, inconsistent, or unsupported data without importing agent code |
@@ -240,3 +240,15 @@ resets for every case attempt. Simulation suites use suite schema 4, reports use
 schema 6, and repeated simulation wrappers use schema 3. Strict loading and
 comparison include the script and initial state without running application code.
 See [the simulation contract](milestones/05-simulations.md).
+
+## Explicit execution boundaries
+
+`limits.py` validates public `ExecutionLimits`; runners apply the policy uniformly
+and record it per case. `process_execution.py` owns fresh spawned workers, parent
+wall deadlines, snapshot IPC, cancellation, parent-death detection and bounded
+termination. `environment.py` owns explicit trusted setup/reset/cleanup hooks;
+`fixtures.py` scopes their handles to an attempt and publishes partial snapshots.
+`factory_agents.py` keeps repeated factories picklable and construction inside
+the worker. [Execution boundaries](milestones/05-execution-boundaries.md) describes
+run schema 7, repeated schema 4, compatibility and cleanup limits. No suite format
+change or evaluator expansion is introduced.

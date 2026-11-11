@@ -208,9 +208,12 @@ def regression_draft(
     if case is None:
         raise ValueError("Choose a case in the source run")
     draft_case = {"id": case_id + "-regression", "input": case["input"], "assertions": []}
-    if "tool_fixtures" in case:
+    if case.get("tool_fixtures") is not None:
         draft_case["tool_fixtures"] = deepcopy(case["tool_fixtures"])
-    if run["schema_version"] == 6:
+    if run["schema_version"] == 6 or (
+        run["schema_version"] == 7
+        and (case.get("conversation") or case.get("state_fixture") is not None)
+    ):
         draft_case.update(
             tool_fixtures=deepcopy(case["tool_fixtures"]),
             conversation=deepcopy(case["conversation"]),

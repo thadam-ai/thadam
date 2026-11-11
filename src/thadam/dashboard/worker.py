@@ -11,6 +11,7 @@ from pathlib import Path
 from thadam.async_runner import run_repeated_async, run_suite_async
 from thadam.cli import _load_agent, _load_reference
 from thadam.fixtures import FixtureAgent
+from thadam.limits import limits_from_dict
 from thadam.repetition import run_repeated
 from thadam.repetition_reporting import write_repeated
 from thadam.reporting import write_report
@@ -72,12 +73,18 @@ def main() -> int:
         options = (
             {"max_concurrency": specification.get("max_concurrency", 1)} if async_execution else {}
         )
+        options["limits"] = limits_from_dict(specification.get("execution_limits"))
         repeat_runner = run_repeated_async if async_execution else run_repeated
         suite_runner = run_suite_async if async_execution else run_suite
         reference = specification["reference"]
         revision = specification.get("agent_revision") or None
         fixture_agent = (
-            FixtureAgent(_load_reference(reference))
+            FixtureAgent(
+                _load_reference(reference),
+                environment=_load_reference(specification["environment"])
+                if specification.get("environment")
+                else None,
+            )
             if specification["mode"] == "fixtures"
             else None
         )

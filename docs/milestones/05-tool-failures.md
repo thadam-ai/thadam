@@ -3,8 +3,8 @@
 **Status:** implemented. The first slice adds scripted tool responses and
 recovery checks through the SDK, CLI and local dashboard. The second adds scripted
 conversations and resettable JSON state; see
-[conversation and state simulations](05-simulations.md). External environment
-resets and enforced execution timeouts remain planned. Exact call-order checks are
+[conversation and state simulations](05-simulations.md). Explicit [execution limits and environment hooks](05-execution-boundaries.md)
+add external setup/reset/cleanup and opt-in spawned deadlines. Exact call-order checks are
 supported by `ToolCallSequence`.
 
 ## Run the controlled example
@@ -125,7 +125,7 @@ never invokes a real-service fallback.
   calls. Evidence must be complete and explicit, just as for other tool checks.
 - Call bounds are assertions evaluated after execution. They do not interrupt an
   infinite loop. A scripted `TimeoutError` does not wait or stop a hung agent.
-  Sync execution has no enforced timeout; async cancellation is cooperative and
+  Default sync execution has no deadline; default async cancellation is cooperative and
   drains owned workers. Dashboard Stop retains its existing process controls and
   never publishes an interrupted evaluation as completed.
 - `ToolCallSequence(id, tools)` checks the exact start-order sequence of every
@@ -250,5 +250,6 @@ excessive retries, sticky unscripted/exhausted calls, unused steps, repetition,
 fresh factories, independent snapshots, async overlap/cancellation, strict saved
 evidence, changed unused contracts, revision guards, CLI imports from a temporary
 project, dashboard APIs/forms, and real sync/async graph callbacks. Default checks
-need no model credentials or hosted service. Milestone 5 does not implement
-resettable external systems, real-time delay simulation, or enforced deadlines.
+need no model credentials or hosted service. Explicit environment hooks and process deadlines are documented in
+[execution boundaries](05-execution-boundaries.md). Real-time delay simulation
+is outside the controlled script contract.

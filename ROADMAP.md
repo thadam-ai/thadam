@@ -2,8 +2,8 @@
 
 Thadam is an open-source testing, evaluation, and reliability tool for AI agents.
 
-**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, all milestone 4.5 review/import/verification workflows, controlled tool-failure testing, and exact tool-call order assertions are implemented.
-**Next build:** complete the remaining milestone 5 boundaries for enforced deadlines and explicit external environment resets. Later milestones remain subject to validation with real projects.
+**Current state:** local execution, tracing, regression/reliability gates, suite revisions, baseline review, the operational local dashboard, reviewable scenario suggestions, all milestone 4.5 review/import/verification workflows, controlled tool-failure testing, exact tool-call order assertions, execution limits and external environment hooks are implemented.
+**Next build:** validate the completed milestone 5 workflow with real projects and prepare a follow-up release. Milestone 6 remains planned.
 
 **Published release:** [`thadam-ai` v0.3.0](https://pypi.org/project/thadam-ai/0.3.0/),
 released on 2026-10-30. Completed features below describe `main`; reliability
@@ -213,7 +213,7 @@ Include an import with incomplete evidence and an incompatible comparison path.
 
 ## 5. Exercise failures and conversation simulations
 
-**Status:** partially implemented. Controlled tool failures, retry-count and call-order checks, scripted conversations, and resettable JSON state fixtures are available; enforced deadlines and external environment resets remain planned.
+**Status:** implemented in the checkout. Controlled tool failures, retry-count and call-order checks, scripted conversations, resettable JSON state, explicit external environment hooks, turn limits and opt-in process deadlines are available.
 
 **Outcome:** a developer checks whether an agent completes a conversation and
 recovers from controlled failures while preserving the expected state.
@@ -224,8 +224,9 @@ recovers from controlled failures while preserving the expected state.
 - [x] Assert inclusive tool-call/retry bounds and recovery through explicit output/tool checks.
 - [x] Assert the exact start-order sequence of every observed tool call, including failed attempts.
 - [x] Assert allowed observable state changes and exact final JSON state.
-- [x] Specify scripted timeout errors, cooperative async cancellation and existing dashboard interruption for current execution modes; no enforced execution deadline.
-- [ ] Specify conversation turn limits, enforced deadlines and additional cleanup behavior before offering enforcement guarantees.
+- [x] Specify scripted timeout errors, cooperative async cancellation and existing dashboard interruption for default execution modes.
+- [x] Implement explicit conversation turn caps, per-case process deadlines, bounded termination, partial evidence and documented cleanup behavior.
+- [x] Add explicit per-attempt external environment setup/reset/cleanup hooks and retain reset/cleanup failures as errors.
 - [x] Add resettable JSON state fixtures and retain partial conversation/tool evidence on failure.
 - [x] Save discovered single/repeated case failures through milestone 4.5's reviewed regression workflow, retaining controlled fixture scripts.
 
@@ -243,7 +244,8 @@ State checks bound changed top-level keys and can require an exact final state.
 Scripts and initial state participate in compatibility and baseline review.
 See [conversation and state simulations](docs/milestones/05-simulations.md).
 
-External environment resets and enforced deadlines remain planned. Any later
+See [execution limits and external environments](docs/milestones/05-execution-boundaries.md)
+for process/cleanup boundaries and schema-7 runs/schema-4 repeated artifacts. Any later
 model-driven user simulator needs explicit budgets, stopping
 rules, recorded configuration, and a supplied success criterion. Scenario
 execution does not imply sandboxing or hidden-reasoning access.

@@ -62,8 +62,9 @@ is emitted in completion order and interruption never publishes a completed repo
   remains a per-case error. `KeyboardInterrupt` propagates.
 
 Concurrency is cooperative. Blocking sync code blocks the event loop. An agent
-that suppresses cancellation can delay shutdown; no enforced timeout, sandbox,
-automatic retries, provider selection or implicit resource cleanup is introduced.
+that suppresses cancellation can delay shutdown. Defaults introduce no enforced
+timeout, sandbox, automatic retries, provider selection or implicit resource
+cleanup.
 Callers own external side effects, shared-agent reentrancy, resource limits,
 verifier state and cleanup. A factory does not reset global/external resources.
 
@@ -95,3 +96,8 @@ Controlled tests cover overlap bounds, ordering, immutable evidence, report
 round trips, factory construction, continuation after errors, cancellation and
 observer cleanup, invalid settings before imports, CLI execution and dashboard
 jobs. All examples can run without model keys or external services.
+
+Optional `limits=ExecutionLimits(...)` selects turn caps or fresh spawned case
+processes for deadlines; `EnvironmentHooks` supplies explicit cleanup. These are
+documented in [execution boundaries](05-execution-boundaries.md). Legacy default
+execution and concurrency semantics above remain in effect without a deadline.
