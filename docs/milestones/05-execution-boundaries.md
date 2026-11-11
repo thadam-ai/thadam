@@ -60,8 +60,7 @@ subprocesses or remote service requests. This process boundary is not a sandbox.
 from thadam import EnvironmentHooks, FixtureAgent
 
 # These functions live at module scope in your application.
-environment = EnvironmentHooks(setup=create_database, reset=seed_database,
-                               cleanup=dispose_database)
+environment = EnvironmentHooks(setup=create_database, reset=seed_database, cleanup=dispose_database)
 agent = FixtureAgent(create_agent, environment=environment)
 ```
 
