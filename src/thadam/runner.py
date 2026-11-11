@@ -30,6 +30,7 @@ from thadam.models import (
     CheckDefinition,
     ConversationTurnResult,
     ExecutionEvent,
+    ExecutionLimits,
     RunReport,
     SuiteIdentity,
     TestCase,
@@ -44,6 +45,7 @@ def run_suite(
     agent_revision: str | None = None,
     suite: SuiteIdentity | None = None,
     on_case_complete: Callable[[CaseResult], None] | None = None,
+    limits: ExecutionLimits | None = None,
 ) -> RunReport:
     """Validate the whole suite, then execute each case exactly once in input order.
 
@@ -51,7 +53,10 @@ def run_suite(
     for invalid configuration. Agent/output/verifier errors are recorded per case;
     KeyboardInterrupt propagates. SystemExit from tested code is a case error,
     including exit(0), so an aborted case cannot masquerade as a passing run.
-    No retries or timeouts are imposed.
+    Defaults impose no retries or deadlines. limits optionally bounds turns and
+    runs each case in a fresh spawned process when a deadline is requested.
+    Deadline mode requires picklable, importable agents/verifiers and does not
+    retain shared callable mutations between cases.
     agent_revision is optional explicit application metadata, not an inferred Git revision.
     suite supplies explicit identity/revision for plain case sequences; TestSuite
     carries it automatically. Conflicting identities are rejected before execution.
@@ -61,9 +66,26 @@ def run_suite(
     identity, validated, definitions = _prepare_run(
         agent, cases, agent_revision, suite, on_case_complete
     )
+    from thadam.limits import validate_limits
+    from thadam.process_execution import execute_case, validate_process_inputs
+
+    validate_limits(limits)
+    if limits is not None and limits.timeout_seconds is not None:
+        validate_process_inputs(agent, validated)
     results = []
     for case, checks in zip(validated, definitions):
-        result = replace(_run_case(agent, case), check_definitions=checks)
+        result = (
+            execute_case(
+                agent,
+                case,
+                limits.timeout_seconds,
+                limits.cleanup_timeout_seconds,
+                max_turns=limits.max_turns,
+            )
+            if limits is not None and limits.timeout_seconds is not None
+            else _run_case(agent, case, max_turns=None if limits is None else limits.max_turns)
+        )
+        result = replace(result, check_definitions=checks, execution_limits=limits)
         results.append(result)
         if on_case_complete is not None:
             on_case_complete(deepcopy(result))
@@ -130,7 +152,7 @@ def _prepare_run(
     return identity, validated, definitions
 
 
-def _run_case(agent: Agent, case: TestCase) -> CaseResult:
+def _run_case(agent: Agent, case: TestCase, *, max_turns: int | None = None) -> CaseResult:
     started = perf_counter()
     try:
         if isinstance(agent, FixtureAgent):
@@ -139,6 +161,7 @@ def _run_case(agent: Agent, case: TestCase) -> CaseResult:
                 deepcopy(case.input),
                 state_fixture=case.state_fixture,
                 conversation=case.conversation,
+                max_turns=max_turns,
             )
         else:
             output = agent(deepcopy(case.input))

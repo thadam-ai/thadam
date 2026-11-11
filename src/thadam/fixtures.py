@@ -3,9 +3,10 @@
 No real tool is invoked. Factories connect handles to their own agents; only
 those handles are controlled. Async tools return immediately without simulating
 wall-clock delay. Fixture errors remain sticky even if application code catches
-them. External resources and detached application work remain caller-owned.
+them. External lifecycle hooks are explicit; detached work remains caller-owned.
 """
 
+import asyncio
 import inspect
 from copy import deepcopy
 from dataclasses import replace
@@ -16,6 +17,13 @@ from uuid import uuid4
 
 from thadam._json import json_equal, validate_json
 from thadam.adapters.python import validate_agent
+from thadam.environment import (
+    EnvironmentHooks,
+    EnvironmentLifecycleError,
+    call_hook,
+    call_hook_async,
+    cleanup_async,
+)
 from thadam.errors import (
     AgentConfigurationError,
     AgentExecutionError,
@@ -197,6 +205,41 @@ class FixtureTools:
         self._lock = RLock()
         self._started = perf_counter()
         self._closed = False
+        self._environment = None
+        self._environment_available = False
+        self._lifecycle_warnings = []
+        self._on_snapshot = None
+        self._conversation_results = ()
+        self._child_events = ()
+        self._snapshot_output = None
+
+    @property
+    def environment(self) -> object:
+        """Return this attempt's trusted external handle, without copying it."""
+        if self._closed or not self._environment_available:
+            message = "No active external environment is available"
+            self._violations.append(message)
+            raise FixtureConfigurationError(message)
+        return self._environment
+
+    def _snapshot(self) -> None:
+        if self._on_snapshot is not None:
+            initial, final = self.state_snapshot()
+            self._on_snapshot(
+                AgentResult(
+                    deepcopy(self._snapshot_output),
+                    tuple(
+                        sorted(
+                            tuple(self._events) + self._child_events, key=lambda e: e.started_at_ms
+                        )
+                    ),
+                    False,
+                    ("Execution in progress",) + tuple(self._lifecycle_warnings),
+                    self._conversation_results,
+                    initial,
+                    final,
+                )
+            )
 
     @property
     def state(self) -> "FixtureState":
@@ -226,6 +269,7 @@ class FixtureTools:
                 self._violations.append(str(error))
                 raise FixtureConfigurationError(str(error)) from error
             self._state = deepcopy(value)
+            self._snapshot()
 
     def state_snapshot(self) -> tuple[JSONValue, JSONValue]:
         """Return independent initial and final state snapshots for the report."""
@@ -241,6 +285,7 @@ class FixtureTools:
         with self._lock:
             if self._closed:
                 raise FixtureConfigurationError("Fixture tool used after its invocation ended")
+            self._snapshot()
             started = perf_counter()
             available = False
             value = None
@@ -283,6 +328,7 @@ class FixtureTools:
                     error=None if error is None else EventError(type(error).__name__, str(error)),
                 )
             )
+            self._snapshot()
             if error is not None:
                 raise error
             return value
@@ -328,6 +374,7 @@ class FixtureTools:
                 events = tuple(self._events)
                 complete, warnings = False, ("Invalid child trace; only fixture evidence retained",)
                 error = FixtureTraceError(str(invalid))
+            warnings = tuple(warnings) + tuple(self._lifecycle_warnings)
             if self._violations:
                 error = FixtureConfigurationError("; ".join(self._violations))
             if error is not None:
@@ -363,17 +410,24 @@ class FixtureAgent:
     factory receives FixtureTools and returns a normal one-input agent. Async
     execution also accepts awaitable factories and agents. Factory construction
     is inside the case's timing/error boundary. No cleanup of application-owned
-    resources or automatic retry/timeout is provided.
+    resources is provided unless explicit EnvironmentHooks are supplied.
     """
 
-    def __init__(self, factory: FixtureFactory) -> None:
+    def __init__(
+        self, factory: FixtureFactory, *, environment: EnvironmentHooks | None = None
+    ) -> None:
         self.factory = factory
+        self.environment = environment
 
     def __call__(self, value: JSONValue) -> AgentResult:
         raise AgentConfigurationError("Use FixtureAgent through a Thadam runner")
 
     def validate(self, *, allow_async: bool = False) -> None:
         validate_agent(self.factory, allow_async=allow_async)
+        if self.environment is not None:
+            if not isinstance(self.environment, EnvironmentHooks):
+                raise AgentConfigurationError("environment must be EnvironmentHooks or None")
+            self.environment.validate(allow_async=allow_async)
 
     def invoke_case(
         self,
@@ -382,8 +436,204 @@ class FixtureAgent:
         *,
         state_fixture: StateFixture | None = None,
         conversation: tuple[ConversationTurn, ...] = (),
+        on_snapshot: Callable[[AgentResult], None] | None = None,
+        max_turns: int | None = None,
     ) -> AgentResult:
+        """Execute one case with fresh tools and optional external lifecycle hooks.
+
+        Internal snapshot observers receive partial evidence; max_turns stops
+        before the next excess turn. Execution failures retain evidence through
+        AgentExecutionError. Async hooks require ainvoke_case.
+        """
+        self.validate()
         tools = FixtureTools(scripts, state_fixture)
+        tools._on_snapshot = on_snapshot
+        tools._max_turns = max_turns
+        output, error = None, None
+        hooks = self.environment
+        try:
+            tools._snapshot()
+            if hooks is not None:
+                tools._environment = call_hook(hooks.setup, phase="setup")
+                tools._environment_available = True
+                tools._snapshot()
+                if hooks.reset is not None:
+                    call_hook(hooks.reset, tools._environment, phase="reset")
+                    tools._snapshot()
+            output = self._invoke_case(
+                scripts, value, state_fixture=state_fixture, conversation=conversation, _tools=tools
+            )
+        except (Exception, SystemExit) as caught:
+            error = caught
+        finally:
+            try:
+                if isinstance(output, AgentResult):
+                    tools._snapshot_output = output.output
+                    tools._child_events = tuple(
+                        e
+                        for e in output.events
+                        if e.id not in {owned.id for owned in tools._events}
+                    )
+                elif isinstance(error, AgentExecutionError):
+                    tools._child_events = tuple(
+                        e for e in error.events if e.id not in {owned.id for owned in tools._events}
+                    )
+                try:
+                    tools._snapshot()
+                except (Exception, SystemExit) as snapshot_error:
+                    if error is None:
+                        error = snapshot_error
+                    else:
+                        tools._lifecycle_warnings.append(
+                            f"Evidence snapshot also failed: {type(snapshot_error).__name__}: {snapshot_error}"
+                        )
+                tools._closed = False
+                if hooks is not None and tools._environment_available and hooks.cleanup is not None:
+                    call_hook(hooks.cleanup, tools._environment)
+                    tools._snapshot()
+            except (Exception, SystemExit) as cleanup_error:
+                if error is None:
+                    error = EnvironmentLifecycleError(
+                        f"Environment cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+                else:
+                    tools._lifecycle_warnings.append(
+                        f"Environment cleanup also failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+            finally:
+                try:
+                    tools._snapshot()
+                except (Exception, SystemExit) as snapshot_error:
+                    if error is None:
+                        error = snapshot_error
+                    else:
+                        tools._lifecycle_warnings.append(
+                            f"Evidence snapshot also failed: {type(snapshot_error).__name__}: {snapshot_error}"
+                        )
+                tools._closed = True
+        if isinstance(output, AgentResult):
+            output = replace(
+                output,
+                events=tuple(
+                    e for e in output.events if e.id not in {owned.id for owned in tools._events}
+                ),
+            )
+        if isinstance(error, AgentExecutionError):
+            error.events = tuple(
+                e for e in error.events if e.id not in {owned.id for owned in tools._events}
+            )
+        return tools._finish(output, error, 0.0)
+
+    async def ainvoke_case(
+        self,
+        scripts: dict[str, ToolScript],
+        value: JSONValue,
+        *,
+        state_fixture: StateFixture | None = None,
+        conversation: tuple[ConversationTurn, ...] = (),
+        on_snapshot: Callable[[AgentResult], None] | None = None,
+        max_turns: int | None = None,
+    ) -> AgentResult:
+        """Await a fresh case attempt and drain configured cleanup on cancellation."""
+        self.validate(allow_async=True)
+        tools = FixtureTools(scripts, state_fixture)
+        tools._on_snapshot = on_snapshot
+        tools._max_turns = max_turns
+        output, error, cancelled = None, None, None
+        hooks = self.environment
+        try:
+            tools._snapshot()
+            if hooks is not None:
+                tools._environment = await call_hook_async(hooks.setup, phase="setup")
+                tools._environment_available = True
+                tools._snapshot()
+                if hooks.reset is not None:
+                    await call_hook_async(hooks.reset, tools._environment, phase="reset")
+                    tools._snapshot()
+            output = await self._ainvoke_case(
+                scripts, value, state_fixture=state_fixture, conversation=conversation, _tools=tools
+            )
+        except asyncio.CancelledError as caught:
+            cancelled = caught
+        except (Exception, SystemExit) as caught:
+            error = caught
+        finally:
+            try:
+                if isinstance(output, AgentResult):
+                    tools._snapshot_output = output.output
+                    tools._child_events = tuple(
+                        e
+                        for e in output.events
+                        if e.id not in {owned.id for owned in tools._events}
+                    )
+                elif isinstance(error, AgentExecutionError):
+                    tools._child_events = tuple(
+                        e for e in error.events if e.id not in {owned.id for owned in tools._events}
+                    )
+                try:
+                    tools._snapshot()
+                except (Exception, SystemExit) as snapshot_error:
+                    if error is None:
+                        error = snapshot_error
+                    else:
+                        tools._lifecycle_warnings.append(
+                            f"Evidence snapshot also failed: {type(snapshot_error).__name__}: {snapshot_error}"
+                        )
+                tools._closed = False
+                if hooks is not None and tools._environment_available and hooks.cleanup is not None:
+                    await cleanup_async(hooks.cleanup, tools._environment)
+                    tools._snapshot()
+            except asyncio.CancelledError as caught:
+                cancelled = caught
+            except (Exception, SystemExit) as cleanup_error:
+                if cancelled is not None:
+                    tools._lifecycle_warnings.append(
+                        f"Environment cleanup failed during cancellation: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+                if error is None:
+                    error = EnvironmentLifecycleError(
+                        f"Environment cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+                else:
+                    tools._lifecycle_warnings.append(
+                        f"Environment cleanup also failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+            finally:
+                try:
+                    tools._snapshot()
+                except (Exception, SystemExit) as snapshot_error:
+                    if error is None:
+                        error = snapshot_error
+                    else:
+                        tools._lifecycle_warnings.append(
+                            f"Evidence snapshot also failed: {type(snapshot_error).__name__}: {snapshot_error}"
+                        )
+                tools._closed = True
+        if cancelled is not None:
+            raise cancelled
+        if isinstance(output, AgentResult):
+            output = replace(
+                output,
+                events=tuple(
+                    e for e in output.events if e.id not in {owned.id for owned in tools._events}
+                ),
+            )
+        if isinstance(error, AgentExecutionError):
+            error.events = tuple(
+                e for e in error.events if e.id not in {owned.id for owned in tools._events}
+            )
+        return tools._finish(output, error, 0.0)
+
+    def _invoke_case(
+        self,
+        scripts: dict[str, ToolScript],
+        value: JSONValue,
+        *,
+        state_fixture: StateFixture | None = None,
+        conversation: tuple[ConversationTurn, ...] = (),
+        _tools: FixtureTools | None = None,
+    ) -> AgentResult:
+        tools = _tools if _tools is not None else FixtureTools(scripts, state_fixture)
         offset = 0.0
         try:
             agent = self.factory(tools)
@@ -403,15 +653,16 @@ class FixtureAgent:
             tools._closed = True
         return tools._finish(output, None, offset)
 
-    async def ainvoke_case(
+    async def _ainvoke_case(
         self,
         scripts: dict[str, ToolScript],
         value: JSONValue,
         *,
         state_fixture: StateFixture | None = None,
         conversation: tuple[ConversationTurn, ...] = (),
+        _tools: FixtureTools | None = None,
     ) -> AgentResult:
-        tools = FixtureTools(scripts, state_fixture)
+        tools = _tools if _tools is not None else FixtureTools(scripts, state_fixture)
         offset = 0.0
         try:
             agent = self.factory(tools)
@@ -494,6 +745,16 @@ def _sync_conversation(agent: Agent, value: JSONValue, turns, tools: FixtureTool
     complete = True
     history = []
     for turn_index, turn in enumerate(turns):
+        if getattr(tools, "_max_turns", None) is not None and turn_index >= tools._max_turns:
+            from thadam.environment import TurnLimitExceeded
+
+            raise AgentExecutionError(
+                TurnLimitExceeded("Conversation turn limit exceeded"),
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            )
         turn_started = perf_counter()
         try:
             output = agent(_conversation_input(value, turn, history))
@@ -548,6 +809,9 @@ def _sync_conversation(agent: Agent, value: JSONValue, turns, tools: FixtureTool
                 conversation_results=tuple(outputs),
             ) from error
         outputs.append(ConversationTurnResult(turn.id, deepcopy(turn.message), deepcopy(output)))
+        tools._child_events = tuple(events)
+        tools._conversation_results = tuple(outputs)
+        tools._snapshot()
         history.extend(
             (
                 {"role": "user", "content": deepcopy(turn.message)},
@@ -564,6 +828,16 @@ async def _async_conversation(agent, value, turns, tools: FixtureTools) -> Agent
     complete = True
     history = []
     for turn_index, turn in enumerate(turns):
+        if getattr(tools, "_max_turns", None) is not None and turn_index >= tools._max_turns:
+            from thadam.environment import TurnLimitExceeded
+
+            raise AgentExecutionError(
+                TurnLimitExceeded("Conversation turn limit exceeded"),
+                events=tuple(events),
+                trace_complete=complete,
+                trace_warnings=tuple(warnings),
+                conversation_results=tuple(outputs),
+            )
         turn_started = perf_counter()
         try:
             output = agent(_conversation_input(value, turn, history))
@@ -616,6 +890,9 @@ async def _async_conversation(agent, value, turns, tools: FixtureTools) -> Agent
                 conversation_results=tuple(outputs),
             ) from error
         outputs.append(ConversationTurnResult(turn.id, deepcopy(turn.message), deepcopy(output)))
+        tools._child_events = tuple(events)
+        tools._conversation_results = tuple(outputs)
+        tools._snapshot()
         history.extend(
             (
                 {"role": "user", "content": deepcopy(turn.message)},

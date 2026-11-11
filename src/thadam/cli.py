@@ -223,6 +223,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--report", type=Path, help="Write a standalone reliability comparison"
     )
     for execution in (run, repeat):
+        execution.add_argument("--max-turns", type=int, help="Maximum conversation turns per case")
+        execution.add_argument(
+            "--case-timeout",
+            type=float,
+            help="Per-case wall deadline in seconds; uses a fresh spawned process",
+        )
+        execution.add_argument(
+            "--cleanup-timeout",
+            type=float,
+            default=1.0,
+            help="Cleanup/termination grace after deadline, seconds (default: 1)",
+        )
+        execution.add_argument(
+            "--environment", help="module:EnvironmentHooks reference; requires --fixture-factory"
+        )
         execution.add_argument(
             "--async",
             dest="async_execution",
@@ -348,6 +363,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         validate_concurrency(arguments.max_concurrency)
         if arguments.max_concurrency != 1 and not arguments.async_execution:
             raise SuiteValidationError("--max-concurrency requires --async")
+        from thadam.limits import validate_limits
+        from thadam.models import ExecutionLimits
+
+        limits = (
+            ExecutionLimits(arguments.max_turns, arguments.case_timeout, arguments.cleanup_timeout)
+            if arguments.max_turns is not None or arguments.case_timeout is not None
+            else None
+        )
+        validate_limits(limits)
+        if arguments.cleanup_timeout != 1.0 and arguments.case_timeout is None:
+            raise SuiteValidationError("--cleanup-timeout requires --case-timeout")
+        if arguments.environment and not arguments.fixture_factory:
+            raise SuiteValidationError("--environment requires --fixture-factory")
         cases = load_suite(arguments.suite)
         if any(case.tool_fixtures is not None for case in cases) and not arguments.fixture_factory:
             raise SuiteValidationError("Tool fixture suites require --fixture-factory")
@@ -357,7 +385,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 factory = None
                 agent = None
                 if arguments.fixture_factory:
-                    agent = FixtureAgent(_load_reference(arguments.fixture_factory))
+                    agent = FixtureAgent(
+                        _load_reference(arguments.fixture_factory),
+                        environment=_load_reference(arguments.environment)
+                        if arguments.environment
+                        else None,
+                    )
                 elif arguments.agent_factory:
                     factory = _load_reference(arguments.agent_factory)
                     validate_factory(factory, allow_async=arguments.async_execution)
@@ -369,6 +402,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     attempts=arguments.attempts,
                     agent_factory=factory,
                     agent_revision=arguments.agent_revision,
+                    limits=limits,
                     **(
                         {"max_concurrency": arguments.max_concurrency}
                         if arguments.async_execution
@@ -377,7 +411,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             else:
                 agent = (
-                    FixtureAgent(_load_reference(arguments.fixture_factory))
+                    FixtureAgent(
+                        _load_reference(arguments.fixture_factory),
+                        environment=_load_reference(arguments.environment)
+                        if arguments.environment
+                        else None,
+                    )
                     if arguments.fixture_factory
                     else _load_agent(arguments.agent, allow_async=arguments.async_execution)
                 )
@@ -385,6 +424,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     agent,
                     cases,
                     agent_revision=arguments.agent_revision,
+                    limits=limits,
                     **(
                         {"max_concurrency": arguments.max_concurrency}
                         if arguments.async_execution

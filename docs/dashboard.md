@@ -164,7 +164,7 @@ Settings, job state and bounded logs live in `.thadam/dashboard/`. The repositor
 ignores that directory. A server session ending normally stops its worker. On a
 hard server exit, the worker's parent watcher exits; recovered running job records
 are displayed as interrupted on the next launch. This is a local process manager,
-not a sandbox, timeout system, or distributed execution service.
+not a sandbox or distributed execution service. Explicit per-case deadlines use fresh spawned workers.
 
 ## Files and local access
 
@@ -271,3 +271,13 @@ turns. Evaluation details show every completed user/agent exchange, initial and
 final state, configured tool scripts, checks and trace evidence. The dashboard
 uses the existing project, revision, one-active-job and interruption guards.
 See [conversation and state simulations](milestones/05-simulations.md).
+
+### Execution limits and environment hooks
+
+Run and Verify a fix expose optional turn limits, case deadline seconds, cleanup
+grace and a fixture environment reference under execution settings. A deadline
+uses a fresh process per case; importable agent/factory/verifier definitions are
+required and shared callable state is not retained. Environment references name
+exported EnvironmentHooks instances and require fixtures mode. Saved reports show
+the selected policy, errors and partial evidence; changed policy is incompatible
+with an existing baseline. [Boundary guide](milestones/05-execution-boundaries.md).

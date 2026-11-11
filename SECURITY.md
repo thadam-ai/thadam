@@ -30,7 +30,7 @@ Maintainers will use the private report to investigate, discuss a fix, and coord
 
 ## Execution and data boundaries
 
-Thadam runs trusted agent modules, tools, and Python verifiers in the current process with the invoking user's permissions. It does not sandbox code or enforce execution timeouts. Only run agent code and integrations you trust; a test suite is not an isolation boundary.
+Thadam runs trusted agent modules, tools, and Python verifiers with the invoking user's permissions. Defaults execute in the current process; explicit deadline limits use spawned case workers with bounded termination. Neither path sandboxes code. Forced termination does not guarantee cleanup, remote rollback, or termination of arbitrary subprocess descendants. Only run agent code and integrations you trust; a test suite is not an isolation boundary.
 
 Reports can contain agent inputs and outputs, tool arguments and results, and exception messages. Automatic secret redaction is not implemented. Review these artifacts before sharing them or uploading them in CI.
 

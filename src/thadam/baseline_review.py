@@ -11,6 +11,7 @@ from thadam._json import json_equal, read_json, validate_json
 from thadam.contracts import equivalent_definitions
 from thadam.errors import ReportValidationError
 from thadam.fixtures import fixtures_to_dict
+from thadam.limits import limits_to_dict
 from thadam.models import CaseResult, JSONValue, RunReport
 from thadam.repetition import RepeatedReport
 from thadam.repetition_loading import repeated_from_dict, require_consistent, validate_repeated
@@ -106,6 +107,11 @@ def _declaration(case: CaseResult | None) -> JSONValue:
     if case is None:
         return None
     return {
+        **(
+            {"execution_limits": limits_to_dict(case.execution_limits)}
+            if case.execution_limits is not None
+            else {}
+        ),
         "input": case.input,
         "checks": [asdict(check) for check in case.check_definitions],
         **(
@@ -162,6 +168,16 @@ def review_baseline(candidate: Evaluation, baseline: Evaluation | None = None) -
                 )
             )
             continue
+        before_limits, after_limits = (
+            limits_to_dict(left.execution_limits),
+            limits_to_dict(right.execution_limits),
+        )
+        if not json_equal(before_limits, after_limits):
+            changes.append(
+                ContractChange(
+                    "execution_limits_changed", case_id, None, before_limits, after_limits
+                )
+            )
         if not json_equal(left.input, right.input):
             changes.append(ContractChange("input_changed", case_id, None, left.input, right.input))
         before_conversation = [asdict(turn) for turn in left.conversation]

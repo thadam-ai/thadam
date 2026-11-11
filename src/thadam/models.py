@@ -285,6 +285,20 @@ class CaseError:
 
 
 @dataclass(frozen=True)
+class ExecutionLimits:
+    """Opt-in per-case turn/deadline policy; deadlines use fresh spawned processes.
+
+    timeout_seconds includes startup, hooks, agent and verifiers. After expiry,
+    cleanup_timeout_seconds allows cooperative cleanup before forced termination.
+    max_turns stops a scripted conversation before invoking the next excess turn.
+    """
+
+    max_turns: int | None = None
+    timeout_seconds: float | None = None
+    cleanup_timeout_seconds: float = 1.0
+
+
+@dataclass(frozen=True)
 class CaseResult:
     """The output, check evidence, and errors for a completed case."""
 
@@ -306,6 +320,7 @@ class CaseResult:
     state_fixture: StateFixture | None = None
     state_initial: JSONValue = None
     state_final: JSONValue = None
+    execution_limits: ExecutionLimits | None = None
 
 
 @dataclass(frozen=True)
@@ -330,7 +345,9 @@ class RunReport:
     schema_version: int = field(default=3, init=False)
 
     def __post_init__(self) -> None:
-        if any(case.conversation or case.state_fixture is not None for case in self.cases):
+        if any(case.execution_limits is not None for case in self.cases):
+            object.__setattr__(self, "schema_version", 7)
+        elif any(case.conversation or case.state_fixture is not None for case in self.cases):
             object.__setattr__(self, "schema_version", 6)
         elif any(case.tool_fixtures is not None for case in self.cases):
             object.__setattr__(self, "schema_version", 5)

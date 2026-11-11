@@ -72,8 +72,10 @@ def register_regression(app, workspace):
             original = next(
                 case for case in source["run"]["cases"] if case["id"] == source["case_id"]
             )
-            fixture_case = "tool_fixtures" in original
-            simulation_case = source["run"]["schema_version"] == 6
+            fixture_case = original.get("tool_fixtures") is not None
+            simulation_case = source["run"]["schema_version"] == 6 or bool(
+                original.get("conversation") or original.get("state_fixture") is not None
+            )
             if fixture_case:
                 # Include the retained scripts in the explicit suite preview so
                 # saving cannot silently remove the original failure setup.

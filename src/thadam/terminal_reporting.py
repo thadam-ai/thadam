@@ -216,6 +216,8 @@ def case_evidence(view: ReportView, case: CaseResult, *, verbose: bool = False) 
     """Show failures/errors by default, or full available case evidence in verbose mode."""
     if verbose:
         view.section(f"{label(case.status)}: {case.id}", ROLES[case.status])
+        if case.execution_limits is not None:
+            view.add("execution limits: " + json.dumps(asdict(case.execution_limits)), indent=4)
         view.field("Duration", f"{case.duration_ms:.2f} ms", indent=4)
         view.add("input: " + json.dumps(case.input, ensure_ascii=False), indent=4)
         view.add(
@@ -253,7 +255,18 @@ def case_evidence(view: ReportView, case: CaseResult, *, verbose: bool = False) 
             view.add(
                 "initial state: " + json.dumps(case.state_initial, ensure_ascii=False), indent=4
             )
-            view.add("final state: " + json.dumps(case.state_final, ensure_ascii=False), indent=4)
+            unavailable = (
+                case.execution_limits is not None and case.events is None and case.status == "error"
+            )
+            view.add(
+                "final state: "
+                + (
+                    "unavailable"
+                    if unavailable
+                    else json.dumps(case.state_final, ensure_ascii=False)
+                ),
+                indent=4,
+            )
     for result in case.assertions:
         if verbose or not result.passed:
             view.section(

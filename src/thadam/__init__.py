@@ -26,6 +26,7 @@ from thadam.comparison import (
     compare_reports,
 )
 from thadam.comparison_reporting import comparison_to_dict, write_comparison
+from thadam.environment import EnvironmentHooks, EnvironmentLifecycleError, TurnLimitExceeded
 from thadam.errors import (
     AgentConfigurationError,
     AgentExecutionError,
@@ -66,6 +67,7 @@ from thadam.models import (
     ConversationTurnResult,
     EventError,
     ExecutionEvent,
+    ExecutionLimits,
     JSONValue,
     OutputEquals,
     OutputHasKeys,
@@ -112,6 +114,10 @@ from thadam.runner import run_suite
 from thadam.suites import TestSuite, load_suite
 
 __all__ = [
+    "EnvironmentHooks",
+    "EnvironmentLifecycleError",
+    "TurnLimitExceeded",
+    "ExecutionLimits",
     "FixtureAgent",
     "FixtureConfigurationError",
     "FixtureFactory",

@@ -11,6 +11,7 @@ from pathlib import Path
 from thadam._json import read_json
 from thadam.errors import ReportWriteError
 from thadam.fixtures import fixtures_to_dict
+from thadam.limits import limits_to_dict
 from thadam.models import JSONValue, RunReport
 from thadam.terminal import TerminalStyle, display_text
 from thadam.terminal_reporting import ROLES, ReportView, case_evidence, run_counts
@@ -22,7 +23,7 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
         "schema_version": report.schema_version,
         **(
             {"suite": asdict(report.suite) if report.suite else None}
-            if report.schema_version in (5, 6)
+            if report.schema_version in (5, 6, 7)
             else {"suite": asdict(report.suite)}
             if report.suite is not None
             else {}
@@ -33,6 +34,11 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
         "summary": asdict(report.summary),
         "cases": [
             {
+                **(
+                    {"execution_limits": limits_to_dict(case.execution_limits)}
+                    if report.schema_version == 7
+                    else {}
+                ),
                 "id": case.id,
                 "status": case.status,
                 "duration_ms": case.duration_ms,
@@ -49,8 +55,14 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
                 "trace_warnings": list(case.trace_warnings),
                 "check_definitions": [asdict(check) for check in case.check_definitions],
                 **(
-                    {"tool_fixtures": fixtures_to_dict(case.tool_fixtures or {})}
-                    if case.tool_fixtures is not None or report.schema_version == 6
+                    {
+                        "tool_fixtures": (
+                            None
+                            if case.tool_fixtures is None and report.schema_version == 7
+                            else fixtures_to_dict(case.tool_fixtures or {})
+                        )
+                    }
+                    if case.tool_fixtures is not None or report.schema_version in (6, 7)
                     else {}
                 ),
                 **(
@@ -76,7 +88,7 @@ def report_to_dict(report: RunReport) -> dict[str, JSONValue]:
                         "state_initial": deepcopy(case.state_initial),
                         "state_final": deepcopy(case.state_final),
                     }
-                    if report.schema_version == 6
+                    if report.schema_version in (6, 7)
                     else {}
                 ),
             }

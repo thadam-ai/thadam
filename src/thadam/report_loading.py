@@ -9,6 +9,7 @@ from thadam.contracts import definition_assertion
 from thadam.errors import ReportValidationError, TraceUnavailableError
 from thadam.events import snapshot_trace
 from thadam.fixtures import parse_fixtures, validate_fixture_evidence
+from thadam.limits import limits_from_dict
 from thadam.models import (
     AssertionResult,
     CaseError,
@@ -67,11 +68,11 @@ def report_from_dict(data: object) -> RunReport:
             raise ValueError("Legacy reports cannot be compared; generate fresh schema-3 reports")
         version = data.get("schema_version") if isinstance(data, dict) else None
         fields = (set(RunReport.__dataclass_fields__) - {"suite"}) | {"summary"}
-        _fields(data, fields | ({"suite"} if version in (4, 5, 6) else set()), "report")
-        if type(version) is not int or version not in (3, 4, 5, 6):
-            raise ValueError("report.schema_version must be the integer 3, 4, 5, or 6")
+        _fields(data, fields | ({"suite"} if version in (4, 5, 6, 7) else set()), "report")
+        if type(version) is not int or version not in (3, 4, 5, 6, 7):
+            raise ValueError("report.schema_version must be the integer 3, 4, 5, 6, or 7")
         identity = None
-        if version == 4 or version in (5, 6) and data["suite"] is not None:
+        if version == 4 or version in (5, 6, 7) and data["suite"] is not None:
             _fields(data["suite"], {"id", "revision"}, "report.suite")
             identity = suite_identity((), SuiteIdentity(**data["suite"]))
         if type(data["evaluation_version"]) is not int or data["evaluation_version"] != 1:
@@ -80,13 +81,20 @@ def report_from_dict(data: object) -> RunReport:
         if data["agent_revision"] is not None:
             _text(data["agent_revision"], "report.agent_revision")
         cases = tuple(
-            _case(raw, fixture_run=version in (5, 6), simulation_run=version == 6)
+            _case(
+                raw,
+                fixture_run=version in (5, 6, 7),
+                simulation_run=version in (6, 7),
+                limits_run=version == 7,
+            )
             for raw in _array(data["cases"], "report.cases")
         )
         if not cases:
             raise ValueError("A run report must contain at least one case")
         _unique([case.id for case in cases], "case IDs")
         report = RunReport(cases, data["run_id"], data["agent_revision"], suite=identity)
+        if report.schema_version != version:
+            raise ValueError("Report schema disagrees with declared execution evidence")
         expected = asdict(report.summary)
         _fields(data["summary"], set(expected), "report.summary")
         if any(type(value) is not int for value in data["summary"].values()):
@@ -98,8 +106,15 @@ def report_from_dict(data: object) -> RunReport:
         raise ReportValidationError(str(error)) from error
 
 
-def _case(raw: object, *, fixture_run: bool = False, simulation_run: bool = False) -> CaseResult:
+def _case(
+    raw: object,
+    *,
+    fixture_run: bool = False,
+    simulation_run: bool = False,
+    limits_run: bool = False,
+) -> CaseResult:
     expected_fields = set(CaseResult.__dataclass_fields__) - {
+        "execution_limits",
         "tool_fixtures",
         "conversation",
         "conversation_results",
@@ -107,6 +122,8 @@ def _case(raw: object, *, fixture_run: bool = False, simulation_run: bool = Fals
         "state_initial",
         "state_final",
     }
+    if limits_run:
+        expected_fields.add("execution_limits")
     if fixture_run:
         expected_fields.add("tool_fixtures")
     if simulation_run:
@@ -194,7 +211,10 @@ def _case(raw: object, *, fixture_run: bool = False, simulation_run: bool = Fals
             "events": events,
             "trace_warnings": tuple(warnings),
             "check_definitions": definitions,
-            "tool_fixtures": parse_fixtures(raw["tool_fixtures"]) if fixture_run else None,
+            "tool_fixtures": parse_fixtures(raw["tool_fixtures"])
+            if fixture_run and (not limits_run or raw["tool_fixtures"] is not None)
+            else None,
+            "execution_limits": limits_from_dict(raw["execution_limits"]) if limits_run else None,
             "conversation": conversation,
             "conversation_results": conversation_results,
             "state_fixture": state_fixture,
@@ -202,8 +222,26 @@ def _case(raw: object, *, fixture_run: bool = False, simulation_run: bool = Fals
             "state_final": state_final,
         }
     )
+    if case.execution_limits is not None and case.execution_limits.max_turns is not None:
+        maximum = case.execution_limits.max_turns
+        if len(case.conversation_results) > maximum or (
+            case.output_available and len(case.conversation) > maximum
+        ):
+            raise ValueError("Conversation evidence exceeds execution max_turns")
     _outcomes(case)
-    if fixture_run:
+    early_worker_error = (
+        limits_run
+        and case.execution_limits is not None
+        and case.execution_limits.timeout_seconds is not None
+        and case.status == "error"
+        and not case.output_available
+        and case.events is None
+        and any(
+            error.source == "agent" and error.type in ("TimeoutError", "WorkerProcessError")
+            for error in errors
+        )
+    )
+    if fixture_run and case.tool_fixtures is not None and not early_worker_error:
         validate_fixture_evidence(
             case.tool_fixtures, case.events, any(error.source == "fixture" for error in errors)
         )

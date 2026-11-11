@@ -17,6 +17,7 @@ from thadam.baseline_review import evaluation_to_dict, load_evaluation
 from thadam.comparison import compare_reports
 from thadam.comparison_reporting import comparison_to_dict
 from thadam.dashboard.workspace import Workspace
+from thadam.limits import limits_from_dict
 from thadam.models import RunReport
 from thadam.reliability import compare_repeated, validate_tolerance
 from thadam.reliability_reporting import reliability_to_dict
@@ -82,9 +83,22 @@ class Jobs:
                 "async_execution",
                 "max_concurrency",
                 "verification",
+                "execution_limits",
+                "environment",
             }:
                 raise ValueError("Evaluation settings have missing or unknown fields")
             validate_json(specification, "evaluation settings")
+            limits_from_dict(specification.get("execution_limits"))
+            environment = specification.get("environment")
+            if environment is not None and (
+                specification["mode"] != "fixtures"
+                or not isinstance(environment, str)
+                or environment.count(":") != 1
+                or not all(environment.split(":"))
+            ):
+                raise ValueError(
+                    "Environment hooks require fixtures mode and a module:hooks reference"
+                )
             async_execution = specification.get("async_execution", False)
             limit = specification.get("max_concurrency", 1)
             if type(async_execution) is not bool:
@@ -376,6 +390,13 @@ class Jobs:
                 else:
                     os.killpg(self.process.pid, signal.SIGKILL)
                 self.process.wait(timeout=2)
+            # A child may ignore SIGTERM after its parent exits. Finish stopping
+            # the owned process group even when waiting for the parent succeeded.
+            if os.name != "nt":
+                try:
+                    os.killpg(self.process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             self.active.update(
                 state="interrupted",
                 finished_at=time(),

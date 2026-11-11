@@ -153,3 +153,13 @@ OpenAI API-key and direct ChatGPT-plan access. Authentication is user-level loca
 state, distinct from project evidence. Existing case/report schemas remain unchanged.
 Generated cases never become trusted checks without explicit review, and saved
 suites run without the generation provider. See the scenario guide for limitations.
+
+## Explicit case boundaries
+
+ExecutionLimits keeps in-process defaults and opts into standard-library spawn
+workers for per-case deadlines. This bounds blocking sync agents without adding
+a serialization dependency or implying a sandbox. EnvironmentHooks explicitly
+owns external setup/reset/cleanup per attempt. Deadline grace bounds shutdown;
+forced termination may skip cleanup. Policies are recorded and compared using
+run schema 7 and repeated schema 4; existing suite contracts stay unchanged.
+See [execution boundaries](docs/milestones/05-execution-boundaries.md).

@@ -7,6 +7,7 @@ from thadam._json import json_equal, read_json, validate_json
 from thadam.contracts import equivalent_definitions
 from thadam.errors import ReportValidationError
 from thadam.fixtures import fixtures_to_dict
+from thadam.limits import limits_to_dict
 from thadam.models import RunReport
 from thadam.repetition import RepeatedReport
 from thadam.repetition_reporting import repeated_to_dict
@@ -68,31 +69,39 @@ def repeated_from_dict(data: object) -> RepeatedReport:
         }
         if not isinstance(data, dict) or data.keys() != fields:
             raise ValueError("Repeated report has missing or unknown fields; expected repeated_run")
-        if type(data["schema_version"]) is not int or data["schema_version"] not in (1, 2, 3):
-            raise ValueError("Unsupported repeated-run schema_version; expected integer 1, 2, or 3")
+        if type(data["schema_version"]) is not int or data["schema_version"] not in (1, 2, 3, 4):
+            raise ValueError(
+                "Unsupported repeated-run schema_version; expected integer 1, 2, 3, or 4"
+            )
         if data["kind"] != "repeated_run":
             raise ValueError("Expected kind repeated_run")
         if not isinstance(data["report_id"], str) or not data["report_id"].strip():
             raise ValueError("report_id must be a non-empty string")
         if data["execution_mode"] not in ("shared", "factory", "fixtures", "simulations"):
             raise ValueError("execution_mode must be shared, factory, fixtures, or simulations")
-        if (data["schema_version"] == 2) != (data["execution_mode"] == "fixtures") or (
-            data["schema_version"] == 3
-        ) != (data["execution_mode"] == "simulations"):
+        if data["schema_version"] != 4 and (
+            (data["schema_version"] == 2) != (data["execution_mode"] == "fixtures")
+            or (data["schema_version"] == 3) != (data["execution_mode"] == "simulations")
+        ):
             raise ValueError("Execution mode disagrees with repeated-run schema")
         if type(data["attempts"]) is not int or data["attempts"] < 2:
             raise ValueError("attempts must be an integer of at least 2")
         if not isinstance(data["runs"], list) or len(data["runs"]) != data["attempts"]:
             raise ValueError("runs must contain exactly the declared number of attempts")
         runs = tuple(report_from_dict(run) for run in data["runs"])
-        if any(
-            (run.schema_version == 5) != (data["execution_mode"] == "fixtures")
-            or (run.schema_version == 6) != (data["execution_mode"] == "simulations")
-            for run in runs
-        ):
-            raise ValueError(
-                "Repeated execution mode disagrees with nested fixture/simulation evidence"
+        for run in runs:
+            simulated = any(
+                case.conversation or case.state_fixture is not None for case in run.cases
             )
+            fixtures = any(case.tool_fixtures is not None for case in run.cases) and not simulated
+            if simulated != (data["execution_mode"] == "simulations") or fixtures != (
+                data["execution_mode"] == "fixtures"
+            ):
+                raise ValueError(
+                    "Repeated execution mode disagrees with nested fixture/simulation evidence"
+                )
+            if (run.schema_version == 7) != (data["schema_version"] == 4):
+                raise ValueError("Repeated execution limits disagree with nested schema")
         if len({run.run_id for run in runs}) != len(runs):
             raise ValueError("Attempt run IDs must be unique")
         for run in runs[1:]:
@@ -115,6 +124,10 @@ def _same_contract(first: RunReport, other: RunReport) -> None:
         raise ValueError("Case IDs differ between attempts")
     for case_id, left in old.items():
         right = new[case_id]
+        if not json_equal(
+            limits_to_dict(left.execution_limits), limits_to_dict(right.execution_limits)
+        ):
+            raise ValueError(f"Case {case_id!r} execution limits differ between attempts")
         if not json_equal(
             None if left.tool_fixtures is None else fixtures_to_dict(left.tool_fixtures),
             None if right.tool_fixtures is None else fixtures_to_dict(right.tool_fixtures),

@@ -16,9 +16,8 @@ from thadam.errors import AgentConfigurationError, SuiteValidationError
 from thadam.fixtures import FixtureAgent
 from thadam.models import (
     Agent,
-    AgentResult,
     CaseResult,
-    JSONValue,
+    ExecutionLimits,
     RunReport,
     SuiteIdentity,
     TestCase,
@@ -95,7 +94,9 @@ class RepeatedReport:
     kind: str = field(default="repeated_run", init=False)
 
     def __post_init__(self) -> None:
-        if self.execution_mode == "fixtures":
+        if any(run.schema_version == 7 for run in self.runs):
+            object.__setattr__(self, "schema_version", 4)
+        elif self.execution_mode == "fixtures":
             object.__setattr__(self, "schema_version", 2)
         elif self.execution_mode == "simulations":
             object.__setattr__(self, "schema_version", 3)
@@ -159,6 +160,7 @@ def run_repeated(
     agent_revision: str | None = None,
     suite: SuiteIdentity | None = None,
     on_case_complete: Callable[[CaseResult], None] | None = None,
+    limits: ExecutionLimits | None = None,
 ) -> RepeatedReport:
     """Run complete suites in order, retaining all case errors and attempt evidence.
 
@@ -167,7 +169,8 @@ def run_repeated(
     state are the caller's responsibility. Invalid configuration raises
     SuiteValidationError or AgentConfigurationError before execution. Construction
     and invocation exceptions become per-case agent errors; KeyboardInterrupt
-    propagates. There are no retries, enforced timeouts, or implicit cleanup hooks.
+    propagates. There are no retries or implicit cleanup hooks. Explicit limits use turn caps
+    or fresh spawned deadline workers; FixtureAgent can supply EnvironmentHooks.
     TestSuite identity is retained automatically; suite explicitly identifies a
     plain case sequence. Conflicting metadata fails before user code.
     on_case_complete receives independent case snapshots in invocation order;
@@ -204,14 +207,9 @@ def run_repeated(
     if agent_factory is not None:
         validate_factory(agent_factory)
 
-        def invoke(value: JSONValue) -> JSONValue | AgentResult:
-            fresh = agent_factory()
-            if inspect.iscoroutine(fresh):
-                fresh.close()
-            validate_agent(fresh)
-            return fresh(value)
+        from thadam.factory_agents import SyncFactoryAgent
 
-        selected = invoke
+        selected = SyncFactoryAgent(agent_factory)
     else:
         validate_agent(agent)
         selected = agent
@@ -223,6 +221,7 @@ def run_repeated(
                 agent_revision=agent_revision,
                 suite=identity,
                 on_case_complete=on_case_complete,
+                limits=limits,
             )
             for _ in range(attempts)
         ),

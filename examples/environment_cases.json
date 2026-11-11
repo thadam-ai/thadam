@@ -1,0 +1,19 @@
+{
+  "schema_version": 4,
+  "suite": {"id": "external-sqlite-environment", "revision": "v1"},
+  "cases": [{
+    "id": "reset-database-before-refund",
+    "input": {"order_id": "ord-42", "amount_cents": 2500},
+    "tool_fixtures": {},
+    "conversation": [
+      {"id": "inspect-reset", "message": "How many refunds exist?"},
+      {"id": "refund", "message": "Issue the refund."}
+    ],
+    "state_fixture": {"initial": {"refund_count": 0}},
+    "assertions": [
+      {"id": "reset-cleared-external-rows", "type": "conversation_output_equals", "turn_id": "inspect-reset", "expected": {"refund_count": 0}},
+      {"id": "one-refund", "type": "output_equals", "expected": {"refund_count": 1, "amount_cents": 2500}},
+      {"id": "observable-database-summary", "type": "state_equals", "expected": {"refund_count": 1}}
+    ]
+  }]
+}

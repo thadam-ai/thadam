@@ -79,5 +79,6 @@ revision and baseline transition.
 
 The SDK, CLI and local dashboard use the existing explicit fixture-factory mode.
 The dashboard's JSON suite editor accepts schema 4 and shows transcript and state
-evidence in evaluation details. No execution deadlines, external service resets,
-model-driven user simulator, or hidden reasoning capture are provided.
+evidence in evaluation details. Explicit [execution limits and environment hooks](05-execution-boundaries.md)
+add turn caps, per-case spawned deadlines and setup/reset/cleanup. A model-driven
+user simulator and hidden reasoning capture are outside this workflow.
